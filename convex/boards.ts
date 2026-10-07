@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import type { ProjectAccess } from "./lib/access";
 import {
@@ -12,6 +12,7 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
+import type { Status } from "./shared/model";
 import { canManageRole, codeProblem } from "./shared/model";
 
 const MAX_TITLE = 80;
@@ -23,6 +24,7 @@ export type BoardView = Pick<
   | "_creationTime"
   | "projectId"
   | "code"
+  | "formerCodes"
   | "title"
   | "description"
   | "createdBy"
@@ -35,6 +37,7 @@ function toView(board: Doc<"boards">): BoardView {
     code: board.code,
     createdBy: board.createdBy,
     description: board.description,
+    formerCodes: board.formerCodes,
     projectId: board.projectId,
     title: board.title,
   };
@@ -69,7 +72,11 @@ export const codes = query({
   handler: async (ctx) => {
     await requireUser(ctx);
     const boards = await ctx.db.query("boards").collect();
-    return boards.map((board) => ({ _id: board._id, code: board.code }));
+    return boards.map((board) => ({
+      _id: board._id,
+      code: board.code,
+      formerCodes: board.formerCodes ?? [],
+    }));
   },
 });
 
@@ -103,6 +110,62 @@ export const content = query({
   },
 });
 
+export interface BoardProgress {
+  boardId: Id<"boards">;
+  /** Cards not done yet, backlog included. */
+  open: number;
+  /** The sprint under way, with how its cards stand. */
+  sprint?: Pick<Doc<"sprints">, "title" | "end"> & Record<Status, number>;
+}
+
+/** How each board of a project stands: cards still open, and the sprint under way. */
+export const progress = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }): Promise<BoardProgress[]> => {
+    if (!(await ifVisible(requireProject(ctx, projectId, "view")))) {
+      return [];
+    }
+    const boards = await ctx.db
+      .query("boards")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    return await Promise.all(
+      boards.map(async (board) => {
+        const [cards, sprints] = await Promise.all([
+          ctx.db
+            .query("cards")
+            .withIndex("by_board", (q) => q.eq("boardId", board._id))
+            .collect(),
+          ctx.db
+            .query("sprints")
+            .withIndex("by_board", (q) => q.eq("boardId", board._id))
+            .collect(),
+        ]);
+        // The latest, should more than one be under way.
+        const active = sprints
+          .filter((sprint) => sprint.status === "active")
+          .toSorted((a, b) => a.number - b.number)
+          .at(-1);
+        const counts: Record<Status, number> = {
+          done: 0,
+          progress: 0,
+          todo: 0,
+        };
+        for (const card of cards) {
+          if (active && card.sprintId === active._id) {
+            counts[card.status] += 1;
+          }
+        }
+        return {
+          boardId: board._id,
+          open: cards.filter((card) => card.status !== "done").length,
+          sprint: active && { end: active.end, title: active.title, ...counts },
+        };
+      })
+    );
+  },
+});
+
 function cleanTitle(title: string): string {
   const trimmed = title.trim().slice(0, MAX_TITLE);
   if (!trimmed) {
@@ -128,6 +191,15 @@ async function freeCode(
   if (taken && taken._id !== except) {
     throw new ConvexError("Another board uses this code.");
   }
+  // Few boards, so a scan beats keeping an index of old codes.
+  const boards = await ctx.db.query("boards").collect();
+  if (
+    boards.some(
+      (board) => board._id !== except && board.formerCodes?.includes(code)
+    )
+  ) {
+    throw new ConvexError("Another board’s old links use this code.");
+  }
   return code;
 }
 
@@ -140,6 +212,27 @@ function canManageBoard(
   );
 }
 
+/** Adds a board to a project, under a code no other board has. Checks no access. */
+export async function insertBoard(
+  ctx: MutationCtx,
+  board: Pick<
+    Doc<"boards">,
+    "code" | "createdBy" | "description" | "projectId" | "title"
+  >
+): Promise<{ _id: Id<"boards">; code: string }> {
+  const code = await freeCode(ctx, board.code);
+  const boardId = await ctx.db.insert("boards", {
+    code,
+    createdBy: board.createdBy,
+    description: board.description.trim().slice(0, MAX_DESCRIPTION),
+    nextCardNumber: 1,
+    nextSprintNumber: 1,
+    projectId: board.projectId,
+    title: cleanTitle(board.title),
+  });
+  return { _id: boardId, code };
+}
+
 export const create = mutation({
   args: {
     code: v.string(),
@@ -149,17 +242,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const { user } = await requireProject(ctx, args.projectId, "edit");
-    const code = await freeCode(ctx, args.code);
-    const boardId = await ctx.db.insert("boards", {
-      code,
-      createdBy: user._id,
-      description: args.description.trim().slice(0, MAX_DESCRIPTION),
-      nextCardNumber: 1,
-      nextSprintNumber: 1,
-      projectId: args.projectId,
-      title: cleanTitle(args.title),
-    });
-    return { _id: boardId, code };
+    return await insertBoard(ctx, { ...args, createdBy: user._id });
   },
 });
 
@@ -184,7 +267,13 @@ export const update = mutation({
       patch.title = cleanTitle(changes.title);
     }
     if (changes.code !== undefined && changes.code !== board.code) {
-      patch.code = await freeCode(ctx, changes.code, boardId);
+      const code = await freeCode(ctx, changes.code, boardId);
+      patch.code = code;
+      // Links and card keys shared under the old code keep finding the board.
+      patch.formerCodes = [
+        ...(board.formerCodes ?? []).filter((former) => former !== code),
+        board.code,
+      ];
     }
     if (changes.description !== undefined) {
       patch.description = changes.description.trim().slice(0, MAX_DESCRIPTION);

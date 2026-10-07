@@ -1,7 +1,4 @@
-import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { cn } from "cn";
-import { useQuery } from "convex/react";
 import type { FormEvent } from "react";
 import { useId, useState } from "react";
 import { useLocation } from "wouter";
@@ -38,92 +35,17 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  codeError,
+  KeyField,
+  useTakenCodes,
+} from "@/features/boards/key-field";
 import type { BoardDraft } from "@/lib/actions";
 import { createBoard, deleteBoard, updateBoard } from "@/lib/actions";
 import type { Board } from "@/lib/model";
-import { CODE, RESERVED_CODES } from "@/lib/model";
+import { suggestCode } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { canEdit } from "@/lib/project";
-
-const DIACRITICS = /\p{Diacritic}/gu;
-
-function deriveCode(title: string): string {
-  const words = title
-    .normalize("NFD")
-    .replace(DIACRITICS, "")
-    .toUpperCase()
-    .split(/[^A-Z0-9]+/u)
-    .filter(Boolean);
-  const code =
-    words.length > 1
-      ? words.map((word) => word[0]).join("")
-      : (words[0] ?? "").slice(0, 4);
-  return code.replace(/^\d+/u, "").slice(0, 10);
-}
-
-function cleanCode(value: string): string {
-  return value
-    .toUpperCase()
-    .replaceAll(/[^A-Z0-9]/gu, "")
-    .slice(0, 10);
-}
-
-function validateCode(
-  code: string,
-  taken: { _id: string; code: string }[],
-  board?: Board
-): string | null {
-  if (code && !CODE.test(code)) {
-    return "Start with a letter.";
-  }
-  if (RESERVED_CODES.has(code)) {
-    return "The app uses this code.";
-  }
-  if (taken.some((item) => item.code === code && item._id !== board?._id)) {
-    return "Another board uses this code.";
-  }
-  return null;
-}
-
-function KeyField({
-  error,
-  onChange,
-  value,
-}: {
-  error: string | null;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  const id = useId();
-  const key = value || "KEY";
-  return (
-    <>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={id}>Key</Label>
-        <Input
-          aria-describedby={`${id}-hint`}
-          aria-invalid={error ? true : undefined}
-          autoCapitalize="characters"
-          autoComplete="off"
-          className="font-mono uppercase"
-          id={id}
-          onChange={(event) => onChange(cleanCode(event.target.value))}
-          spellCheck={false}
-          value={value}
-        />
-      </div>
-      <p
-        className={cn(
-          "col-span-2 -mt-1 text-xs",
-          error ? "text-destructive" : "text-muted-foreground"
-        )}
-        id={`${id}-hint`}
-      >
-        {error ?? `Cards are numbered ${key}-1, ${key}-2, …`}
-      </p>
-    </>
-  );
-}
 
 function ProjectField({
   projects,
@@ -231,7 +153,6 @@ function initialDraft(
     return board;
   }
   return {
-    code: "",
     description: "",
     projectId: project?._id ?? choices[0]?._id,
     title: "",
@@ -253,23 +174,17 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
   // Only read on the first render, as the starting values.
   const initial = initialDraft(board, project, choices);
   const [title, setTitle] = useState(initial.title);
-  const [code, setCode] = useState(initial.code);
-  const [codeEdited, setCodeEdited] = useState(board !== undefined);
+  // A new board's key follows its name until typed.
+  const [typedCode, setTypedCode] = useState(board?.code);
   const [description, setDescription] = useState(initial.description);
   const [projectId, setProjectId] = useState(initial.projectId);
   const [saving, setSaving] = useState(false);
-  const taken = useQuery(api.boards.codes) ?? [];
+  const taken = useTakenCodes(board?._id);
+  const code = typedCode ?? suggestCode(title, taken);
 
-  const codeError = validateCode(code, taken, board);
+  const keyError = codeError(code, taken, board?.code);
   const valid =
-    title.trim() !== "" && code !== "" && !codeError && projectId !== undefined;
-
-  const changeTitle = (value: string) => {
-    setTitle(value);
-    if (!codeEdited) {
-      setCode(deriveCode(value));
-    }
-  };
+    title.trim() !== "" && code !== "" && !keyError && projectId !== undefined;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -307,18 +222,11 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
             autoComplete="off"
             autoFocus={!board}
             id={`${id}-title`}
-            onChange={(event) => changeTitle(event.target.value)}
+            onChange={(event) => setTitle(event.target.value)}
             value={title}
           />
         </div>
-        <KeyField
-          error={codeError}
-          onChange={(value) => {
-            setCode(value);
-            setCodeEdited(true);
-          }}
-          value={code}
-        />
+        <KeyField error={keyError} onChange={setTypedCode} value={code} />
       </div>
 
       <div className="flex flex-col gap-2">

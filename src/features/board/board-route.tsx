@@ -7,11 +7,28 @@ import { BoardPage, BoardSkeleton } from "@/features/board/board-page";
 import type { Board } from "@/lib/model";
 import type { Project } from "@/lib/project";
 
+// Up to 10 characters: boards made before the 7-character cap keep their codes.
 const SLUG = /^(?<code>[A-Z][A-Z0-9]{0,9})(?:-(?<number>\d+))?$/u;
 
-/** The board a code points at. Codes are unique across the hub. */
+/** The board a code points at, also by a code it had before. Codes are unique across the hub. */
 export function findBoard(boards: Board[], code: string): Board | undefined {
-  return boards.find((board) => board.code === code);
+  return (
+    boards.find((board) => board.code === code) ??
+    boards.find((board) => board.formerCodes?.includes(code))
+  );
+}
+
+/** Where a path by a board's old code lives now, with its card and query kept. */
+export function renamedPath(
+  board: Pick<Board, "code">,
+  cardNumber: number | undefined,
+  search: string
+): string {
+  const path =
+    cardNumber === undefined
+      ? `/${board.code}`
+      : `/${board.code}-${cardNumber}`;
+  return search ? `${path}?${search}` : path;
 }
 
 /** Splits a path segment like `HUB-12` into the board code and card number. */

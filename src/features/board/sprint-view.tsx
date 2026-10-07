@@ -1,6 +1,6 @@
 import { CollisionPriority } from "@dnd-kit/abstract";
 import { DragDropProvider, useDroppable } from "@dnd-kit/react";
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { PencilIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -25,7 +25,12 @@ import { SprintDialog } from "@/features/board/sprint-dialog";
 import { useCardDrag } from "@/features/board/use-card-drag";
 import { endSprint, moveCards, startSprint } from "@/lib/actions";
 import type { BoardContent, Card, Sprint, Status } from "@/lib/model";
-import { activeSprint, STATUSES, upcomingSprint } from "@/lib/model";
+import {
+  activeSprint,
+  sprintRemaining,
+  STATUSES,
+  upcomingSprint,
+} from "@/lib/model";
 import { plural } from "@/lib/utils";
 
 function upcomingTitle(content: BoardContent): string {
@@ -36,15 +41,7 @@ function sprintDates(sprint: Sprint): string | undefined {
   if (!(sprint.start && sprint.end)) {
     return undefined;
   }
-  const end = parseISO(sprint.end);
-  const days = differenceInCalendarDays(end, new Date());
-  let remaining = "Last day";
-  if (days > 0) {
-    remaining = `${plural(days, "day")} left`;
-  } else if (days < 0) {
-    remaining = `${plural(-days, "day")} over`;
-  }
-  return `${format(parseISO(sprint.start), "MMM d")} – ${format(end, "MMM d")} · ${remaining}`;
+  return `${format(parseISO(sprint.start), "MMM d")} – ${format(parseISO(sprint.end), "MMM d")} · ${sprintRemaining(sprint.end)}`;
 }
 
 function EndSprint({ sprint }: { sprint: Sprint }) {

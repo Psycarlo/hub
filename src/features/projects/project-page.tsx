@@ -1,4 +1,6 @@
+import { api } from "@convex/_generated/api";
 import { cn } from "cn";
+import { useQuery } from "convex/react";
 import { LockIcon, PlusIcon, Settings2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -157,6 +159,74 @@ interface ProjectPageProps {
   portfoliosLoaded: boolean;
   content?: ProjectContent;
   loaded: boolean;
+}
+
+/** The project's boards with where each stands, and a way to start one. */
+function ProjectBoards({
+  project,
+  boards,
+  members,
+  onNew,
+}: {
+  project: Project;
+  /** The project's boards. */
+  boards: Board[];
+  members: string[];
+  onNew: () => void;
+}) {
+  const progress = useQuery(
+    api.boards.progress,
+    boards.length > 0 ? { projectId: project._id } : "skip"
+  );
+  const editable = canEdit(project);
+
+  let body: ReactNode = (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {boards.map((board) => (
+        <BoardCard
+          board={board}
+          href={boardPath(board)}
+          key={board._id}
+          members={members}
+          progress={progress?.find((item) => item.boardId === board._id)}
+        />
+      ))}
+    </div>
+  );
+  if (boards.length === 0) {
+    body = editable ? (
+      <Empty className="bg-muted/60 rounded-2xl py-10">
+        <EmptyDescription className="mt-0 max-w-sm">
+          Plan work as cards on a board, with a backlog and sprints.
+        </EmptyDescription>
+        <Button onClick={onNew}>
+          <PlusIcon />
+          New board
+        </Button>
+      </Empty>
+    ) : (
+      <p className="text-muted-foreground text-sm">
+        No boards in this project yet.
+      </p>
+    );
+  }
+
+  return (
+    <Section
+      action={
+        editable &&
+        boards.length > 0 && (
+          <Button onClick={onNew} variant="outline">
+            <PlusIcon />
+            New board
+          </Button>
+        )
+      }
+      title="Boards"
+    >
+      {body}
+    </Section>
+  );
 }
 
 /** The project's portfolios with their total, and a way to start one. */
@@ -326,34 +396,12 @@ export function ProjectPage({
         >
           {crm}
         </Section>
-        <Section
-          action={
-            editable && (
-              <Button onClick={() => setDialog("board")} variant="outline">
-                <PlusIcon />
-                New board
-              </Button>
-            )
-          }
-          title="Boards"
-        >
-          {projectBoards.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {projectBoards.map((board) => (
-                <BoardCard
-                  board={board}
-                  href={boardPath(board)}
-                  key={board._id}
-                  members={members}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              No boards in this project yet.
-            </p>
-          )}
-        </Section>
+        <ProjectBoards
+          boards={projectBoards}
+          members={members}
+          onNew={() => setDialog("board")}
+          project={project}
+        />
         <Section
           action={
             editable && (

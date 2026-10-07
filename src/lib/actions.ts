@@ -33,6 +33,11 @@ export interface ProjectDraft {
   members: Project["members"];
 }
 
+export interface NewProjectDraft extends ProjectDraft {
+  /** A board the project starts with. */
+  board?: { code: string; title: string };
+}
+
 export type NewCard = Pick<CardFields, "title" | "status" | "rank"> &
   Partial<CardFields>;
 
@@ -81,7 +86,7 @@ function applyChanges(card: Card, changes: CardChanges): Card {
   return next as Card;
 }
 
-export function createProject(draft: ProjectDraft) {
+export function createProject(draft: NewProjectDraft) {
   return run(convex.mutation(api.projects.create, draft));
 }
 

@@ -1,8 +1,14 @@
+import type { BoardProgress } from "@convex/boards";
+import { cn } from "cn";
 import { Link } from "wouter";
 
 import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
+import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { UserAvatar } from "@/components/user-avatar";
-import type { Board } from "@/lib/model";
+import type { Board, Status } from "@/lib/model";
+import { sprintRemaining, statusLabel } from "@/lib/model";
+import { SWATCH_COLORS } from "@/lib/palette";
+import { plural } from "@/lib/utils";
 
 const VISIBLE_MEMBERS = 5;
 
@@ -27,15 +33,71 @@ export function MemberAvatars({
   );
 }
 
+type SprintProgress = NonNullable<BoardProgress["sprint"]>;
+
+/** Finished work first, so the bar fills from the left as the sprint goes. */
+const BAR_PARTS: { status: Status; className: string }[] = [
+  { className: SWATCH_COLORS.green, status: "done" },
+  { className: SWATCH_COLORS.blue, status: "progress" },
+  { className: "bg-foreground/12", status: "todo" },
+];
+
+/** The sprint's cards as one bar split by status. */
+function SprintBar({ sprint }: { sprint: SprintProgress }) {
+  const parts = BAR_PARTS.filter(({ status }) => sprint[status] > 0);
+  if (parts.length === 0) {
+    return <div className="bg-foreground/8 h-1.5 rounded-full" />;
+  }
+  return (
+    <div className="flex h-1.5 gap-0.5 overflow-hidden rounded-full">
+      <FluidTooltip.Group>
+        {parts.map(({ status, className }) => (
+          <FluidTooltip.Root key={status}>
+            <FluidTooltip.Trigger>
+              <span
+                className={cn(
+                  "h-full first:rounded-l-full last:rounded-r-full",
+                  className
+                )}
+                style={{ flexGrow: sprint[status] }}
+              />
+            </FluidTooltip.Trigger>
+            <FluidTooltip.Content>
+              {statusLabel(status)}{" "}
+              <span className="tabular-nums">{sprint[status]}</span>
+            </FluidTooltip.Content>
+          </FluidTooltip.Root>
+        ))}
+      </FluidTooltip.Group>
+    </div>
+  );
+}
+
+/** One line on where the board stands: the sprint under way, or what's open. */
+function progressLine(progress: BoardProgress): string {
+  const { sprint, open } = progress;
+  if (!sprint) {
+    return open === 0 ? "Nothing open" : plural(open, "open card");
+  }
+  const total = sprint.todo + sprint.progress + sprint.done;
+  const remaining = sprint.end ? ` · ${sprintRemaining(sprint.end)}` : "";
+  return total === 0
+    ? `${sprint.title}${remaining}`
+    : `${sprint.title} · ${sprint.done}/${total} done${remaining}`;
+}
+
 export function BoardCard({
   board,
   href,
   members,
+  progress,
 }: {
   board: Board;
   href: string;
   /** The people of the board's project. */
   members: string[];
+  /** Where its cards stand, once loaded. */
+  progress?: BoardProgress;
 }) {
   return (
     <Link className={CARD_SURFACE} href={href}>
@@ -50,7 +112,15 @@ export function BoardCard({
           {board.description}
         </p>
       )}
-      <MemberAvatars className="mt-auto pt-2" members={members} />
+      <div className="mt-auto flex flex-col gap-3 pt-2">
+        {progress?.sprint && <SprintBar sprint={progress.sprint} />}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground min-w-0 truncate text-xs tabular-nums">
+            {progress && progressLine(progress)}
+          </span>
+          <MemberAvatars className="shrink-0" members={members} />
+        </div>
+      </div>
     </Link>
   );
 }

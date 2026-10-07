@@ -86,6 +86,8 @@ export default defineSchema({
     code: v.string(),
     createdBy: v.id("users"),
     description: v.string(),
+    /** Codes the board went by before, so old links still find it. Kept from other boards. */
+    formerCodes: v.optional(v.array(v.string())),
     nextCardNumber: v.number(),
     nextSprintNumber: v.number(),
     projectId: v.id("projects"),

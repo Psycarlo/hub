@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { insertBoard } from "./boards";
 import {
   isAdmin,
   requireAdmin,
@@ -274,6 +275,8 @@ async function setMembers(
 
 export const create = mutation({
   args: {
+    /** A board the project starts with. */
+    board: v.optional(v.object({ code: v.string(), title: v.string() })),
     color: vProjectColor,
     description: v.string(),
     members: v.array(vMember),
@@ -294,6 +297,14 @@ export const create = mutation({
       ? args.members
       : [{ role: "owner" as const, userId: user._id }, ...args.members];
     await setMembers(ctx, projectId, members);
+    if (args.board) {
+      await insertBoard(ctx, {
+        ...args.board,
+        createdBy: user._id,
+        description: "",
+        projectId,
+      });
+    }
     return { _id: projectId, slug };
   },
 });

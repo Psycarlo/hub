@@ -1,6 +1,7 @@
 import { api } from "@convex/_generated/api";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
+import { SquareKanbanIcon } from "lucide-react";
 import type { FormEvent } from "react";
 import { useId, useState } from "react";
 import { useLocation } from "wouter";
@@ -19,6 +20,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogClose,
@@ -31,11 +33,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  codeError,
+  KeyField,
+  useTakenCodes,
+} from "@/features/boards/key-field";
 import type { User } from "@/hooks/use-users";
 import { useMe } from "@/hooks/use-users";
-import type { ProjectDraft } from "@/lib/actions";
+import type { NewProjectDraft, ProjectDraft } from "@/lib/actions";
 import { createProject, deleteProject, updateProject } from "@/lib/actions";
+import { suggestCode } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { cleanSlugInput, slugify, uniqueSlug } from "@/lib/project";
 
@@ -168,6 +177,90 @@ function NameFields({
   );
 }
 
+/** What a new project's board is called unless renamed. */
+const STARTER_TITLE = "Issues";
+
+/** The board a new project starts with; its key follows the project's name until typed. */
+function useStarterBoard(projectTitle: string) {
+  const taken = useTakenCodes();
+  const [enabled, setEnabled] = useState(true);
+  const [title, setTitle] = useState(STARTER_TITLE);
+  const [typedCode, setTypedCode] = useState<string>();
+  const code = typedCode ?? suggestCode(projectTitle, taken);
+  const error = codeError(code, taken);
+  return {
+    code,
+    /** What the project is created with: the board, or nothing when switched off. */
+    draft: enabled ? { code, title: title.trim() } : undefined,
+    enabled,
+    error,
+    setCode: setTypedCode,
+    setEnabled,
+    setTitle,
+    title,
+    valid: !enabled || (title.trim() !== "" && code !== "" && !error),
+  };
+}
+
+type StarterBoard = ReturnType<typeof useStarterBoard>;
+
+function StarterBoardField({ board }: { board: StarterBoard }) {
+  const id = useId();
+  return (
+    <Collapsible
+      className="bg-muted/60 rounded-[calc(var(--radius-lg)+0.75rem)]"
+      open={board.enabled}
+    >
+      <label
+        className="flex cursor-pointer items-center gap-3 p-3 select-none"
+        htmlFor={`${id}-switch`}
+      >
+        <span className="bg-card shadow-surface flex size-9 shrink-0 items-center justify-center rounded-lg">
+          <SquareKanbanIcon
+            className={cn(
+              "size-4 transition-colors duration-150",
+              board.enabled ? "text-foreground" : "text-muted-foreground"
+            )}
+          />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-sm font-medium" id={`${id}-label`}>
+            Start with a board
+          </span>
+          <span className="text-muted-foreground text-xs" id={`${id}-hint`}>
+            Plan cards and sprints from day one.
+          </span>
+        </span>
+        <Switch
+          aria-describedby={`${id}-hint`}
+          aria-labelledby={`${id}-label`}
+          checked={board.enabled}
+          id={`${id}-switch`}
+          onCheckedChange={(checked) => board.setEnabled(checked)}
+        />
+      </label>
+      <CollapsibleContent>
+        <div className="grid grid-cols-[1fr_7.5rem] gap-3 px-3 pb-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-title`}>Board name</Label>
+            <Input
+              autoComplete="off"
+              id={`${id}-title`}
+              onChange={(event) => board.setTitle(event.target.value)}
+              value={board.title}
+            />
+          </div>
+          <KeyField
+            error={board.error}
+            onChange={(value) => board.setCode(value)}
+            value={board.code}
+          />
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 interface ProjectFormProps {
   project?: Project;
   projects: Project[];
@@ -185,9 +278,16 @@ function initialDraft(project: Project | undefined, me: User) {
   };
 }
 
-/** Creates the project or saves its settings; resolves with its link once saved. */
-function saveProject(project: Project | undefined, draft: ProjectDraft) {
-  return project ? updateProject(project, draft) : createProject(draft);
+/** Creates the project, with its starter board if any, or saves its settings; resolves with its link once saved. */
+function saveProject(
+  project: Project | undefined,
+  draft: ProjectDraft,
+  board: NewProjectDraft["board"]
+) {
+  if (project) {
+    return updateProject(project, draft);
+  }
+  return createProject(board ? { ...draft, board } : draft);
 }
 
 function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
@@ -203,6 +303,7 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
   const [color, setColor] = useState<Project["color"]>(initial.color);
   const [roster, setRoster] = useState(() => toRoster(initial.members));
   const [saving, setSaving] = useState(false);
+  const starter = useStarterBoard(title);
 
   // Admins see every link in use; others learn of a clash when saving.
   const every = useQuery(api.projects.slugs) ?? [];
@@ -215,7 +316,11 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
   const taken = takenSlugs.has(finalSlug);
   // A personal project keeps its name and link; only who sees it changes.
   const personal = project?.personalFor !== undefined;
-  const valid = title.trim() !== "" && finalSlug !== "" && !taken;
+  const valid =
+    title.trim() !== "" &&
+    finalSlug !== "" &&
+    !taken &&
+    (project !== undefined || starter.valid);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -230,7 +335,7 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
       title: title.trim(),
     };
     setSaving(true);
-    const saved = await saveProject(project, draft);
+    const saved = await saveProject(project, draft, starter.draft);
     setSaving(false);
     if (!saved) {
       return;
@@ -303,6 +408,8 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
         owner={project?.personalFor}
         roster={roster}
       />
+
+      {!project && <StarterBoardField board={starter} />}
 
       <DialogFooter className="mt-1">
         {project && !personal && (

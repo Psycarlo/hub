@@ -10,7 +10,7 @@ import { SquareKanbanIcon } from "lucide-react";
 import { MotionConfig } from "motion/react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { DefaultParams } from "wouter";
-import { Redirect, Route, Switch, useRoute } from "wouter";
+import { Redirect, Route, Switch, useRoute, useSearch } from "wouter";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -25,7 +25,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ADMIN_PATH, SETTINGS_PATH } from "@/components/user-menu";
 import { AdminPage } from "@/features/admin/admin-page";
-import { BoardRoute, findBoard, parseSlug } from "@/features/board/board-route";
+import {
+  BoardRoute,
+  findBoard,
+  parseSlug,
+  renamedPath,
+} from "@/features/board/board-route";
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
 import { LoginPage } from "@/features/login/login-page";
@@ -128,6 +133,7 @@ function Workspace() {
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const [creatingProject, setCreatingProject] = useState(false);
   const [, params] = useRoute<{ slug: string }>("/:slug");
+  const search = useSearch();
   const slug = params ? parseSlug(params.slug) : undefined;
   const board = slug ? findBoard(boards, slug.code) : undefined;
   const boardProject = board
@@ -188,6 +194,15 @@ function Workspace() {
             <Route path={ADMIN_PATH}>
               <AdminPage />
             </Route>
+            {board && slug && board.code !== slug.code && (
+              // Reached by a code the board had before.
+              <Route path="/:slug">
+                <Redirect
+                  replace
+                  to={renamedPath(board, slug.number, search)}
+                />
+              </Route>
+            )}
             {slug && (
               <Route path="/:slug">
                 <TopBar crumbs={boardCrumbs(slug.code, board, boardProject)} />

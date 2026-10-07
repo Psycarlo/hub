@@ -1,5 +1,8 @@
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import type { BoardView } from "@convex/boards";
+import { differenceInCalendarDays, parseISO } from "date-fns";
+
+import { plural } from "@/lib/utils";
 
 export type {
   Label,
@@ -10,11 +13,13 @@ export type {
 export {
   CODE,
   LABELS,
+  MAX_CODE,
   PRIORITIES,
   rankBetween,
   RESERVED_CODES,
   STATUSES,
   statusLabel,
+  suggestCode,
 } from "@convex/shared/model";
 
 export type UserId = Id<"users">;
@@ -48,6 +53,18 @@ export function cardKey(
   card: Pick<Card, "number">
 ) {
   return `${board.code}-${card.number}`;
+}
+
+/** How long is left until a sprint's `YYYY-MM-DD` end, like "3 days left". */
+export function sprintRemaining(end: string): string {
+  const days = differenceInCalendarDays(parseISO(end), new Date());
+  if (days > 0) {
+    return `${plural(days, "day")} left`;
+  }
+  if (days < 0) {
+    return `${plural(-days, "day")} over`;
+  }
+  return "Last day";
 }
 
 export function activeSprint(content: BoardContent): Sprint | undefined {
