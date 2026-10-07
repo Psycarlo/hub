@@ -57,7 +57,7 @@ Leave it running: it pushes the functions in `convex/` on every save and keeps `
 
 ### 3. Set up auth keys
 
-Convex Auth signs sessions with a key pair. In another terminal:
+Convex Auth signs sessions with a key pair. With step 2 done (it needs the `CONVEX_DEPLOYMENT` that `npx convex dev` writes to `.env.local`), run in another terminal:
 
 ```bash
 npx @convex-dev/auth
@@ -115,16 +115,17 @@ pnpm build          # type-check and build to dist/
 ## Deploy on Vercel
 
 1. In Convex, open the production deployment and create a **deploy key** (Settings → Deploy keys).
-2. Import the repository in Vercel. `vercel.json` sets the build command to `convex deploy --cmd 'pnpm build'`, which pushes the functions to production and builds the app against them, and sends every path to `index.html`.
-3. Add `CONVEX_DEPLOY_KEY` to the Vercel project's environment variables (Production).
-4. Set up the production deployment like the development one:
+2. Add it to the GitHub repository as the secret `CONVEX_DEPLOY_KEY`. `.github/workflows/convex-deploy.yml` pushes the functions to production on every push to `main` that changes `convex/`, `package.json` or `pnpm-lock.yaml`. Run it by hand from the Actions tab, or run `pnpm exec convex deploy` locally.
+3. Import the repository in Vercel. `vercel.json` sets the build command to `pnpm build` and sends every path to `index.html`.
+4. Add `VITE_CONVEX_URL` to the Vercel project's environment variables (Production), set to the production deployment's URL.
+5. Set up the production deployment like the development one:
 
    ```bash
    npx @convex-dev/auth --prod                  # SITE_URL is your Vercel URL
    npx convex env set --prod R2_TOKEN xxxxx     # and the other R2_* values
    ```
 
-5. Deploy, then create the first account on the live site: it becomes the production admin.
+6. Deploy, then create the first account on the live site: it becomes the production admin.
 
 Optionally set `VITE_APP_NAME` in Vercel to rename the hub.
 
