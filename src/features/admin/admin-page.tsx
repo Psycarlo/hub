@@ -14,12 +14,12 @@ import {
   UserXIcon,
   XIcon,
 } from "lucide-react";
-import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import type { ChangeEvent, DragEvent, FormEvent, ReactNode } from "react";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { IconButton } from "@/components/icon-button";
-import { Logo } from "@/components/logo";
+import { LogoMark } from "@/components/logo";
 import { TopBar } from "@/components/top-bar";
 import {
   AlertDialog,
@@ -75,6 +75,10 @@ type AppRole = User["role"];
 const MIN_PASSWORD = 8;
 /** The logo is also the favicon, loaded on every visit, so it's kept small. */
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+/** The size to ask for: sharp everywhere, and what most logo exports default to. */
+const LOGO_PX = 512;
+/** Below this it gets upscaled at the largest size it shows: a 48px mark on a 3x screen. */
+const SOFT_LOGO_PX = 144;
 /** Formats every browser shows, as an image and as a favicon. */
 const LOGO_TYPES = [
   "image/png",
@@ -480,19 +484,53 @@ async function saveLogo(file: File): Promise<true> {
   return true;
 }
 
+/** A raster image's size, or null for SVG and anything the browser can't decode. */
+async function imageSize(
+  file: File
+): Promise<{ height: number; width: number } | null> {
+  if (file.type === "image/svg+xml") {
+    return null;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { height: bitmap.height, width: bitmap.width };
+    bitmap.close();
+    return size;
+  } catch {
+    return null;
+  }
+}
+
+/** A heads-up when the image will look worse than it could, after it's saved anyway. */
+function logoAdvice(
+  size: { height: number; width: number } | null
+): string | undefined {
+  if (!size) {
+    return undefined;
+  }
+  if (size.width !== size.height) {
+    return "It isn’t square, so it’s fitted inside the square with space around it.";
+  }
+  if (size.width < SOFT_LOGO_PX) {
+    return `It’s under ${SOFT_LOGO_PX} px, so it may look soft on sharp screens.`;
+  }
+  return undefined;
+}
+
+/** Whether a drag carries files, rather than text or a link. */
+function draggingFiles(event: DragEvent): boolean {
+  return event.dataTransfer.types.includes("Files");
+}
+
 function LogoField() {
   const logo = useLogo();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
 
-  const choose = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) {
-      return;
-    }
+  const upload = async (file: File) => {
     if (!LOGO_TYPES.includes(file.type)) {
-      toast.error("Pick a PNG, SVG, WebP, JPEG or GIF image.");
+      toast.error("Pick an SVG, PNG, WebP, JPEG or GIF image.");
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
@@ -500,10 +538,30 @@ function LogoField() {
       return;
     }
     setBusy(true);
-    const saved = await run(saveLogo(file));
+    const [saved, size] = await Promise.all([
+      run(saveLogo(file)),
+      imageSize(file),
+    ]);
     setBusy(false);
     if (saved) {
-      toast.success("Logo updated");
+      toast.success("Logo updated", { description: logoAdvice(size) });
+    }
+  };
+
+  const choose = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) {
+      upload(file);
+    }
+  };
+
+  const drop = (event: DragEvent) => {
+    event.preventDefault();
+    setOver(false);
+    const [file] = event.dataTransfer.files;
+    if (file && !busy) {
+      upload(file);
     }
   };
 
@@ -516,17 +574,54 @@ function LogoField() {
     }
   };
 
+  let status = logo ? "Custom logo" : "Default logo";
+  if (busy) {
+    status = "Saving…";
+  } else if (over) {
+    status = "Drop to use it as the logo";
+  }
+
   return (
-    <div className="bg-card shadow-surface flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4">
-      <div className="relative flex h-14 min-w-0 items-center">
-        <Logo className="h-9" />
-        {busy && (
-          <span className="bg-card/70 absolute inset-0 grid place-items-center">
-            <Spinner />
-          </span>
-        )}
+    <div
+      className={cn(
+        "bg-card shadow-surface flex flex-col gap-4 rounded-2xl p-4 transition-[background-color,box-shadow] duration-150 ease-out sm:flex-row sm:items-center",
+        over && "bg-primary/5 ring-primary/40 ring-2"
+      )}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+          setOver(false);
+        }
+      }}
+      onDragOver={(event) => {
+        if (!busy && draggingFiles(event)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          setOver(true);
+        }
+      }}
+      onDrop={drop}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        {/* Padding plus the mark's own corner radius, so the corners nest. */}
+        <div className="bg-muted relative grid size-16 shrink-0 place-items-center rounded-[22px]">
+          <LogoMark className="size-12" />
+          {busy && (
+            <span className="bg-muted/70 absolute inset-0 grid place-items-center rounded-[inherit]">
+              <Spinner />
+            </span>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <p aria-live="polite" className="text-sm font-medium">
+            {status}
+          </p>
+          <p className="text-muted-foreground text-xs text-pretty">
+            Square SVG, or PNG at least {LOGO_PX} × {LOGO_PX} px, up to 2 MB.
+            Fill the square edge to edge: the corners are rounded for you.
+          </p>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
         {logo && (
           <Button
             className="text-muted-foreground"
@@ -605,7 +700,7 @@ export function AdminPage() {
           <People me={me._id} />
         </Section>
         <Section
-          description="Shown in the sidebar, on the sign-in page and as the browser tab’s icon. A square image works best."
+          description="Shown in the sidebar, on the sign-in page and as the browser tab’s icon."
           title="Logo"
         >
           <LogoField />
