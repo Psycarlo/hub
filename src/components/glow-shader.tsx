@@ -24,11 +24,11 @@ const LIGHT_STOPS = [
 ];
 
 /**
- * A slower, calmer cousin of the sign-in shader for the top of the dashboard.
- * It fades in once the GPU draws, and the CSS glow under it stays on its own
+ * A slower, calmer cousin of the sign-in shader for the top of every page. It
+ * fades in once the GPU draws, and the CSS glow under it stays on its own
  * where WebGPU isn't available.
  */
-export function HomeShader() {
+export function GlowShader() {
   const dark = useDark();
   const still = useReducedMotion() ?? false;
   const [ready, setReady] = useState(false);

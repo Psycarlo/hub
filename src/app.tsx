@@ -14,6 +14,7 @@ import { Redirect, Route, Switch, useRoute } from "wouter";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { PageGlow } from "@/components/page-glow";
 import { ProjectAvatar } from "@/components/project-avatar";
 import { AccessRemoved, LoadingScreen } from "@/components/status-screens";
 import type { Crumb } from "@/components/top-bar";
@@ -142,57 +143,61 @@ function Workspace() {
         unread={inbox.unread}
       />
       <SidebarInset>
-        <Switch>
-          <Route path="/">
-            <HomePage
-              boards={boards}
-              loaded={projectsLoaded && boardList !== undefined}
-              onNewProject={newProject}
-              projects={projects}
-              tables={tables}
-            />
-          </Route>
-          <Route<ProjectParams> path="/p/:project/:table?/:record?">
-            {(route) => (
-              <Suspense fallback={<RouteFallback />}>
-                <ProjectRoute
-                  boards={boards}
-                  docs={docs}
-                  docsLoaded={pages !== undefined}
-                  loaded={projectsLoaded}
-                  projects={projects}
-                  recordId={route.record}
-                  slug={route.project}
-                  tableSlug={route.table}
-                />
-              </Suspense>
-            )}
-          </Route>
-          <Route path={INBOX_PATH}>
-            <InboxPage inbox={inbox} />
-          </Route>
-          <Route path={SETTINGS_PATH}>
-            <SettingsPage />
-          </Route>
-          <Route path={ADMIN_PATH}>
-            <AdminPage />
-          </Route>
-          {slug && (
-            <Route path="/:slug">
-              <TopBar crumbs={boardCrumbs(slug.code, board, boardProject)} />
-              <BoardRoute
-                board={board}
-                cardNumber={slug.number}
+        <PageGlow />
+        {/* Positioned, so every page paints over the glow. */}
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          <Switch>
+            <Route path="/">
+              <HomePage
+                boards={boards}
                 loaded={projectsLoaded && boardList !== undefined}
-                project={boardProject}
+                onNewProject={newProject}
                 projects={projects}
+                tables={tables}
               />
             </Route>
-          )}
-          <Route>
-            <Redirect replace to="/" />
-          </Route>
-        </Switch>
+            <Route<ProjectParams> path="/p/:project/:table?/:record?">
+              {(route) => (
+                <Suspense fallback={<RouteFallback />}>
+                  <ProjectRoute
+                    boards={boards}
+                    docs={docs}
+                    docsLoaded={pages !== undefined}
+                    loaded={projectsLoaded}
+                    projects={projects}
+                    recordId={route.record}
+                    slug={route.project}
+                    tableSlug={route.table}
+                  />
+                </Suspense>
+              )}
+            </Route>
+            <Route path={INBOX_PATH}>
+              <InboxPage inbox={inbox} />
+            </Route>
+            <Route path={SETTINGS_PATH}>
+              <SettingsPage />
+            </Route>
+            <Route path={ADMIN_PATH}>
+              <AdminPage />
+            </Route>
+            {slug && (
+              <Route path="/:slug">
+                <TopBar crumbs={boardCrumbs(slug.code, board, boardProject)} />
+                <BoardRoute
+                  board={board}
+                  cardNumber={slug.number}
+                  loaded={projectsLoaded && boardList !== undefined}
+                  project={boardProject}
+                  projects={projects}
+                />
+              </Route>
+            )}
+            <Route>
+              <Redirect replace to="/" />
+            </Route>
+          </Switch>
+        </div>
       </SidebarInset>
       <ProjectDialog
         onOpenChange={setCreatingProject}

@@ -3,13 +3,7 @@ import { FolderLockIcon, LockIcon, PlusIcon } from "lucide-react";
 import type { Variants } from "motion/react";
 import { motion } from "motion/react";
 import type { PointerEvent, ReactNode } from "react";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useMemo,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { Link } from "wouter";
 
 import { ProjectAvatar } from "@/components/project-avatar";
@@ -18,19 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CARD_SURFACE, MemberAvatars } from "@/features/boards/board-card";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useMe } from "@/hooks/use-users";
 import type { NavTable } from "@/lib/crm";
 import type { Board } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { projectPath, splitPersonal } from "@/lib/project";
 import { plural } from "@/lib/utils";
-
-// Shares its engine with the sign-in shader, so it is usually cached already.
-const HomeShader = lazy(async () => {
-  const module = await import("@/features/home/home-shader");
-  return { default: module.HomeShader };
-});
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 /** The gap between one part of the page rising in and the next. */
@@ -251,29 +238,6 @@ function CardsSkeleton() {
   );
 }
 
-/**
- * A soft wash of the hub's blues in the top-right corner, behind the top bar
- * and the greeting. Phones get the still CSS glow alone, sparing the battery.
- */
-function Glow() {
-  const mobile = useIsMobile();
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-0 h-[32rem] overflow-hidden"
-    >
-      <div className="absolute top-0 right-0 h-full w-full max-w-5xl [mask-image:radial-gradient(ellipse_90%_100%_at_100%_0%,#000,transparent_72%)] opacity-60 dark:opacity-50">
-        <div className="bg-primary/15 absolute inset-0" />
-        {!mobile && (
-          <Suspense>
-            <HomeShader />
-          </Suspense>
-        )}
-      </div>
-    </div>
-  );
-}
-
 interface HomePageProps {
   boards: Board[];
   projects: Project[];
@@ -356,10 +320,8 @@ export function HomePage({
 
   return (
     <>
-      <Glow />
       <TopBar crumbs={[{ label: "Home" }]} />
-      {/* Positioned, so it paints over the glow. */}
-      <main className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 pt-4 pb-10 sm:px-6">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 pt-4 pb-10 sm:px-6">
         <Reveal at={0} initial={intro}>
           <div className="flex flex-col gap-1">
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
