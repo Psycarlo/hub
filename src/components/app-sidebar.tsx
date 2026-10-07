@@ -1,4 +1,5 @@
 import {
+  CameraIcon,
   ChevronRightIcon,
   HouseIcon,
   InboxIcon,
@@ -12,6 +13,7 @@ import { useLocation } from "wouter";
 import { Logo } from "@/components/logo";
 import { NavLink } from "@/components/nav-link";
 import { ProjectAvatar } from "@/components/project-avatar";
+import { SidebarNotice, useDismissed } from "@/components/sidebar-notice";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,7 +38,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { ADMIN_PATH, UserMenu } from "@/components/user-menu";
+import { ADMIN_PATH, SETTINGS_PATH, UserMenu } from "@/components/user-menu";
 import { boardPath } from "@/features/board/board-context";
 import { findBoard, parseSlug } from "@/features/board/board-route";
 import { tablePath } from "@/features/crm/crm-context";
@@ -50,6 +52,22 @@ import { EMPTY_DOCS } from "@/lib/docs";
 import type { Board } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { canEdit, projectPath, splitPersonal } from "@/lib/project";
+
+/** Asks people without a photo to add one, until they do or wave it away. */
+function PhotoNotice() {
+  const me = useMe();
+  const [dismissed, dismiss] = useDismissed(`photo:${me._id}`);
+  return (
+    <SidebarNotice
+      action={{ href: SETTINGS_PATH, label: "Upload a photo" }}
+      description="So your team can spot you on cards, comments and docs."
+      icon={<CameraIcon />}
+      onDismiss={dismiss}
+      show={!(me.image || dismissed)}
+      title="Add a profile photo"
+    />
+  );
+}
 
 /** Projects shown open until the user folds them. */
 const OPEN_BY_DEFAULT = 3;
@@ -302,6 +320,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <PhotoNotice />
         <SidebarMenu>
           <SidebarMenuItem>
             <UserMenu />

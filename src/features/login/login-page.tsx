@@ -26,9 +26,9 @@ import { useIsDesktop } from "@/hooks/use-mobile";
 import { APP_NAME } from "@/lib/brand";
 
 // The shader engine is only for the sign-in page, and only on wide screens.
-const LoginShader = lazy(async () => {
-  const module = await import("@/features/login/login-shader");
-  return { default: module.LoginShader };
+const BrandShader = lazy(async () => {
+  const module = await import("@/components/brand-shader");
+  return { default: module.BrandShader };
 });
 
 const EASE = [0.23, 1, 0.32, 1] as const;
@@ -280,7 +280,7 @@ function ShowcasePanel() {
     <aside className="sticky top-0 h-dvh flex-1 p-3">
       <div className="relative isolate flex h-full flex-col justify-between overflow-hidden rounded-3xl bg-linear-to-br from-[#050f33] via-[#0b2585] to-[#2563eb] p-10 text-white xl:p-14">
         <Suspense>
-          <LoginShader />
+          <BrandShader />
         </Suspense>
         <div
           aria-hidden

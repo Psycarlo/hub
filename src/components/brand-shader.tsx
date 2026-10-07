@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FilmGrain, MeshGradient, Shader } from "shaders/react";
 
 /** Deep navy through the primary blue to a pale sky, so white text stays readable over most of it. */
-const STOPS = [
+const FULL = [
   { color: "#050f33", position: 0 },
   { color: "#0b2585", position: 0.3 },
   { color: "#2563eb", position: 0.62 },
@@ -12,12 +12,26 @@ const STOPS = [
   { color: "#b9d2ff", position: 1 },
 ];
 
+/** The same blues without the pale sky, for small surfaces where text covers most of it. */
+const DEEP = [
+  { color: "#050f33", position: 0 },
+  { color: "#0b2585", position: 0.4 },
+  { color: "#1d4ed8", position: 0.75 },
+  { color: "#3b82f6", position: 1 },
+];
+
 /**
  * A slow mesh gradient in the hub's blues, with a little film grain. It fades
- * in over the panel's CSS gradient once the GPU draws, and that gradient stays
- * on its own where WebGPU isn't available.
+ * in over the surface's CSS gradient once the GPU draws, and that gradient
+ * stays on its own where WebGPU isn't available.
  */
-export function LoginShader() {
+export function BrandShader({
+  tone = "full",
+  seed = 7,
+}: {
+  tone?: "full" | "deep";
+  seed?: number;
+}) {
   const still = useReducedMotion() ?? false;
   const [ready, setReady] = useState(false);
   return (
@@ -34,10 +48,10 @@ export function LoginShader() {
         colorSpace="oklab"
         count={6}
         drift={0.6}
-        seed={7}
+        seed={seed}
         smoothness={2.4}
         speed={still ? 0 : 0.35}
-        stops={STOPS}
+        stops={tone === "deep" ? DEEP : FULL}
         swirl={0.45}
       />
       <FilmGrain bias={1} strength={0.12} />
