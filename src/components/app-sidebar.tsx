@@ -1,4 +1,5 @@
 import {
+  BitcoinIcon,
   CameraIcon,
   ChevronRightIcon,
   HouseIcon,
@@ -45,11 +46,13 @@ import { tablePath } from "@/features/crm/crm-context";
 import { TableIcon } from "@/features/crm/table-icon";
 import { SidebarDocs } from "@/features/docs/sidebar-docs";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
+import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Board } from "@/lib/model";
+import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { canEdit, projectPath, splitPersonal } from "@/lib/project";
 
@@ -88,6 +91,8 @@ interface ProjectItemProps {
   docs: DocsContent;
   /** This project's boards. */
   boards: Board[];
+  /** This project's portfolios. */
+  portfolios: Portfolio[];
   openBoard?: Board;
   location: string;
   open: boolean;
@@ -99,6 +104,7 @@ function ProjectItem({
   tables,
   docs,
   boards,
+  portfolios,
   openBoard,
   location,
   open,
@@ -157,6 +163,22 @@ function ProjectItem({
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
           ))}
+          {portfolios.map((portfolio) => {
+            const href = portfolioPath(project, portfolio);
+            return (
+              <SidebarMenuSubItem key={portfolio._id}>
+                <SidebarMenuSubButton
+                  isActive={
+                    location === href || location.startsWith(`${href}/`)
+                  }
+                  render={<NavLink href={href} />}
+                >
+                  <BitcoinIcon />
+                  <span>{portfolio.title}</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
           <SidebarDocs
             canEdit={canEdit(project)}
             docs={docs}
@@ -174,6 +196,8 @@ interface AppSidebarProps {
   tables: NavTable[];
   /** Every project's doc pages, by project id. */
   docs: Map<string, DocsContent>;
+  /** Portfolios in every project. */
+  portfolios: Portfolio[];
   /** Unread notifications in the inbox. */
   unread: number;
   onNewProject: () => void;
@@ -184,6 +208,7 @@ export function AppSidebar({
   projects,
   tables,
   docs,
+  portfolios,
   unread,
   onNewProject,
 }: AppSidebarProps) {
@@ -221,6 +246,9 @@ export function AppSidebar({
         onOpenChange={(open) => setFolded({ ...folded, [project._id]: open })}
         open={isOpen(project, projectBoards)}
         openBoard={openBoard}
+        portfolios={portfolios.filter(
+          (portfolio) => portfolio.projectId === project._id
+        )}
         project={project}
         tables={tables.filter((table) => table.projectId === project._id)}
       />

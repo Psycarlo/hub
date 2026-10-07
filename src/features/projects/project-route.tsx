@@ -14,11 +14,20 @@ import {
 } from "@/features/docs/docs-context";
 import { DocsPage } from "@/features/docs/docs-page";
 import { PageView } from "@/features/docs/page-view";
+import {
+  PORTFOLIOS_SEGMENT,
+  parsePortfolioParam,
+  portfolioPath,
+  portfoliosPath,
+} from "@/features/portfolios/portfolio-context";
+import { PortfolioPage } from "@/features/portfolios/portfolio-page";
+import { PortfoliosPage } from "@/features/portfolios/portfolios-page";
 import { ProjectPage } from "@/features/projects/project-page";
 import { useProjectContent } from "@/hooks/use-project-content";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Board } from "@/lib/model";
+import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { projectPath } from "@/lib/project";
 
@@ -56,6 +65,9 @@ interface ProjectViewProps {
   docs: DocsContent;
   projects: Project[];
   boards: Board[];
+  /** The project's portfolios. */
+  portfolios: Portfolio[];
+  portfoliosLoaded: boolean;
   tableSlug?: string;
   recordId?: string;
 }
@@ -155,12 +167,81 @@ function DocsView({ project, docs, loaded, pageParam }: DocsViewProps) {
   );
 }
 
-interface ProjectRouteProps extends Omit<ProjectViewProps, "project" | "docs"> {
+interface PortfoliosViewProps {
+  project: Project;
+  portfolios: Portfolio[];
+  loaded: boolean;
+  /** The portfolio part of the link: its name, then its id. */
+  portfolioParam?: string;
+}
+
+function PortfoliosView({
+  project,
+  portfolios,
+  loaded,
+  portfolioParam,
+}: PortfoliosViewProps) {
+  const [, navigate] = useLocation();
+  const id = portfolioParam ? parsePortfolioParam(portfolioParam) : undefined;
+  const portfolio = id ? portfolios.find((item) => item._id === id) : undefined;
+  const path = portfolio ? portfolioPath(project, portfolio) : undefined;
+  // The link follows the name as it changes; any name before the id still opens it.
+  useEffect(() => {
+    if (path && portfolioParam && !path.endsWith(`/${portfolioParam}`)) {
+      navigate(path, { replace: true });
+    }
+  }, [navigate, portfolioParam, path]);
+
+  if (!portfolioParam) {
+    return (
+      <PortfoliosPage
+        loaded={loaded}
+        portfolios={portfolios}
+        project={project}
+      />
+    );
+  }
+  if (portfolio) {
+    return (
+      <PortfolioPage
+        key={portfolio._id}
+        portfolio={portfolio}
+        project={project}
+      />
+    );
+  }
+  return (
+    <>
+      <TopBar
+        crumbs={[
+          { href: projectPath(project), label: project.title },
+          { href: portfoliosPath(project), label: "Portfolios" },
+        ]}
+      />
+      {loaded ? (
+        <NotFound
+          href={portfoliosPath(project)}
+          label="Portfolios"
+          title="Portfolio not found"
+        />
+      ) : (
+        <Loading />
+      )}
+    </>
+  );
+}
+
+interface ProjectRouteProps extends Omit<
+  ProjectViewProps,
+  "project" | "docs" | "portfolios"
+> {
   slug: string;
   loaded: boolean;
   /** Every project's doc pages, by project id. */
   docs: Map<string, DocsContent>;
   docsLoaded: boolean;
+  /** Portfolios in every project. */
+  portfolios: Portfolio[];
 }
 
 export function ProjectRoute({
@@ -169,9 +250,24 @@ export function ProjectRoute({
   projects,
   docs,
   docsLoaded,
+  portfolios,
   ...props
 }: ProjectRouteProps) {
   const project = projects.find((item) => item.slug === slug.toLowerCase());
+  const projectPortfolios = project
+    ? portfolios.filter((item) => item.projectId === project._id)
+    : [];
+  if (project && props.tableSlug?.toLowerCase() === PORTFOLIOS_SEGMENT) {
+    return (
+      <PortfoliosView
+        key={project._id}
+        loaded={props.portfoliosLoaded}
+        portfolioParam={props.recordId}
+        portfolios={projectPortfolios}
+        project={project}
+      />
+    );
+  }
   if (project && props.tableSlug?.toLowerCase() === DOCS_SEGMENT) {
     return (
       <DocsView
@@ -188,6 +284,7 @@ export function ProjectRoute({
       <ProjectView
         docs={docs.get(project._id) ?? EMPTY_DOCS}
         key={project._id}
+        portfolios={projectPortfolios}
         project={project}
         projects={projects}
         {...props}

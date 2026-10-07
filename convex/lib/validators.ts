@@ -18,6 +18,7 @@ import {
 } from "../shared/model";
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
+import { FIATS, TRANSACTION_KINDS } from "../shared/portfolio";
 
 type OneOf<T extends string> = VUnion<T, VLiteral<T, "required">[], "required">;
 
@@ -46,6 +47,8 @@ export const vStageKind = oneOf(STAGE_KINDS);
 export const vTableIcon = oneOf(TABLE_ICONS);
 export const vCurrency = oneOf(CURRENCIES);
 export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
+export const vFiat = oneOf(FIATS);
+export const vTransactionKind = oneOf(TRANSACTION_KINDS);
 
 export const vFieldOption = v.object({
   color: vColor,

@@ -19,7 +19,9 @@ import {
 import { isAdmin, requireAdmin, requireUser } from "./lib/access";
 import { dropFile, ownedFile } from "./lib/files";
 import { mediaUrl } from "./lib/media";
-import { vAppRole } from "./lib/validators";
+import { vAppRole, vFiat } from "./lib/validators";
+import type { Fiat } from "./shared/portfolio";
+import { DEFAULT_FIAT } from "./shared/portfolio";
 
 const MIN_PASSWORD = 8;
 const MAX_NAME = 80;
@@ -31,6 +33,8 @@ export interface UserView {
   image?: string;
   role: "admin" | "member";
   deactivated: boolean;
+  /** What they see prices in. */
+  currency: Fiat;
 }
 
 function displayName(user: Doc<"users">): string {
@@ -40,6 +44,7 @@ function displayName(user: Doc<"users">): string {
 export function toUserView(user: Doc<"users">): UserView {
   return {
     _id: user._id,
+    currency: user.currency ?? DEFAULT_FIAT,
     deactivated: user.deactivated ?? false,
     email: user.email ?? "",
     image: user.avatarKey ? mediaUrl(user.avatarKey) : undefined,
@@ -85,6 +90,14 @@ export const updateProfile = mutation({
       throw new ConvexError("Enter a name.");
     }
     await ctx.db.patch(user._id, { name: trimmed });
+  },
+});
+
+export const setCurrency = mutation({
+  args: { currency: vFiat },
+  handler: async (ctx, { currency }) => {
+    const user = await requireUser(ctx);
+    await ctx.db.patch(user._id, { currency });
   },
 });
 

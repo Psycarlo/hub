@@ -352,7 +352,7 @@ export const update = mutation({
   },
 });
 
-/** Deletes the project for everyone, with its boards, tables and docs. */
+/** Deletes the project for everyone, with its boards, tables, docs and portfolios. */
 export const remove = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {

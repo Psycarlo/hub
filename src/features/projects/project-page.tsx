@@ -22,16 +22,22 @@ import { tablePath } from "@/features/crm/crm-context";
 import { NewTableDialog } from "@/features/crm/new-table-dialog";
 import { TableIcon } from "@/features/crm/table-icon";
 import { PageGrid, useNewPage } from "@/features/docs/docs-page";
+import {
+  NoPortfolios,
+  PortfolioGrid,
+} from "@/features/portfolios/portfolio-card";
+import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import { ProjectDialog } from "@/features/projects/project-dialog";
 import type { CrmRecord, CrmTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import type { Board } from "@/lib/model";
 import { SWATCH_COLORS } from "@/lib/palette";
+import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { canEdit, canManage } from "@/lib/project";
 
-function Section({
+export function Section({
   title,
   action,
   children,
@@ -146,8 +152,63 @@ interface ProjectPageProps {
   docs: DocsContent;
   projects: Project[];
   boards: Board[];
+  /** The project's portfolios. */
+  portfolios: Portfolio[];
+  portfoliosLoaded: boolean;
   content?: ProjectContent;
   loaded: boolean;
+}
+
+/** The project's portfolios with their total, and a way to start one. */
+function ProjectPortfolios({
+  project,
+  portfolios,
+  loaded,
+}: {
+  project: Project;
+  portfolios: Portfolio[];
+  loaded: boolean;
+}) {
+  const [creating, setCreating] = useState(false);
+  const editable = canEdit(project);
+
+  let body: ReactNode = (
+    <PortfolioGrid portfolios={portfolios} project={project} withTotal />
+  );
+  if (portfolios.length === 0 && !loaded) {
+    body = (
+      <div aria-busy className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-36 rounded-2xl max-sm:hidden" />
+      </div>
+    );
+  } else if (portfolios.length === 0) {
+    body = <NoPortfolios editable={editable} onNew={() => setCreating(true)} />;
+  }
+
+  return (
+    <>
+      <Section
+        action={
+          editable &&
+          portfolios.length > 0 && (
+            <Button onClick={() => setCreating(true)} variant="outline">
+              <PlusIcon />
+              New portfolio
+            </Button>
+          )
+        }
+        title="Portfolios"
+      >
+        {body}
+      </Section>
+      <PortfolioDialog
+        onOpenChange={setCreating}
+        open={creating}
+        project={project}
+      />
+    </>
+  );
 }
 
 export function ProjectPage({
@@ -155,6 +216,8 @@ export function ProjectPage({
   docs,
   projects,
   boards,
+  portfolios,
+  portfoliosLoaded,
   content,
   loaded,
 }: ProjectPageProps) {
@@ -310,6 +373,11 @@ export function ProjectPage({
             </p>
           )}
         </Section>
+        <ProjectPortfolios
+          loaded={portfoliosLoaded}
+          portfolios={portfolios}
+          project={project}
+        />
       </main>
       <ProjectDialog
         {...dialogProps("settings")}

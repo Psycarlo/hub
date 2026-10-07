@@ -190,7 +190,7 @@ function Calendar({
         ),
         root: cn("w-fit", defaultClassNames.root),
         today: cn(
-          "bg-muted text-foreground rounded-(--cell-radius) data-[selected=true]:rounded-none",
+          "bg-muted text-foreground rounded-(--cell-radius) has-data-[selected-single=true]:bg-transparent data-[selected=true]:rounded-none",
           defaultClassNames.today
         ),
         week: cn("mt-2 flex w-full", defaultClassNames.week),

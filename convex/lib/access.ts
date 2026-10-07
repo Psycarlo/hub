@@ -225,6 +225,41 @@ export async function requirePage(
   return { ...(await requireProject(ctx, page.projectId, need)), page };
 }
 
+export async function requirePortfolio(
+  ctx: QueryCtx,
+  portfolioId: Id<"portfolios">,
+  need: Need
+): Promise<ProjectAccess & { portfolio: Doc<"portfolios"> }> {
+  const portfolio = await ctx.db.get(portfolioId);
+  if (!portfolio) {
+    throw new ConvexError("This portfolio doesn’t exist anymore.");
+  }
+  return {
+    ...(await requireProject(ctx, portfolio.projectId, need)),
+    portfolio,
+  };
+}
+
+export async function requireTransaction(
+  ctx: QueryCtx,
+  transactionId: Id<"portfolioTransactions">,
+  need: Need
+): Promise<
+  ProjectAccess & {
+    portfolio: Doc<"portfolios">;
+    transaction: Doc<"portfolioTransactions">;
+  }
+> {
+  const transaction = await ctx.db.get(transactionId);
+  if (!transaction) {
+    throw new ConvexError("This transaction doesn’t exist anymore.");
+  }
+  return {
+    ...(await requirePortfolio(ctx, transaction.portfolioId, need)),
+    transaction,
+  };
+}
+
 /**
  * The access check's result, or null when the thing is gone or no longer
  * shared. Live queries for one card, record or board use it, so a screen open

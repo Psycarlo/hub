@@ -6,6 +6,7 @@ import {
   vActivityType,
   vAppRole,
   vField,
+  vFiat,
   vLabel,
   vPriority,
   vProjectColor,
@@ -14,6 +15,7 @@ import {
   vStageMove,
   vStatus,
   vTableIcon,
+  vTransactionKind,
   vValues,
 } from "./lib/validators";
 
@@ -26,6 +28,8 @@ export default defineSchema({
   users: defineTable({
     /** R2 key of the profile photo. */
     avatarKey: v.optional(v.string()),
+    /** What they see prices in; dollars until they pick. */
+    currency: v.optional(vFiat),
     /** Set when an admin takes someone's access away. */
     deactivated: v.optional(v.boolean()),
     email: v.optional(v.string()),
@@ -202,6 +206,35 @@ export default defineSchema({
     pageId: v.id("docPages"),
     revision: v.number(),
   }).index("by_page_and_revision", ["pageId", "revision"]),
+
+  /** Bitcoin a project holds, tracked through what it bought and sold. */
+  portfolios: defineTable({
+    createdBy: v.id("users"),
+    description: v.string(),
+    projectId: v.id("projects"),
+    /** What its transactions add up to, kept here so lists needn't read them all. */
+    sats: v.number(),
+    title: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  portfolioTransactions: defineTable({
+    /** When it happened, in ms. */
+    at: v.number(),
+    createdBy: v.id("users"),
+    /** The currency the price is in. */
+    currency: vFiat,
+    kind: vTransactionKind,
+    note: v.string(),
+    portfolioId: v.id("portfolios"),
+    /** What one bitcoin cost then. */
+    price: v.number(),
+    projectId: v.id("projects"),
+    /** Satoshis bought or sold, always positive. */
+    sats: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_portfolio_and_at", ["portfolioId", "at"])
+    .index("by_project", ["projectId"]),
 
   /** Files uploaded to R2, and who uploaded them. */
   files: defineTable({

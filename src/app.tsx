@@ -41,6 +41,7 @@ import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
 import { docsByProject } from "@/lib/docs";
 import type { Board } from "@/lib/model";
+import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { projectPath } from "@/lib/project";
 
@@ -55,6 +56,7 @@ const NO_PROJECTS: Project[] = [];
 const NO_BOARDS: Board[] = [];
 const NO_TABLES: NavTable[] = [];
 const NO_PAGES: DocPage[] = [];
+const NO_PORTFOLIOS: Portfolio[] = [];
 
 function boardCrumbs(code: string, board?: Board, project?: Project): Crumb[] {
   const crumb: Crumb = {
@@ -117,11 +119,13 @@ function Workspace() {
   const boardList = useQuery(api.boards.list);
   const tables = useQuery(api.crm.navTables) ?? NO_TABLES;
   const pages = useQuery(api.docs.tree);
+  const portfolioList = useQuery(api.portfolios.list);
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
   const projects = projectList ?? NO_PROJECTS;
   const boards = boardList ?? NO_BOARDS;
   const docs = docsByProject(pages ?? NO_PAGES);
+  const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const [creatingProject, setCreatingProject] = useState(false);
   const [, params] = useRoute<{ slug: string }>("/:slug");
   const slug = params ? parseSlug(params.slug) : undefined;
@@ -138,6 +142,7 @@ function Workspace() {
         boards={boards}
         docs={docs}
         onNewProject={newProject}
+        portfolios={portfolios}
         projects={projects}
         tables={tables}
         unread={inbox.unread}
@@ -164,6 +169,8 @@ function Workspace() {
                     docs={docs}
                     docsLoaded={pages !== undefined}
                     loaded={projectsLoaded}
+                    portfolios={portfolios}
+                    portfoliosLoaded={portfolioList !== undefined}
                     projects={projects}
                     recordId={route.record}
                     slug={route.project}

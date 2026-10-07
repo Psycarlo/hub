@@ -1,5 +1,4 @@
 import { api } from "@convex/_generated/api";
-import { cn } from "cn";
 import {
   CameraIcon,
   MonitorIcon,
@@ -22,6 +21,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
+import type { Fiat } from "@/lib/portfolio";
+import { fiatSymbol } from "@/lib/portfolio";
 import type { Theme } from "@/lib/theme";
 import { setTheme, useTheme } from "@/lib/theme";
 import { isImage, uploadFile } from "@/lib/upload";
@@ -33,6 +34,15 @@ const THEMES = [
   { icon: MoonIcon, label: "Dark", value: "dark" },
   { icon: MonitorIcon, label: "System", value: "system" },
 ] as const;
+
+const CURRENCIES = [
+  { label: "US dollar", value: "USD" },
+  { label: "Euro", value: "EUR" },
+] as const satisfies readonly { label: string; value: Fiat }[];
+
+/** One choice in a row of them, like a theme or a currency. */
+const CHOICE =
+  "text-muted-foreground hover:bg-foreground/5 hover:text-foreground data-pressed:bg-primary/12 data-pressed:text-foreground data-pressed:inset-ring-primary/50 flex h-9 items-center gap-2 rounded-lg px-3 text-sm inset-ring inset-ring-transparent transition-[background-color,color,box-shadow] duration-150 [&_svg]:size-4";
 
 function Section({
   title,
@@ -258,14 +268,51 @@ function ThemePicker() {
       value={[theme]}
     >
       {THEMES.map(({ value, label, icon: Icon }) => (
-        <ToggleGroupItem
-          className={cn(
-            "text-muted-foreground hover:bg-foreground/5 hover:text-foreground data-pressed:bg-primary/12 data-pressed:text-foreground data-pressed:inset-ring-primary/50 flex h-9 items-center gap-2 rounded-lg px-3 text-sm inset-ring inset-ring-transparent transition-[background-color,color,box-shadow] duration-150 [&_svg]:size-4"
-          )}
-          key={value}
-          value={value}
-        >
+        <ToggleGroupItem className={CHOICE} key={value} value={value}>
           <Icon />
+          {label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
+function setCurrency(currency: Fiat) {
+  return run(
+    convex.mutation(
+      api.users.setCurrency,
+      { currency },
+      {
+        optimisticUpdate: (store) => {
+          const me = store.getQuery(api.users.me, {});
+          if (me) {
+            store.setQuery(api.users.me, {}, { ...me, currency });
+          }
+        },
+      }
+    )
+  );
+}
+
+function CurrencyPicker() {
+  const me = useMe();
+  return (
+    <ToggleGroup
+      aria-label="Currency"
+      className="flex-wrap gap-2"
+      onValueChange={(next) => {
+        const picked = CURRENCIES.find((item) => item.value === next[0]);
+        if (picked && picked.value !== me.currency) {
+          setCurrency(picked.value);
+        }
+      }}
+      value={[me.currency]}
+    >
+      {CURRENCIES.map(({ value, label }) => (
+        <ToggleGroupItem className={CHOICE} key={value} value={value}>
+          <span aria-hidden className="w-3 text-center font-medium">
+            {fiatSymbol(value)}
+          </span>
           {label}
         </ToggleGroupItem>
       ))}
@@ -295,6 +342,12 @@ export function SettingsPage() {
         </Section>
         <Section description="Saved on this device." title="Appearance">
           <ThemePicker />
+        </Section>
+        <Section
+          description="What portfolios show their worth in."
+          title="Currency"
+        >
+          <CurrencyPicker />
         </Section>
       </main>
     </>
