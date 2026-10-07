@@ -34,7 +34,7 @@ import { useInbox } from "@/hooks/use-inbox";
 import type { User } from "@/hooks/use-users";
 import { MeContext, useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
-import { useBrandSync } from "@/lib/brand";
+import { useBrandSync, useUnreadIcon } from "@/lib/brand";
 import { convex } from "@/lib/convex";
 import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
@@ -117,6 +117,7 @@ function Workspace() {
   const tables = useQuery(api.crm.navTables) ?? NO_TABLES;
   const pages = useQuery(api.docs.tree);
   const inbox = useInbox();
+  useUnreadIcon(inbox.unread > 0);
   const projects = projectList ?? NO_PROJECTS;
   const boards = boardList ?? NO_BOARDS;
   const docs = docsByProject(pages ?? NO_PAGES);

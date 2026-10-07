@@ -77,6 +77,10 @@
   --shadow-raised:
     0 0 0 1px rgb(10 13 20 / 0.06), 0 6px 12px -4px rgb(10 13 20 / 0.08),
     0 16px 32px -8px rgb(10 13 20 / 0.14);
+  /* Grey noise, a few percent strong: grain, not texture. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
+  --spotlight: color-mix(in oklab, var(--primary) 5%, transparent);
+  --spotlight-edge: color-mix(in oklab, var(--primary) 28%, transparent);
 }
 
 .dark {
@@ -106,6 +110,14 @@
   --shadow-surface: 0 0 0 1px oklch(1 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-raised:
     0 0 0 1px oklch(1 0 0 / 0.09), 0 8px 24px -6px rgb(0 0 0 / 0.7);
+  /* Lighter: noise reads more on a dark page. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+  --spotlight: color-mix(in oklab, var(--primary) 8%, transparent);
+  --spotlight-edge: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--primary) 55%, white) 32%,
+    transparent
+  );
 }
 
 @utility shadow-surface {
@@ -114,6 +126,12 @@
 
 @utility shadow-raised {
   box-shadow: var(--shadow-raised);
+}
+
+/* Faint film grain over a surface's own colour, for a little tactile depth. */
+@utility bg-grain {
+  background-image: var(--grain);
+  background-size: 180px;
 }
 
 @utility image-outline {
@@ -159,7 +177,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background bg-grain text-foreground antialiased;
   }
 
   h1,
@@ -190,6 +208,37 @@
     ::view-transition-new(root) {
       animation: none;
       mix-blend-mode: normal;
+    }
+  }
+}
+
+/*
+ * A faint light that follows the pointer across a card and catches its edge.
+ * The card sets --spot-x and --spot-y as the pointer moves.
+ */
+@layer components {
+  .spotlight {
+    background: radial-gradient(
+      20rem circle at var(--spot-x, 50%) var(--spot-y, 0%),
+      var(--spotlight),
+      transparent 70%
+    );
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: inherit;
+      background: radial-gradient(
+        12rem circle at var(--spot-x, 50%) var(--spot-y, 0%),
+        var(--spotlight-edge),
+        transparent 70%
+      );
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask-composite: exclude;
     }
   }
 }
