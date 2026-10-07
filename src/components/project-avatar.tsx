@@ -1,8 +1,9 @@
 import { cn } from "cn";
 
 import { UserAvatar } from "@/components/user-avatar";
-import type { Color } from "@/lib/palette";
-import { SWATCH_COLORS } from "@/lib/palette";
+import { isLight } from "@/lib/color";
+import type { Color, HexColor } from "@/lib/palette";
+import { isHexColor, SWATCH_COLORS } from "@/lib/palette";
 
 const SIZES = {
   default: "size-5 rounded-md text-[0.65rem]",
@@ -22,7 +23,7 @@ export function ProjectAvatar({
   size = "default",
   className,
 }: {
-  project: { title: string; color: Color; personalFor?: string };
+  project: { title: string; color: Color | HexColor; personalFor?: string };
   size?: keyof typeof SIZES;
   className?: string;
 }) {
@@ -38,16 +39,20 @@ export function ProjectAvatar({
     );
   }
   const initial = [...project.title.trim()][0]?.toUpperCase() ?? "?";
+  const { color } = project;
+  const custom = isHexColor(color);
+  const light = custom ? isLight(color) : color === "yellow";
   return (
     <span
       aria-hidden
       className={cn(
-        "flex shrink-0 items-center justify-center font-semibold text-white select-none",
-        project.color === "yellow" && "text-black/75",
-        SWATCH_COLORS[project.color],
+        "image-outline flex shrink-0 items-center justify-center font-semibold text-white select-none",
+        light && "text-black/75",
+        !custom && SWATCH_COLORS[color],
         SIZES[size],
         className
       )}
+      style={custom ? { backgroundColor: color } : undefined}
     >
       {initial}
     </span>

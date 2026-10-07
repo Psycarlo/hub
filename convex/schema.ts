@@ -5,10 +5,10 @@ import { v } from "convex/values";
 import {
   vActivityType,
   vAppRole,
-  vColor,
   vField,
   vLabel,
   vPriority,
+  vProjectColor,
   vProjectRole,
   vSprintStatus,
   vStageMove,
@@ -54,7 +54,7 @@ export default defineSchema({
   }).index("by_email", ["email"]),
 
   projects: defineTable({
-    color: vColor,
+    color: vProjectColor,
     createdBy: v.id("users"),
     description: v.string(),
     /** Set on someone's personal project: theirs alone unless they share it. */

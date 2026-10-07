@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useId, useState } from "react";
 import { useLocation } from "wouter";
 
-import { ColorPicker } from "@/components/color-picker";
+import { ColorPicker, CustomColorPicker } from "@/components/color-picker";
 import { fromRoster, MembersField, toRoster } from "@/components/members-field";
 import {
   AlertDialog,
@@ -36,7 +36,6 @@ import type { User } from "@/hooks/use-users";
 import { useMe } from "@/hooks/use-users";
 import type { ProjectDraft } from "@/lib/actions";
 import { createProject, deleteProject, updateProject } from "@/lib/actions";
-import type { Color } from "@/lib/palette";
 import type { Project } from "@/lib/project";
 import { cleanSlugInput, slugify, uniqueSlug } from "@/lib/project";
 
@@ -178,7 +177,7 @@ interface ProjectFormProps {
 /** What the form starts with: the project's settings, or a blank one you own. */
 function initialDraft(project: Project | undefined, me: User) {
   return {
-    color: project?.color ?? ("blue" as Color),
+    color: project?.color ?? ("blue" as Project["color"]),
     description: project?.description ?? "",
     members: project?.members ?? [{ role: "owner" as const, userId: me._id }],
     slug: project?.slug ?? "",
@@ -201,7 +200,7 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
   const [slug, setSlug] = useState(initial.slug);
   const [slugEdited, setSlugEdited] = useState(project !== undefined);
   const [description, setDescription] = useState(initial.description);
-  const [color, setColor] = useState<Color>(initial.color);
+  const [color, setColor] = useState<Project["color"]>(initial.color);
   const [roster, setRoster] = useState(() => toRoster(initial.members));
   const [saving, setSaving] = useState(false);
 
@@ -287,11 +286,14 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
           <span className="text-sm font-medium select-none" id={`${id}-color`}>
             Color
           </span>
-          <ColorPicker
-            aria-labelledby={`${id}-color`}
-            onChange={setColor}
-            value={color}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <ColorPicker
+              aria-labelledby={`${id}-color`}
+              onChange={setColor}
+              value={color}
+            />
+            <CustomColorPicker onChange={setColor} value={color} />
+          </div>
         </div>
       )}
 

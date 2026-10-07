@@ -1,4 +1,4 @@
-import type { VLiteral, VUnion } from "convex/values";
+import type { VLiteral, VString, VUnion } from "convex/values";
 import { v } from "convex/values";
 
 import {
@@ -16,6 +16,7 @@ import {
   SPRINT_STATUSES,
   STATUSES,
 } from "../shared/model";
+import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
 
 type OneOf<T extends string> = VUnion<T, VLiteral<T, "required">[], "required">;
@@ -30,6 +31,10 @@ function oneOf<const T extends string>(values: readonly T[]): OneOf<T> {
 }
 
 export const vColor = oneOf(COLORS);
+/** Any string to the validator; mutations check it's really `#rrggbb`. */
+export const vHexColor = v.string() as VString<HexColor>;
+/** Projects take a palette color, or any other picked off it. */
+export const vProjectColor = v.union(vColor, vHexColor);
 export const vAppRole = oneOf(APP_ROLES);
 export const vProjectRole = oneOf(PROJECT_ROLES);
 export const vStatus = oneOf(STATUSES.map(({ id }) => id));

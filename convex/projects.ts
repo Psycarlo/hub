@@ -11,8 +11,9 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { vColor, vMember } from "./lib/validators";
+import { vMember, vProjectColor } from "./lib/validators";
 import type { ProjectRole } from "./shared/model";
+import { COLORS, isHexColor } from "./shared/palette";
 import { slugify, uniqueSlug } from "./shared/slug";
 
 const MAX_TITLE = 80;
@@ -206,6 +207,21 @@ function cleanTitle(title: string): string {
   return trimmed;
 }
 
+/** A palette color as it is, or a picked one as lowercase `#rrggbb`. */
+function cleanColor(color: string): Doc<"projects">["color"] {
+  const hex = color.toLowerCase();
+  if (isHexColor(hex)) {
+    return hex;
+  }
+  const named = COLORS.find((item) => item === color);
+  if (!named) {
+    throw new ConvexError(
+      "Pick a color from the palette, or a hex like #2b7fff."
+    );
+  }
+  return named;
+}
+
 async function freeSlug(
   ctx: QueryCtx,
   raw: string,
@@ -258,7 +274,7 @@ async function setMembers(
 
 export const create = mutation({
   args: {
-    color: vColor,
+    color: vProjectColor,
     description: v.string(),
     members: v.array(vMember),
     slug: v.string(),
@@ -268,7 +284,7 @@ export const create = mutation({
     const user = await requireAdmin(ctx);
     const slug = await freeSlug(ctx, args.slug);
     const projectId = await ctx.db.insert("projects", {
-      color: args.color,
+      color: cleanColor(args.color),
       createdBy: user._id,
       description: args.description.trim().slice(0, MAX_DESCRIPTION),
       slug,
@@ -284,7 +300,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    color: v.optional(vColor),
+    color: v.optional(vProjectColor),
     description: v.optional(v.string()),
     members: v.optional(v.array(vMember)),
     projectId: v.id("projects"),
@@ -310,7 +326,7 @@ export const update = mutation({
       patch.description = changes.description.trim().slice(0, MAX_DESCRIPTION);
     }
     if (changes.color !== undefined) {
-      patch.color = changes.color;
+      patch.color = cleanColor(changes.color);
     }
     await ctx.db.patch(projectId, patch);
     if (members && personal) {
