@@ -100,6 +100,20 @@ export function useTheme(): Theme {
   return useSyncExternalStore(subscribe, () => current);
 }
 
+function subscribeDark(listener: () => void): () => void {
+  listeners.add(listener);
+  media.addEventListener("change", listener);
+  return () => {
+    listeners.delete(listener);
+    media.removeEventListener("change", listener);
+  };
+}
+
+/** Whether the app shows dark, whether picked or followed from the device. */
+export function useDark(): boolean {
+  return useSyncExternalStore(subscribeDark, () => isDark(current));
+}
+
 export function startTheme(): void {
   apply(current);
   media.addEventListener("change", () => {
