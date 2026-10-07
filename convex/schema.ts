@@ -40,6 +40,12 @@ export default defineSchema({
     .index("email", ["email"])
     .index("phone", ["phone"]),
 
+  /** The hub's own look, in a single document. */
+  hubSettings: defineTable({
+    /** R2 key of the logo, shown in place of the default mark and as the favicon. */
+    logoKey: v.optional(v.string()),
+  }),
+
   /** Emails that may create an account, and the role they start with. */
   invites: defineTable({
     email: v.string(),

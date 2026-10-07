@@ -1,14 +1,33 @@
 import { cn } from "cn";
+import { useId } from "react";
 
-import { APP_NAME } from "@/lib/brand";
+import { APP_NAME, useLogo } from "@/lib/brand";
 
 /** Roughly how wide each letter of the name sets, in the mark's units. */
 const LETTER_WIDTH = 12;
 const MARK = 28;
 const GAP = 8;
 
-/** Spokes joining at the middle, on the primary color. */
+/** The uploaded logo, clipped to the mark's rounded square, or the default: spokes joining at the middle. */
 function MarkShapes() {
+  const logo = useLogo();
+  const clip = useId();
+  if (logo) {
+    return (
+      <>
+        <clipPath id={clip}>
+          <rect height={MARK} rx="8" width={MARK} />
+        </clipPath>
+        <image
+          clipPath={`url(#${clip})`}
+          height={MARK}
+          href={logo}
+          preserveAspectRatio="xMidYMid meet"
+          width={MARK}
+        />
+      </>
+    );
+  }
   return (
     <>
       <rect className="fill-primary" height={MARK} rx="8" width={MARK} />
@@ -29,7 +48,7 @@ function MarkShapes() {
   );
 }
 
-/** The hub's mark alone. */
+/** The hub's mark alone: its logo, or the default one. */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg

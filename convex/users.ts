@@ -8,7 +8,7 @@ import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import {
   action,
   internalMutation,
@@ -17,9 +17,9 @@ import {
   query,
 } from "./_generated/server";
 import { isAdmin, requireAdmin, requireUser } from "./lib/access";
+import { dropFile, ownedFile } from "./lib/files";
 import { mediaUrl } from "./lib/media";
 import { vAppRole } from "./lib/validators";
-import { r2 } from "./r2";
 
 const MIN_PASSWORD = 8;
 const MAX_NAME = 80;
@@ -87,28 +87,6 @@ export const updateProfile = mutation({
     await ctx.db.patch(user._id, { name: trimmed });
   },
 });
-
-async function ownedFile(ctx: QueryCtx, key: string, owner: Id<"users">) {
-  const file = await ctx.db
-    .query("files")
-    .withIndex("by_key", (q) => q.eq("key", key))
-    .unique();
-  if (file?.ownerId !== owner) {
-    throw new ConvexError("That upload couldn’t be found.");
-  }
-  return file;
-}
-
-async function dropFile(ctx: MutationCtx, key: string) {
-  const file = await ctx.db
-    .query("files")
-    .withIndex("by_key", (q) => q.eq("key", key))
-    .unique();
-  if (file) {
-    await ctx.db.delete(file._id);
-  }
-  await r2.deleteObject(ctx, key);
-}
 
 /** Sets the profile photo to an uploaded file, or removes it. */
 export const setAvatar = mutation({

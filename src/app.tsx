@@ -34,6 +34,7 @@ import { useInbox } from "@/hooks/use-inbox";
 import type { User } from "@/hooks/use-users";
 import { MeContext, useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
+import { useBrandSync } from "@/lib/brand";
 import { convex } from "@/lib/convex";
 import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
@@ -228,11 +229,18 @@ function SignedIn() {
   );
 }
 
+/** Keeps the favicon on the hub's logo. */
+function BrandSync() {
+  useBrandSync();
+  return null;
+}
+
 export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
         <ErrorBoundary>
+          <BrandSync />
           <AuthLoading>
             <LoadingScreen />
           </AuthLoading>
