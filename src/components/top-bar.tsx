@@ -87,7 +87,7 @@ export function TopBar({
   crumbs: Crumb[];
   children?: ReactNode;
 }) {
-  const { isMobile, open } = useSidebar();
+  const { isMobile } = useSidebar();
   const scrolled = useScrolled();
   return (
     // Clear at the top, so whatever sits behind the page shows through; frosted
@@ -98,7 +98,7 @@ export function TopBar({
         scrolled && "bg-background/85 shadow-[0_1px_0_0_var(--color-border)]"
       )}
     >
-      {(isMobile || !open) && <SidebarTrigger className="-ml-1.5" />}
+      {isMobile && <SidebarTrigger className="-ml-1.5" />}
       <nav aria-label="Breadcrumb" className="min-w-0">
         <ol className="flex min-w-0 items-center gap-3">
           {crumbs.map((crumb, index) => (

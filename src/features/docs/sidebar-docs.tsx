@@ -209,7 +209,7 @@ export function SidebarDocs({
   canEdit: boolean;
 }) {
   const [location, navigate] = useLocation();
-  const { setOpenMobile } = useSidebar();
+  const { dismiss } = useSidebar();
   const [open, setOpen] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const base = docsPath(project);
@@ -240,7 +240,7 @@ export function SidebarDocs({
     setOpen(true);
     const pageId = await createPage(project._id, { parentId: parent?._id });
     if (pageId) {
-      setOpenMobile(false);
+      dismiss();
       navigate(pagePath(project, { _id: pageId, title: "" }));
     }
   };

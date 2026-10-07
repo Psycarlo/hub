@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ArrowRightIcon, XIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
@@ -81,6 +82,7 @@ export function SidebarNotice({
   description,
   action,
   onDismiss,
+  className,
 }: {
   show: boolean;
   icon: ReactNode;
@@ -89,6 +91,7 @@ export function SidebarNotice({
   action?: NoticeAction;
   /** Shows a close button; leave out for notices that go away on their own. */
   onDismiss?: () => void;
+  className?: string;
 }) {
   const mobile = useIsMobile();
   return (
@@ -102,7 +105,7 @@ export function SidebarNotice({
             opacity: 1,
             transition: { delay: 0.3, duration: 0.35, ease: EASE },
           }}
-          className="-mb-2 overflow-hidden"
+          className={cn("-mb-2 overflow-hidden", className)}
           exit={{
             height: 0,
             opacity: 0,

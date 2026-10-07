@@ -11,7 +11,7 @@ import {
 import { useState } from "react";
 import { useLocation } from "wouter";
 
-import { Logo } from "@/components/logo";
+import { Logo, LogoMark } from "@/components/logo";
 import { NavLink } from "@/components/nav-link";
 import { ProjectAvatar } from "@/components/project-avatar";
 import { SidebarNotice, useDismissed } from "@/components/sidebar-notice";
@@ -63,6 +63,7 @@ function PhotoNotice() {
   return (
     <SidebarNotice
       action={{ href: SETTINGS_PATH, label: "Upload a photo" }}
+      className="group-data-[collapsible=icon]:hidden"
       description="So your team can spot you on cards, comments and docs."
       icon={<CameraIcon />}
       onDismiss={dismiss}
@@ -97,6 +98,8 @@ interface ProjectItemProps {
   location: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Folded into the icon column, where only the project shows. */
+  rail: boolean;
 }
 
 function ProjectItem({
@@ -109,17 +112,22 @@ function ProjectItem({
   location,
   open,
   onOpenChange,
+  rail,
 }: ProjectItemProps) {
   const base = projectPath(project);
   return (
     <Collapsible
       onOpenChange={onOpenChange}
-      open={open}
+      // Folds with the sidebar, so the rows below slide rather than jump.
+      open={open && !rail}
       render={<SidebarMenuItem />}
     >
       <SidebarMenuButton
+        // Wide enough for the avatar, centred in the icon column.
+        className="pl-1.5 group-data-[collapsible=icon]:p-1.5!"
         isActive={location === base}
         render={<NavLink href={base} />}
+        tooltip={project.title}
       >
         <ProjectAvatar project={project} />
         <span>{project.title}</span>
@@ -134,7 +142,7 @@ function ProjectItem({
       >
         <ChevronRightIcon />
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent keepMounted>
         <SidebarMenuSub className="pt-0.5">
           {tables.map((table) => {
             const href = tablePath(project, table);
@@ -216,7 +224,7 @@ export function AppSidebar({
   const admin = me.role === "admin";
   const [location] = useLocation();
   const openBoard = useOpenBoard(boards);
-  const { isMobile } = useSidebar();
+  const { isMobile, state } = useSidebar();
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const { personal, shared } = splitPersonal(projects, me._id);
 
@@ -250,22 +258,24 @@ export function AppSidebar({
           (portfolio) => portfolio.projectId === project._id
         )}
         project={project}
+        rail={state === "collapsed"}
         tables={tables.filter((table) => table.projectId === project._id)}
       />
     );
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="flex-row items-center justify-between gap-2 py-3 pr-2 pl-4">
+    <Sidebar collapsible="icon">
+      {/* The mark sits on the icon column's centre line, folded or not. */}
+      <SidebarHeader className="flex-row items-center py-3 pl-2.5">
         <NavLink
           aria-label="Home"
           className="focus-visible:ring-ring/50 -mx-1.5 flex min-w-0 items-center rounded-lg px-1.5 py-1 outline-none focus-visible:ring-3"
           href="/"
         >
-          <Logo className="h-7" />
+          <Logo className="h-7 group-data-[collapsible=icon]:hidden" />
+          <LogoMark className="hidden size-7 group-data-[collapsible=icon]:block" />
         </NavLink>
-        {!isMobile && <SidebarTrigger />}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -274,6 +284,7 @@ export function AppSidebar({
               <SidebarMenuButton
                 isActive={location === "/"}
                 render={<NavLink href="/" />}
+                tooltip="Home"
               >
                 <HouseIcon />
                 <span>Home</span>
@@ -283,6 +294,7 @@ export function AppSidebar({
               <SidebarMenuButton
                 isActive={location === INBOX_PATH}
                 render={<NavLink href={INBOX_PATH} />}
+                tooltip="Inbox"
               >
                 <InboxIcon />
                 <span>Inbox</span>
@@ -298,12 +310,20 @@ export function AppSidebar({
                   {unread > MAX_BADGE ? `${MAX_BADGE}+` : unread}
                 </SidebarMenuBadge>
               )}
+              {/* The count has no room in the icon column; a dot stands in. */}
+              {unread > 0 && (
+                <span
+                  aria-hidden
+                  className="bg-primary ring-sidebar pointer-events-none absolute top-1.5 left-5 hidden size-2 rounded-full ring-2 group-data-[collapsible=icon]:block"
+                />
+              )}
             </SidebarMenuItem>
             {admin && (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === ADMIN_PATH}
                   render={<NavLink href={ADMIN_PATH} />}
+                  tooltip="Admin"
                 >
                   <ShieldIcon />
                   <span>Admin</span>
@@ -333,6 +353,7 @@ export function AppSidebar({
                 <SidebarMenuButton
                   className="text-muted-foreground"
                   onClick={onNewProject}
+                  tooltip="New project"
                 >
                   <PlusIcon />
                   <span>New project</span>
@@ -340,7 +361,7 @@ export function AppSidebar({
               </SidebarMenuItem>
             )}
             {shared.length === 0 && !admin && (
-              <li className="text-muted-foreground px-2 py-1.5 text-xs">
+              <li className="text-muted-foreground px-2 py-1.5 text-xs transition-opacity duration-200 ease-out group-data-[collapsible=icon]:opacity-0">
                 No projects shared with you yet.
               </li>
             )}
@@ -354,6 +375,8 @@ export function AppSidebar({
             <UserMenu />
           </SidebarMenuItem>
         </SidebarMenu>
+        {/* Bottom left, folded or not, so it's always where the hand expects. */}
+        {!isMobile && <SidebarTrigger />}
       </SidebarFooter>
     </Sidebar>
   );

@@ -41,10 +41,10 @@ export function UserMenu() {
   const theme = useTheme();
   const { signOut } = useAuthActions();
   const [, navigate] = useLocation();
-  const { setOpenMobile } = useSidebar();
+  const { dismiss } = useSidebar();
 
   const go = (path: string) => {
-    setOpenMobile(false);
+    dismiss();
     navigate(path);
   };
 
