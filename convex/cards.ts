@@ -7,7 +7,7 @@ import { deleteCard } from "./cleanup";
 import { canSee, ifVisible, requireBoard, requireCard } from "./lib/access";
 import { patchCard } from "./lib/history";
 import { vPriority, vStatus } from "./lib/validators";
-import { LEGACY_LABELS } from "./shared/model";
+import { isClosed, LEGACY_LABELS } from "./shared/model";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const MAX_TITLE = 300;
@@ -94,7 +94,7 @@ export const create = mutation({
       boardId: board._id,
       createdBy: user._id,
       description: args.description.slice(0, MAX_DESCRIPTION),
-      doneAt: args.status === "done" ? now : undefined,
+      doneAt: isClosed(args.status) ? now : undefined,
       due: cleanDue(args.due),
       labels: cleanLabels(board, args.labels),
       number,

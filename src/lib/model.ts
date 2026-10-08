@@ -13,6 +13,7 @@ export type {
 } from "@convex/shared/model";
 export {
   CODE,
+  isClosed,
   labelKey,
   MAX_CARD_FILES,
   MAX_CODE,

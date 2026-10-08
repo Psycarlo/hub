@@ -7,10 +7,14 @@ import { Link } from "wouter";
 
 import { OPENED_FROM_BOARD, useBoard } from "@/features/board/board-context";
 import { CARD_SURFACE } from "@/features/board/card-surface";
-import { cardLabels, PRIORITY_STYLES } from "@/features/card/card-fields";
+import {
+  cardLabels,
+  PRIORITY_STYLES,
+  STATUS_STYLES,
+} from "@/features/card/card-fields";
 import { AvatarStack, LabelChip, LabelDot } from "@/features/card/card-parts";
-import type { BoardLabel, Card, Priority } from "@/lib/model";
-import { cardKey, priorityLabel } from "@/lib/model";
+import type { BoardLabel, Card, Priority, Status } from "@/lib/model";
+import { cardKey, isClosed, priorityLabel, statusLabel } from "@/lib/model";
 
 function PriorityIcon({ priority }: { priority: Priority }) {
   const { icon: Icon, className } = PRIORITY_STYLES[priority];
@@ -22,9 +26,19 @@ function PriorityIcon({ priority }: { priority: Priority }) {
   );
 }
 
-function DueDate({ due, done }: { due: string; done: boolean }) {
+function StatusIcon({ status }: { status: Status }) {
+  const { icon: Icon, className } = STATUS_STYLES[status];
+  return (
+    <>
+      <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
+      <span className="sr-only">{statusLabel(status)}</span>
+    </>
+  );
+}
+
+function DueDate({ due, closed }: { due: string; closed: boolean }) {
   const date = parseISO(due);
-  const overdue = !done && isBefore(date, startOfToday());
+  const overdue = !closed && isBefore(date, startOfToday());
   return (
     <span
       className={cn(
@@ -98,7 +112,7 @@ function CardMeta({ card }: { card: Card }) {
   return (
     <>
       {card.priority && <PriorityIcon priority={card.priority} />}
-      {card.due && <DueDate done={card.status === "done"} due={card.due} />}
+      {card.due && <DueDate closed={isClosed(card.status)} due={card.due} />}
       {card.assignees.length > 0 && (
         <AvatarStack className="ml-auto" people={card.assignees} />
       )}
@@ -206,6 +220,7 @@ export function CardRow({
       <span className="text-muted-foreground min-w-14 shrink-0 text-xs tabular-nums">
         {cardKey(board, card)}
       </span>
+      <StatusIcon status={card.status} />
       <CardTitle className="min-w-0 flex-1 truncate" title={card.title} />
       <span className="flex shrink-0 items-center gap-2">
         {labels.length > 0 && <RowLabels labels={labels} />}

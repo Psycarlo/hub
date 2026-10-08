@@ -35,7 +35,7 @@ import {
   startSprint,
 } from "@/lib/actions";
 import type { Card, Sprint } from "@/lib/model";
-import { activeSprint } from "@/lib/model";
+import { activeSprint, isClosed } from "@/lib/model";
 import { plural } from "@/lib/utils";
 
 const BACKLOG = "backlog";
@@ -172,7 +172,7 @@ export function BacklogView({
   );
   const backlog: Card[] = [];
   for (const card of cards) {
-    if (card.status !== "done" && !(active && card.sprintId === active._id)) {
+    if (!isClosed(card.status) && !(active && card.sprintId === active._id)) {
       const bucket = card.sprintId ? planned.get(card.sprintId) : undefined;
       (bucket ?? backlog).push(card);
     }

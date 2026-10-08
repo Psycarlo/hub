@@ -15,11 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Board, Card } from "@/lib/model";
+import { isClosed } from "@/lib/model";
 import { plural, readStorage, writeStorage } from "@/lib/utils";
 
 const DAY = 24 * 60 * 60_000;
 
-/** How far back the done column reaches. Done cards pile up, so older ones stay out of sight. */
+/** How far back closed cards reach. They pile up, so older ones stay out of sight. */
 const DONE_WINDOWS = [
   { label: "Last day", span: DAY, value: "day" },
   { label: "Last week", span: 7 * DAY, value: "week" },
@@ -54,12 +55,12 @@ export function useDoneWindow(
   return [value, change];
 }
 
-/** Whether the window leaves the card out: done, and before the window reaches. */
+/** Whether the window leaves the card out: closed, and before the window reaches. */
 export function outsideWindow(card: Card, value: DoneWindow): boolean {
   const span = DONE_WINDOWS.find((item) => item.value === value)?.span;
   return (
     span !== undefined &&
-    card.status === "done" &&
+    isClosed(card.status) &&
     card.doneAt !== undefined &&
     card.doneAt < Date.now() - span
   );
@@ -107,7 +108,7 @@ export function HiddenCards({ hidden, value, onChange }: HiddenCardsProps) {
           <h3 className="font-medium">Display options</h3>
           <div className="flex flex-col gap-1.5">
             <Label className="text-muted-foreground text-xs" htmlFor={id}>
-              Done cards
+              Done and canceled cards
             </Label>
             <Select
               items={DONE_WINDOWS}

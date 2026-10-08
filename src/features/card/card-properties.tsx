@@ -31,11 +31,13 @@ import {
   PRIORITY_OPTIONS,
   sprintOptions,
   STATUS_OPTIONS,
+  useOptionShortcuts,
 } from "@/features/card/card-options";
 import { LabelChip, Muted, People, Person } from "@/features/card/card-parts";
 import { LabelPicker } from "@/features/card/label-picker";
 import { updateCard } from "@/lib/actions";
 import type { BoardLabel, Card, CardFields, UserId } from "@/lib/model";
+import { isClosed } from "@/lib/model";
 
 const NAME = "font-normal text-muted-foreground";
 const VALUE =
@@ -54,7 +56,7 @@ function labelOf<T>(options: Option<T>[], value: T): ReactNode {
 function isOverdue(card: Card): boolean {
   return (
     card.due !== undefined &&
-    card.status !== "done" &&
+    !isClosed(card.status) &&
     isBefore(parseISO(card.due), startOfToday())
   );
 }
@@ -74,18 +76,23 @@ function PropertySelect<T>({
   options,
   onChange,
 }: PropertySelectProps<T>) {
+  const { onKeyDown, ...open } = useOptionShortcuts(options, onChange);
   return (
     <>
       <Label className={NAME} htmlFor={id}>
         {label}
       </Label>
-      <Select items={options} onValueChange={onChange} value={value}>
+      <Select {...open} items={options} onValueChange={onChange} value={value}>
         <SelectTrigger className={SELECT_VALUE} id={id}>
           <SelectValue className="items-center gap-2" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent onKeyDown={onKeyDown}>
           {options.map((option) => (
-            <SelectItem key={String(option.value)} value={option.value}>
+            <SelectItem
+              key={String(option.value)}
+              shortcut={option.shortcut}
+              value={option.value}
+            >
               {option.label}
             </SelectItem>
           ))}

@@ -5,6 +5,7 @@ import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { requireBoard, requireSprint } from "./lib/access";
 import { patchCard } from "./lib/history";
+import { isClosed, statusKind } from "./shared/model";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const SPRINT_DAYS = 15;
@@ -115,7 +116,10 @@ export const start = mutation({
   },
 });
 
-/** Unfinished cards roll over to the next future sprint; done cards stay with the ended one. */
+/**
+ * Open cards roll over to the next future sprint, those under way back to todo;
+ * closed cards stay with the ended one.
+ */
 export const end = mutation({
   args: { sprintId: v.id("sprints") },
   handler: async (ctx, { sprintId }) => {
@@ -127,7 +131,7 @@ export const end = mutation({
       .query("cards")
       .withIndex("by_sprint", (q) => q.eq("sprintId", sprint._id))
       .collect();
-    const unfinished = cards.filter((card) => card.status !== "done");
+    const unfinished = cards.filter((card) => !isClosed(card.status));
     const sprints = await boardSprints(ctx, board._id);
     let next = sprints.find(
       (item) => item.status === "future" && item._id !== sprintId
@@ -139,7 +143,7 @@ export const end = mutation({
     for (const card of unfinished) {
       await patchCard(ctx, user._id, board, card, {
         sprintId: next,
-        status: "todo",
+        ...(statusKind(card.status) === "started" ? { status: "todo" } : {}),
         updatedAt: now,
       });
     }

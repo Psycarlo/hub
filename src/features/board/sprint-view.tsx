@@ -21,7 +21,12 @@ import { Kanban } from "@/features/board/kanban";
 import { SprintDialog } from "@/features/board/sprint-dialog";
 import { endSprint, startSprint } from "@/lib/actions";
 import type { BoardContent, Sprint } from "@/lib/model";
-import { activeSprint, sprintRemaining, upcomingSprint } from "@/lib/model";
+import {
+  activeSprint,
+  isClosed,
+  sprintRemaining,
+  upcomingSprint,
+} from "@/lib/model";
 import { plural } from "@/lib/utils";
 
 function upcomingTitle(content: BoardContent): string {
@@ -38,7 +43,7 @@ function sprintDates(sprint: Sprint): string | undefined {
 function EndSprint({ sprint }: { sprint: Sprint }) {
   const { content } = useBoard();
   const unfinished = content.cards.filter(
-    (card) => card.sprintId === sprint._id && card.status !== "done"
+    (card) => card.sprintId === sprint._id && !isClosed(card.status)
   ).length;
   return (
     <AlertDialog>
@@ -52,7 +57,7 @@ function EndSprint({ sprint }: { sprint: Sprint }) {
           <AlertDialogTitle>End {sprint.title}?</AlertDialogTitle>
           <AlertDialogDescription>
             {unfinished === 0
-              ? "All cards are done."
+              ? "No cards left open."
               : `${plural(unfinished, "unfinished card")} ${unfinished === 1 ? "moves" : "move"} to ${upcomingTitle(content)}.`}
           </AlertDialogDescription>
         </AlertDialogHeader>

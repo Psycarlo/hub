@@ -17,12 +17,14 @@ import type { BoardLabel, Status } from "./shared/model";
 import {
   canManageRole,
   codeProblem,
+  isClosed,
   LABEL_ID,
   labelKey,
   legacyLabels,
   MAX_LABEL_NAME,
   MAX_LABELS,
   sortLabels,
+  STATUSES,
 } from "./shared/model";
 
 const MAX_TITLE = 80;
@@ -125,7 +127,7 @@ export const content = query({
 
 export interface BoardProgress {
   boardId: Id<"boards">;
-  /** Cards not done yet, backlog included. */
+  /** Cards not closed yet, backlog included. */
   open: number;
   /** The sprint under way, with how its cards stand. Only on boards that use sprints. */
   sprint?: Pick<Doc<"sprints">, "title" | "end"> & Record<Status, number>;
@@ -169,11 +171,9 @@ export const progress = query({
             .collect(),
           sprintUnderWay(ctx, board),
         ]);
-        const counts: Record<Status, number> = {
-          done: 0,
-          progress: 0,
-          todo: 0,
-        };
+        const counts = Object.fromEntries(
+          STATUSES.map(({ id }) => [id, 0])
+        ) as Record<Status, number>;
         for (const card of cards) {
           if (active && card.sprintId === active._id) {
             counts[card.status] += 1;
@@ -181,7 +181,7 @@ export const progress = query({
         }
         return {
           boardId: board._id,
-          open: cards.filter((card) => card.status !== "done").length,
+          open: cards.filter((card) => !isClosed(card.status)).length,
           sprint: active && { end: active.end, title: active.title, ...counts },
         };
       })

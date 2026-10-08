@@ -35,11 +35,19 @@ export function MemberAvatars({
 
 type SprintProgress = NonNullable<BoardProgress["sprint"]>;
 
-/** Finished work first, so the bar fills from the left as the sprint goes. */
+const NOT_STARTED = "bg-foreground/12";
+
+/**
+ * Finished work first, so the bar fills from the left as the sprint goes.
+ * Canceled cards and duplicates were never going to be done, so stay out.
+ */
 const BAR_PARTS: { status: Status; className: string }[] = [
-  { className: SWATCH_COLORS.green, status: "done" },
-  { className: SWATCH_COLORS.blue, status: "progress" },
-  { className: "bg-foreground/12", status: "todo" },
+  { className: SWATCH_COLORS.blue, status: "done" },
+  { className: SWATCH_COLORS.green, status: "review" },
+  { className: SWATCH_COLORS.yellow, status: "progress" },
+  { className: NOT_STARTED, status: "todo" },
+  { className: NOT_STARTED, status: "backlog" },
+  { className: NOT_STARTED, status: "triage" },
 ];
 
 /** The sprint's cards as one bar split by status. */
@@ -79,7 +87,7 @@ function progressLine(progress: BoardProgress): string {
   if (!sprint) {
     return open === 0 ? "Nothing open" : plural(open, "open card");
   }
-  const total = sprint.todo + sprint.progress + sprint.done;
+  const total = BAR_PARTS.reduce((sum, { status }) => sum + sprint[status], 0);
   const remaining = sprint.end ? ` · ${sprintRemaining(sprint.end)}` : "";
   return total === 0
     ? `${sprint.title}${remaining}`

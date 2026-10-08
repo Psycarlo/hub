@@ -2,10 +2,19 @@
 
 import type { Color } from "./palette";
 
+/**
+ * Statuses in the order work moves through them, after Linear's. Their kind
+ * says how far along that is: completed and canceled ones close the card.
+ */
 export const STATUSES = [
-  { id: "todo", label: "To do" },
-  { id: "progress", label: "In progress" },
-  { id: "done", label: "Done" },
+  { id: "triage", kind: "triage", label: "Triage" },
+  { id: "backlog", kind: "backlog", label: "Backlog" },
+  { id: "todo", kind: "unstarted", label: "Todo" },
+  { id: "progress", kind: "started", label: "In progress" },
+  { id: "review", kind: "started", label: "In review" },
+  { id: "done", kind: "completed", label: "Done" },
+  { id: "canceled", kind: "canceled", label: "Canceled" },
+  { id: "duplicate", kind: "canceled", label: "Duplicate" },
 ] as const;
 
 export const PRIORITIES = [
@@ -18,6 +27,7 @@ export const PRIORITIES = [
 export const SPRINT_STATUSES = ["future", "active", "ended"] as const;
 
 export type Status = (typeof STATUSES)[number]["id"];
+export type StatusKind = (typeof STATUSES)[number]["kind"];
 export type Priority = (typeof PRIORITIES)[number]["id"];
 export type SprintStatus = (typeof SPRINT_STATUSES)[number];
 
@@ -107,6 +117,20 @@ export function canManageRole(role: ProjectRole | null | undefined): boolean {
 
 export function statusLabel(status: Status): string {
   return STATUSES.find(({ id }) => id === status)?.label ?? status;
+}
+
+const STATUS_KINDS = Object.fromEntries(
+  STATUSES.map(({ id, kind }) => [id, kind])
+) as Record<Status, StatusKind>;
+
+export function statusKind(status: Status): StatusKind {
+  return STATUS_KINDS[status];
+}
+
+/** Whether the card is finished with: done, or dropped as canceled or a duplicate. */
+export function isClosed(status: Status): boolean {
+  const kind = statusKind(status);
+  return kind === "completed" || kind === "canceled";
 }
 
 export function priorityLabel(priority: Priority): string {

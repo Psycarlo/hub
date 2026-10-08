@@ -2,7 +2,7 @@ import { Empty, EmptyTitle } from "@/components/ui/empty";
 import { useBoard } from "@/features/board/board-context";
 import { Bucket } from "@/features/board/bucket";
 import { CardRow } from "@/features/board/card-tile";
-import { activeSprint } from "@/lib/model";
+import { activeSprint, isClosed } from "@/lib/model";
 
 export function DoneView() {
   const { content, cards } = useBoard();
@@ -10,7 +10,7 @@ export function DoneView() {
   const done = cards
     .filter(
       (card) =>
-        card.status === "done" && !(active && card.sprintId === active._id)
+        isClosed(card.status) && !(active && card.sprintId === active._id)
     )
     .toSorted((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
 

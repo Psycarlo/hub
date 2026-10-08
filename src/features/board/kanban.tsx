@@ -1,5 +1,6 @@
 import { CollisionPriority } from "@dnd-kit/abstract";
 import { DragDropProvider, useDroppable } from "@dnd-kit/react";
+import { cn } from "cn";
 
 import { useBoard } from "@/features/board/board-context";
 import { CardTile } from "@/features/board/card-tile";
@@ -10,9 +11,10 @@ import {
 } from "@/features/board/display-options";
 import { AddButton } from "@/features/board/quick-add";
 import { useCardDrag } from "@/features/board/use-card-drag";
+import { STATUS_STYLES } from "@/features/card/card-fields";
 import { moveCards } from "@/lib/actions";
 import type { Card, Sprint, Status } from "@/lib/model";
-import { STATUSES } from "@/lib/model";
+import { isClosed, STATUSES } from "@/lib/model";
 
 interface ColumnProps {
   status: Status;
@@ -28,12 +30,14 @@ function Column({ status, label, cards, onAdd }: ColumnProps) {
     id: status,
     type: "column",
   });
+  const { icon: Icon, className } = STATUS_STYLES[status];
   return (
     <section
       className="bg-muted/60 flex flex-col gap-2 rounded-2xl p-2"
       ref={ref}
     >
       <h3 className="flex h-8 items-center gap-2 px-1.5 text-sm font-medium">
+        <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
         {label}
         <span className="text-muted-foreground tabular-nums">
           {cards.length}
@@ -56,7 +60,9 @@ interface KanbanProps {
 /** Cards in a column per status. */
 export function Kanban({ cards, sprint }: KanbanProps) {
   const { canEdit, newCard } = useBoard();
-  const columns: Record<Status, Card[]> = { done: [], progress: [], todo: [] };
+  const columns = Object.fromEntries(
+    STATUSES.map(({ id }): [Status, Card[]] => [id, []])
+  ) as Record<Status, Card[]>;
   for (const card of cards) {
     columns[card.status].push(card);
   }
@@ -75,7 +81,7 @@ export function Kanban({ cards, sprint }: KanbanProps) {
             key={id}
             label={label}
             onAdd={
-              canEdit && id !== "done"
+              canEdit && !isClosed(id)
                 ? () => newCard({ sprintId: sprint?._id, status: id })
                 : undefined
             }
@@ -87,7 +93,7 @@ export function Kanban({ cards, sprint }: KanbanProps) {
   );
 }
 
-/** Every card on a board without sprints, but those done before the display options reach. */
+/** Every card on a board without sprints, but those closed before the display options reach. */
 export function BoardKanban() {
   const { board, cards } = useBoard();
   const [doneWindow, setDoneWindow] = useDoneWindow(board);

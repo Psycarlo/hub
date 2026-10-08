@@ -126,7 +126,7 @@ export default defineSchema({
     createdBy: v.id("users"),
     /** Markdown. */
     description: v.string(),
-    /** When it last moved to done, in ms. Only on done cards. */
+    /** When it last closed (done, canceled or duplicate), in ms. Only on closed cards. */
     doneAt: v.optional(v.number()),
     /** `YYYY-MM-DD`. */
     due: v.optional(v.string()),

@@ -1,7 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { BoardLabel } from "../shared/model";
-import { legacyLabels } from "../shared/model";
+import { isClosed, legacyLabels } from "../shared/model";
 import type { CardChange } from "./validators";
 
 /** Changes to the same field this close together show as one. */
@@ -172,15 +172,21 @@ export async function recordChange(
   }
 }
 
-/** When the card got to done, should the patch move it there; cleared should it move it out. */
+/**
+ * When the card closed, should the patch close it; cleared should it reopen it.
+ * Moving between closed statuses, say from done to canceled, keeps the stamp.
+ */
 function doneStamp(
   card: Doc<"cards">,
   patch: Partial<Doc<"cards">>
 ): Pick<Doc<"cards">, "doneAt"> | undefined {
-  if (patch.status === undefined || patch.status === card.status) {
+  if (
+    patch.status === undefined ||
+    isClosed(patch.status) === isClosed(card.status)
+  ) {
     return undefined;
   }
-  return { doneAt: patch.status === "done" ? Date.now() : undefined };
+  return { doneAt: isClosed(patch.status) ? Date.now() : undefined };
 }
 
 /** Patches a card, adding what that changes to its history. */

@@ -46,6 +46,7 @@ import {
   PRIORITY_OPTIONS,
   sprintOptions,
   STATUS_OPTIONS,
+  useOptionShortcuts,
 } from "@/features/card/card-options";
 import { LabelDot, People, Person } from "@/features/card/card-parts";
 import { LabelPicker } from "@/features/card/label-picker";
@@ -114,8 +115,9 @@ function PillSelect<T>({
   options,
   onChange,
 }: PillSelectProps<T>) {
+  const { onKeyDown, ...open } = useOptionShortcuts(options, onChange);
   return (
-    <Select onValueChange={onChange} value={value}>
+    <Select {...open} onValueChange={onChange} value={value}>
       <SelectTrigger aria-label={label} className={PILL_SELECT}>
         <SelectValue className="items-center gap-1.5">
           {(current: T | null) =>
@@ -127,9 +129,13 @@ function PillSelect<T>({
           }
         </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent onKeyDown={onKeyDown}>
         {options.map((option) => (
-          <SelectItem key={String(option.value)} value={option.value}>
+          <SelectItem
+            key={String(option.value)}
+            shortcut={option.shortcut}
+            value={option.value}
+          >
             {option.label}
           </SelectItem>
         ))}
