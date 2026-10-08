@@ -22,6 +22,7 @@ import { cardPath, useBoard } from "@/features/board/board-context";
 import { CardActivity } from "@/features/card/card-activity";
 import { CardFiles } from "@/features/card/card-files";
 import { CardProperties } from "@/features/card/card-properties";
+import { useSaveWhileTyping } from "@/hooks/use-save-while-typing";
 import { deleteCard, updateCard } from "@/lib/actions";
 import type { Card } from "@/lib/model";
 import { cardKey } from "@/lib/model";
@@ -32,18 +33,24 @@ const INLINE_FIELD =
 const TITLE = "text-xl leading-snug font-semibold";
 const DESCRIPTION = "py-1.5 text-base leading-relaxed md:text-sm";
 
-// Typing is kept local until the field loses focus, so teammates' edits never overwrite it mid-sentence.
+// Typing is kept local until the field loses focus, so teammates' edits never
+// overwrite it mid-sentence. It still saves as it goes, should the page close first.
 function useDraft(value: string, save: (draft: string) => void) {
   const [draft, setDraft] = useState<string>();
+  const typing = useSaveWhileTyping(() => {
+    if (draft !== undefined && draft !== value) {
+      save(draft);
+    }
+  });
   return {
     onBlur: () => {
-      if (draft !== undefined && draft !== value) {
-        save(draft);
-      }
+      typing.save();
       setDraft(undefined);
     },
-    onChange: (event: ChangeEvent<HTMLTextAreaElement>) =>
-      setDraft(event.target.value),
+    onChange: (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setDraft(event.target.value);
+      typing.typed();
+    },
     value: draft ?? value,
   };
 }

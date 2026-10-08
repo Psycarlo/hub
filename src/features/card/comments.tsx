@@ -4,7 +4,7 @@ import { useQuery } from "convex/react";
 import { ArrowUpIcon, Trash2Icon, XIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { MentionText } from "@/components/mention-text";
@@ -33,6 +33,7 @@ import type { DraftFile } from "@/features/card/use-draft-files";
 import { useDraftFiles } from "@/features/card/use-draft-files";
 import { DROP_TARGET, useFileDrop } from "@/features/card/use-file-drop";
 import type { Comment } from "@/hooks/use-comments";
+import { useStoredDraft } from "@/hooks/use-stored-draft";
 import { useUser } from "@/hooks/use-users";
 import { addComment, deleteComment, run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
@@ -295,16 +296,32 @@ function SendButton({ ready, sending }: { ready: boolean; sending: boolean }) {
   );
 }
 
+/** A comment being written, and who was picked from the list to mention in it. */
+interface CommentDraft {
+  text: string;
+  picked: Mention[];
+}
+
+const BLANK: CommentDraft = { picked: [], text: "" };
+
+function isBlank(draft: CommentDraft): boolean {
+  return draft.text.trim() === "";
+}
+
 /**
  * Where a comment is written, or a reply to `parent`. Files can be attached
- * with the paperclip, dropped on it or pasted into it.
+ * with the paperclip, dropped on it or pasted into it. The text is kept as a
+ * draft until it's sent; the files aren't.
  */
 export function Composer({ card, parent }: { card: Card; parent?: Comment }) {
   const { me, people } = useBoard();
-  const [text, setText] = useState("");
+  const { draft, change, discard } = useStoredDraft(
+    `comment:${me}:${card._id}${parent ? `:${parent._id}` : ""}`,
+    BLANK,
+    isBlank
+  );
+  const { text } = draft;
   const [sending, setSending] = useState(false);
-  // Who was picked from the list, read only when sending.
-  const picked = useRef<Mention[]>([]);
   const drafts = useDraftFiles(MAX_COMMENT_FILES);
   const drop = useFileDrop(drafts.add);
   const uploading = drafts.files.some((file) => !file.upload);
@@ -318,15 +335,14 @@ export function Composer({ card, parent }: { card: Card; parent?: Comment }) {
     const { files } = drafts;
     setSending(true);
     const sent = await addComment(card, {
-      content: encodeMentions(text.trim(), picked.current),
+      content: encodeMentions(text.trim(), draft.picked),
       files: files.flatMap((file) => file.upload ?? []),
       parentId: parent?._id,
     });
     setSending(false);
     // Not sent: the text and files stay, to try again.
     if (sent !== undefined) {
-      setText("");
-      picked.current = [];
+      discard();
       drafts.sent(files.map((file) => file.id));
     }
   };
@@ -364,11 +380,9 @@ export function Composer({ card, parent }: { card: Card; parent?: Comment }) {
         parent ? "min-h-8 flex-1 px-0 py-1.5" : "min-h-14 px-3 pt-3 pb-1"
       )}
       onKeyDown={onKeyDown}
-      onMention={(mention) => {
-        picked.current = [...picked.current, mention];
-      }}
+      onMention={(mention) => change({ picked: [...draft.picked, mention] })}
       onPaste={onPaste}
-      onValueChange={setText}
+      onValueChange={(next) => change({ text: next })}
       // Anyone on the project, viewers too, can be pointed at the card.
       people={people.filter((person) => person !== me)}
       placeholder={

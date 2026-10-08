@@ -12,7 +12,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { IconButton } from "@/components/icon-button";
@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { CardPlacement } from "@/features/board/board-context";
+import type { BoardScope, CardPlacement } from "@/features/board/board-context";
 import { useBoard } from "@/features/board/board-context";
 import {
   assignable,
@@ -49,14 +49,30 @@ import {
 } from "@/features/card/card-options";
 import { LabelDot, People, Person } from "@/features/card/card-parts";
 import { LabelPicker } from "@/features/card/label-picker";
+import { useStoredDraft } from "@/hooks/use-stored-draft";
 import { createCard } from "@/lib/actions";
+import { readDraft, writeDraft } from "@/lib/drafts";
 import type { CardFields, UserId } from "@/lib/model";
 import { cardKey, rankBetween } from "@/lib/model";
 
 export type NewCardDefaults = CardPlacement & Pick<CardFields, "assignees">;
 
-type Properties = NewCardDefaults &
-  Pick<CardFields, "priority" | "due" | "labels">;
+/** What's kept of a card being written, should the dialog close before it's created. */
+type Draft = Pick<
+  CardFields,
+  "title" | "description" | "assignees" | "priority" | "due" | "labels"
+>;
+
+const BLANK: Draft = { assignees: [], description: "", labels: [], title: "" };
+
+function isBlank(draft: Draft): boolean {
+  return draft.title.trim() === "" && draft.description.trim() === "";
+}
+
+/** One draft per person and board. */
+function draftKey({ board, me }: BoardScope): string {
+  return `new-card:${me}:${board._id}`;
+}
 
 const PILL =
   "h-7 w-auto max-w-56 gap-1.5 rounded-full border-transparent bg-foreground/5 px-2.5 text-xs font-medium hover:bg-foreground/10 data-popup-open:bg-foreground/10 dark:bg-foreground/5 dark:hover:bg-foreground/10 [&_svg:not([class*='size-'])]:size-3.5";
@@ -254,45 +270,68 @@ function NewCardForm({
   titleField: RefObject<HTMLTextAreaElement | null>;
   onClose: () => void;
 }) {
-  const { board, content, people } = useBoard();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  // Counts the cards created here, so each next one starts with a fresh editor.
-  const [created, setCreated] = useState(0);
-  const [properties, setProperties] = useState<Properties>({
-    ...defaults,
-    labels: [],
+  const scope = useBoard();
+  const { board, content, people } = scope;
+  const { draft, change, discard, restored } = useStoredDraft(
+    draftKey(scope),
+    { ...BLANK, assignees: defaults.assignees },
+    isBlank
+  );
+  // Where the card goes follows where it was added, even for a draft started elsewhere.
+  const [placement, setPlacement] = useState<CardPlacement>({
+    sprintId: defaults.sprintId,
+    status: defaults.status,
   });
+  // Bumped whenever the text is replaced from here, so the editor starts over with it.
+  const [fresh, setFresh] = useState(0);
   const [createMore, setCreateMore] = useState(false);
-  const ready = title.trim() !== "";
-  const sprints = sprintChoices(content.sprints, properties.sprintId);
+  const ready = draft.title.trim() !== "";
+  const sprints = sprintChoices(content.sprints, placement.sprintId);
 
-  const set = (changes: Partial<Properties>) =>
-    setProperties((current) => ({ ...current, ...changes }));
+  // A restored draft picks up where it was left, at the end of the title.
+  useEffect(() => {
+    const field = titleField.current;
+    if (restored && field) {
+      field.setSelectionRange(field.value.length, field.value.length);
+    }
+  }, [restored, titleField]);
+
+  const startOver = () => {
+    discard();
+    setFresh((count) => count + 1);
+    titleField.current?.focus();
+  };
 
   // Mod+Enter in the description passes its text, since the state it just
   // committed only updates on the next render.
-  const create = async (text = description) => {
+  const create = async (text?: string) => {
     if (!ready) {
       return;
     }
+    const written = { ...draft, description: text ?? draft.description };
+    // The text leaves the form, and the kept draft, right away. Properties
+    // carry over, so a run of similar cards is quick to enter.
+    change({ description: "", title: "" });
     const saving = createCard(board, {
-      ...properties,
-      description: text,
+      ...written,
+      ...placement,
+      // A draft can name someone who has since left the project.
+      assignees: written.assignees.filter((person) => people.includes(person)),
       rank: rankBetween(content.cards.at(-1)?.rank),
-      title: title.trim(),
+      title: written.title.trim(),
     });
-    if (!createMore) {
+    if (createMore) {
+      setFresh((count) => count + 1);
+      titleField.current?.focus();
+    } else {
       onClose();
-      return;
     }
-    // Properties carry over, so a run of similar cards is quick to enter.
-    setTitle("");
-    setDescription("");
-    setCreated((count) => count + 1);
-    titleField.current?.focus();
     const card = await saving;
-    if (card) {
+    if (!card) {
+      // Not created: the text comes back as the draft, to try again.
+      change(written);
+      setFresh((count) => count + 1);
+    } else if (createMore) {
       toast.success(`${cardKey(board, card)} created`);
     }
   };
@@ -321,7 +360,7 @@ function NewCardForm({
         <textarea
           aria-label="Title"
           className="placeholder:text-muted-foreground/70 field-sizing-content resize-none bg-transparent text-lg leading-snug font-semibold outline-none"
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => change({ title: event.target.value })}
           // Enter creates; Shift+Enter is left alone.
           onKeyDown={(event) => {
             if (isEnter(event) && !event.shiftKey) {
@@ -332,16 +371,16 @@ function NewCardForm({
           placeholder="Card title"
           ref={titleField}
           rows={1}
-          value={title}
+          value={draft.title}
         />
         <MarkdownEditor
           aria-label="Description"
           className="max-h-[40dvh] min-h-20 overflow-y-auto text-base leading-relaxed outline-none md:text-sm"
-          key={created}
+          key={fresh}
           onSubmit={create}
-          onValueCommitted={setDescription}
+          onValueCommitted={(description) => change({ description })}
           placeholder="Add a description…"
-          value={description}
+          value={draft.description}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5 px-5 pt-2 pb-4">
@@ -350,47 +389,59 @@ function NewCardForm({
           label="Status"
           onChange={(status) => {
             if (status) {
-              set({ status });
+              setPlacement((current) => ({ ...current, status }));
             }
           }}
           options={STATUS_OPTIONS}
-          value={properties.status}
+          value={placement.status}
         />
         <PillSelect
           icon={ChartNoAxesColumnIcon}
           label="Priority"
-          onChange={(priority) => set({ priority: priority ?? undefined })}
+          onChange={(priority) => change({ priority: priority ?? undefined })}
           options={PRIORITY_OPTIONS}
-          value={properties.priority ?? null}
+          value={draft.priority ?? null}
         />
         <AssigneesPill
-          onChange={(assignees) => set({ assignees })}
-          people={assignable(people, properties.assignees)}
-          value={properties.assignees}
+          onChange={(assignees) => change({ assignees })}
+          people={assignable(people, draft.assignees)}
+          value={draft.assignees}
         />
         {board.usesSprints && (
           <PillSelect
             icon={IterationCwIcon}
             label="Sprint"
             onChange={(sprint) =>
-              set({
+              setPlacement((current) => ({
+                ...current,
                 sprintId: sprints.find((item) => item._id === sprint)?._id,
-              })
+              }))
             }
             options={sprintOptions(sprints)}
             value={
-              sprints.find((sprint) => sprint._id === properties.sprintId)
+              sprints.find((sprint) => sprint._id === placement.sprintId)
                 ?._id ?? null
             }
           />
         )}
-        <DuePill onChange={(due) => set({ due })} value={properties.due} />
+        <DuePill onChange={(due) => change({ due })} value={draft.due} />
         <LabelsPill
-          onChange={(labels) => set({ labels })}
-          value={properties.labels}
+          onChange={(labels) => change({ labels })}
+          value={draft.labels}
         />
       </div>
       <div className="flex items-center justify-end gap-4 px-5 pb-4">
+        {restored && !isBlank(draft) && (
+          <Button
+            className="text-muted-foreground mr-auto -ml-3"
+            onClick={startOver}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Discard draft
+          </Button>
+        )}
         {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the switch renders its own input */}
         <label className="text-muted-foreground flex items-center gap-2 text-sm select-none">
           <Switch checked={createMore} onCheckedChange={setCreateMore} />
@@ -416,8 +467,29 @@ export function NewCardDialog({
   onOpenChange,
 }: NewCardDialogProps) {
   const titleField = useRef<HTMLTextAreaElement>(null);
+  const key = draftKey(useBoard());
+
+  // What was written stays as a draft, and closing says so, with a way to drop it.
+  const close = () => {
+    onOpenChange(false);
+    const kept = readDraft(key, BLANK);
+    if (kept && !isBlank(kept)) {
+      toast("Draft saved", {
+        action: { label: "Discard", onClick: () => writeDraft(key, null) },
+        description: "It’s back the next time you add a card to this board.",
+      });
+    }
+  };
+
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) {
+          close();
+        }
+      }}
+      open={open}
+    >
       <DialogContent
         className="max-w-2xl gap-0 p-0"
         initialFocus={titleField}
@@ -425,7 +497,7 @@ export function NewCardDialog({
       >
         <NewCardForm
           defaults={defaults}
-          onClose={() => onOpenChange(false)}
+          onClose={close}
           titleField={titleField}
         />
       </DialogContent>

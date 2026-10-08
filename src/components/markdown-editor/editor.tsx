@@ -20,6 +20,7 @@ import {
   LinkTarget,
   SelectionToolbar,
 } from "@/components/markdown-editor/toolbar";
+import { useSaveWhileTyping } from "@/hooks/use-save-while-typing";
 
 function isSubmit(event: KeyboardEvent): boolean {
   return (
@@ -145,13 +146,23 @@ export function MarkdownEditorView({
     onIncoming(incoming);
   }, [incoming]);
 
-  // Closing the card or dialog mid-edit keeps the edit.
-  const onUnmount = useEffectEvent(() => {
+  // A pause in typing commits too, as do leaving the page and closing the
+  // card or dialog mid-edit, so the text survives a reload or a crash.
+  const typing = useSaveWhileTyping(() => {
     if (editor && !editor.isDestroyed) {
       commit(editor.getJSON());
     }
   });
-  useEffect(() => () => onUnmount(), []);
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    // Text loaded from outside doesn't emit updates; only edits made here do.
+    editor.on("update", typing.typed);
+    return () => {
+      editor.off("update", typing.typed);
+    };
+  }, [editor, typing]);
 
   return (
     <>

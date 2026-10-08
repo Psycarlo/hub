@@ -17,7 +17,10 @@ const MarkdownViewer = lazy(async () => {
 export interface MarkdownEditorProps {
   /** Markdown to show. A new value replaces the text unless it's being edited. */
   value: string;
-  /** The edited markdown, once the editor loses focus or closes, or on submit. */
+  /**
+   * The edited markdown: after a pause in typing, once the editor loses focus
+   * or closes, when the page is hidden or left, and on submit.
+   */
   onValueCommitted: (markdown: string) => void;
   /** Mod+Enter, with the markdown as it stands. */
   onSubmit?: (markdown: string) => void;

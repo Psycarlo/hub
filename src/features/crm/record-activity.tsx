@@ -32,6 +32,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UserAvatar } from "@/components/user-avatar";
 import { useCrm } from "@/features/crm/crm-context";
 import { useRecordActivity } from "@/hooks/use-record-activity";
+import { useStoredDraft } from "@/hooks/use-stored-draft";
 import { useUser } from "@/hooks/use-users";
 import type { Activity, ActivityType, CrmRecord, StageMove } from "@/lib/crm";
 import { ACTIVITY_TYPES, findOption, stageField } from "@/lib/crm";
@@ -215,10 +216,27 @@ function CreatedEntry({ at, by }: { at: number; by?: string }) {
   );
 }
 
+/** An entry being written, kept as a draft until it's logged. */
+interface EntryDraft {
+  type: ActivityType;
+  text: string;
+}
+
+const BLANK: EntryDraft = { text: "", type: "note" };
+
+function isBlank(draft: EntryDraft): boolean {
+  return draft.text.trim() === "";
+}
+
 function Composer({ record }: { record: CrmRecord }) {
   const id = useId();
-  const [type, setType] = useState<ActivityType>("note");
-  const [text, setText] = useState("");
+  const { me } = useCrm();
+  const { draft, change } = useStoredDraft(
+    `activity:${me}:${record._id}`,
+    BLANK,
+    isBlank
+  );
+  const { type, text } = draft;
   const label =
     ACTIVITY_TYPES.find((item) => item.id === type)?.label ?? "Note";
 
@@ -227,9 +245,9 @@ function Composer({ record }: { record: CrmRecord }) {
     if (!content) {
       return;
     }
-    setText("");
+    change({ text: "" });
     if ((await addActivity(record, type, content)) === undefined) {
-      setText(text);
+      change({ text });
     }
   };
 
@@ -246,7 +264,7 @@ function Composer({ record }: { record: CrmRecord }) {
         onValueChange={(next) => {
           const picked = ACTIVITY_TYPES.find((item) => item.id === next[0]);
           if (picked) {
-            setType(picked.id);
+            change({ type: picked.id });
           }
         }}
         value={[type]}
@@ -275,7 +293,7 @@ function Composer({ record }: { record: CrmRecord }) {
         aria-label={label}
         className="min-h-16"
         id={id}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => change({ text: event.target.value })}
         onKeyDown={(event) => {
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
             event.preventDefault();
@@ -336,7 +354,7 @@ export function RecordActivity({
           </span>
         )}
       </h3>
-      {canEdit && <Composer record={record} />}
+      {canEdit && <Composer key={record._id} record={record} />}
       <ol className="before:bg-border relative flex flex-col gap-4 before:absolute before:top-3 before:bottom-3 before:left-3 before:w-px">
         {entries.map((entry) => {
           if (entry.kind === "activity") {
