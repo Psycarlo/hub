@@ -18,8 +18,11 @@ import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { cardPath, OPENED_FROM_BOARD } from "@/features/board/board-context";
+import { pagePath } from "@/features/docs/docs-context";
+import { PageIcon } from "@/features/docs/page-icon";
 import type { Inbox, InboxItem } from "@/hooks/use-inbox";
 import { useUser } from "@/hooks/use-users";
+import { pageTitle } from "@/lib/docs";
 import { cardKey } from "@/lib/model";
 
 /** Shares the top-level path with short board links, so INBOX is a reserved code. */
@@ -42,8 +45,35 @@ function shortAgo(at: number): string {
   return days < 7 ? `${days}d` : format(new Date(at), "MMM d");
 }
 
+/** What the mention is in: the card by its key and title, or the page by its icon and title. */
+function Subject({ item }: { item: InboxItem }) {
+  const title = cn("truncate", !item.read && "text-foreground font-medium");
+  if (item.kind === "page") {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <PageIcon className="text-muted-foreground" page={item.page} />
+        <span className={title}>{pageTitle(item.page)}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 items-baseline gap-2">
+      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        {cardKey(item.board, item.card)}
+      </span>
+      <span className={title}>{item.card.title || "Untitled"}</span>
+    </span>
+  );
+}
+
+function hrefOf(item: InboxItem): string {
+  return item.kind === "page"
+    ? pagePath(item.project, item.page)
+    : cardPath(item.project, item.board, item.card);
+}
+
 function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
-  const { board, card, project, read } = item;
+  const { read } = item;
   const { name } = useUser(item.actorId);
   const date = new Date(item._creationTime);
   return (
@@ -53,9 +83,9 @@ function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
           "hover:bg-foreground/5 focus-visible:ring-ring/50 flex items-center gap-3 rounded-xl py-2.5 pr-3 pl-2 transition-colors duration-150 outline-none focus-visible:ring-3",
           read && "text-muted-foreground"
         )}
-        href={cardPath(project, board, card)}
+        href={hrefOf(item)}
         onClick={() => inbox.setRead([item], true)}
-        state={OPENED_FROM_BOARD}
+        state={item.kind === "comment" ? OPENED_FROM_BOARD : undefined}
       >
         <span
           aria-hidden
@@ -71,16 +101,7 @@ function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
           </span>
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-              {cardKey(board, card)}
-            </span>
-            <span
-              className={cn("truncate", !read && "text-foreground font-medium")}
-            >
-              {card.title || "Untitled"}
-            </span>
-          </span>
+          <Subject item={item} />
           <span className="text-muted-foreground truncate text-sm">
             {name} mentioned you: <MentionText content={item.content} />
           </span>
@@ -135,7 +156,7 @@ function InboxList({ inbox }: { inbox: Inbox }) {
       <InboxIcon aria-hidden className="text-muted-foreground size-8" />
       <EmptyTitle>You’re all caught up</EmptyTitle>
       <EmptyDescription>
-        When someone mentions you in a comment, it shows up here.
+        When someone mentions you in a comment or a doc, it shows up here.
       </EmptyDescription>
     </Empty>
   );

@@ -55,13 +55,20 @@ export async function deleteRecord(
 }
 
 /**
- * A page. The texts kept to merge its edits can be large, so they're
- * cleared afterwards in batches of their own.
+ * A page and the notifications pointing at it. The texts kept to merge its
+ * edits can be large, so they're cleared afterwards in batches of their own.
  */
 export async function deletePage(
   ctx: MutationCtx,
   pageId: Id<"docPages">
 ): Promise<void> {
+  const notifications = await ctx.db
+    .query("notifications")
+    .withIndex("by_page_and_user", (q) => q.eq("pageId", pageId))
+    .collect();
+  for (const notification of notifications) {
+    await ctx.db.delete(notification._id);
+  }
   await ctx.db.delete(pageId);
   await ctx.scheduler.runAfter(0, internal.cleanup.revisions, { pageId });
 }

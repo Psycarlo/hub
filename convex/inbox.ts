@@ -1,22 +1,89 @@
 import { v } from "convex/values";
 
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser, roleIn } from "./lib/access";
 
 /** Newest notifications shown. */
 const LIMIT = 200;
 
-export interface InboxItem {
+interface Notification {
   _id: Id<"notifications">;
   _creationTime: number;
   actorId: Id<"users">;
   content: string;
   read: boolean;
+  /** Where the card or page sits, which its links go through. */
+  project: { slug: string };
+}
+
+/** A mention in a card comment. */
+export interface CommentMention extends Notification {
+  kind: "comment";
   card: { _id: Id<"cards">; number: number; title: string };
   board: { _id: Id<"boards">; code: string; title: string };
-  /** Where the board sits, which its links go through. */
-  project: { slug: string };
+}
+
+/** A mention on a doc page. */
+export interface PageMention extends Notification {
+  kind: "page";
+  page: {
+    _id: Id<"docPages">;
+    title: string;
+    icon: string;
+    hasContent: boolean;
+  };
+}
+
+export type InboxItem = CommentMention | PageMention;
+
+/** The card or page a notification points at, or null once it's gone or out of sight. */
+async function itemOf(
+  ctx: QueryCtx,
+  user: Doc<"users">,
+  notification: Doc<"notifications">
+): Promise<InboxItem | null> {
+  const common = {
+    _creationTime: notification._creationTime,
+    _id: notification._id,
+    actorId: notification.actorId,
+    content: notification.content,
+    read: notification.read,
+  };
+  if ("pageId" in notification) {
+    const page = await ctx.db.get(notification.pageId);
+    const project = page ? await ctx.db.get(page.projectId) : null;
+    // Pages on projects the person has since left drop out.
+    if (!(page && project && (await roleIn(ctx, user, project)))) {
+      return null;
+    }
+    return {
+      ...common,
+      kind: "page",
+      page: {
+        _id: page._id,
+        hasContent: page.content.trim() !== "",
+        icon: page.icon,
+        title: page.title,
+      },
+      project: { slug: project.slug },
+    };
+  }
+  const card = await ctx.db.get(notification.cardId);
+  const board = card ? await ctx.db.get(card.boardId) : null;
+  const project = board ? await ctx.db.get(board.projectId) : null;
+  // Cards on projects the person has since left drop out.
+  if (!(card && board && project && (await roleIn(ctx, user, project)))) {
+    return null;
+  }
+  return {
+    ...common,
+    board: { _id: board._id, code: board.code, title: board.title },
+    card: { _id: card._id, number: card.number, title: card.title },
+    kind: "comment",
+    project: { slug: project.slug },
+  };
 }
 
 /** The signed-in person's notifications that aren't archived, newest first. */
@@ -32,25 +99,7 @@ export const list = query({
       .order("desc")
       .take(LIMIT);
     const items = await Promise.all(
-      notifications.map(async (notification): Promise<InboxItem | null> => {
-        const card = await ctx.db.get(notification.cardId);
-        const board = card ? await ctx.db.get(card.boardId) : null;
-        const project = board ? await ctx.db.get(board.projectId) : null;
-        // Cards on projects the person has since left drop out.
-        if (!(card && board && project && (await roleIn(ctx, user, project)))) {
-          return null;
-        }
-        return {
-          _creationTime: notification._creationTime,
-          _id: notification._id,
-          actorId: notification.actorId,
-          board: { _id: board._id, code: board.code, title: board.title },
-          card: { _id: card._id, number: card.number, title: card.title },
-          content: notification.content,
-          project: { slug: project.slug },
-          read: notification.read,
-        };
-      })
+      notifications.map((notification) => itemOf(ctx, user, notification))
     );
     return items.filter((item) => item !== null);
   },
@@ -93,6 +142,25 @@ export const readCard = mutation({
       .collect();
     for (const notification of notifications) {
       if (notification.userId === user._id && !notification.read) {
+        await ctx.db.patch(notification._id, { read: true });
+      }
+    }
+  },
+});
+
+/** Opening a page reads the mentions of you on it. */
+export const readPage = mutation({
+  args: { pageId: v.id("docPages") },
+  handler: async (ctx, { pageId }) => {
+    const user = await requireUser(ctx);
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_page_and_user", (q) =>
+        q.eq("pageId", pageId).eq("userId", user._id)
+      )
+      .collect();
+    for (const notification of notifications) {
+      if (!notification.read) {
         await ctx.db.patch(notification._id, { read: true });
       }
     }

@@ -67,9 +67,9 @@ function findQuery(
     : { query, start };
 }
 
-// People who share a name also show their email, so each `@Name` stays theirs.
-function distinctNames(
-  people: string[],
+/** People who share a name also show their email, so each `@Name` stays theirs. */
+export function distinctNames(
+  people: readonly string[],
   users: Map<string, { name: string; email: string }>
 ): Map<string, string> {
   const uses = new Map<string, number>();

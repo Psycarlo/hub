@@ -9,6 +9,8 @@ import { StarterKit } from "@tiptap/starter-kit";
 import type { marked, TokenizerExtension } from "marked";
 import { Lexer, Marked } from "marked";
 
+import { Mention } from "@/components/markdown-editor/mention";
+
 const SCHEME = /^(?<scheme>[a-z][a-z\d+.-]*):/iu;
 // Only addresses typed in full link up, so a file name like index.md stays text.
 const FULL_ADDRESS = /^(?:[a-z][a-z\d+.-]*:|www\.)/iu;
@@ -139,6 +141,7 @@ export const CONTENT = [
   BulletTaskItem.configure({ nested: true }),
   TableKit.configure({ table: { resizable: false } }),
   WebImage.configure({ inline: true }),
+  Mention,
 ];
 
 // Raw HTML stays text, as written: an HTML block reads as a paragraph and a

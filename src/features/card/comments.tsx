@@ -489,7 +489,8 @@ export function CommentThread({
 export function useReadMentions(card: Card) {
   const inbox = useQuery(api.inbox.list);
   const unread = inbox?.some(
-    (item) => item.card._id === card._id && !item.read
+    (item) =>
+      item.kind === "comment" && item.card._id === card._id && !item.read
   );
   useEffect(() => {
     if (unread) {

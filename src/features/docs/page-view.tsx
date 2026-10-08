@@ -9,7 +9,7 @@ import {
   SmilePlusIcon,
 } from "lucide-react";
 import type { ChangeEvent, KeyboardEvent } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
@@ -27,6 +27,7 @@ import type { PageEditorHandle } from "@/features/docs/page-editor";
 import { PageEditor } from "@/features/docs/page-editor";
 import { PageIcon } from "@/features/docs/page-icon";
 import { PageMenu } from "@/features/docs/page-menu";
+import { useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import type { DocPage, DocsContent } from "@/lib/docs";
@@ -103,6 +104,19 @@ function SubPages({ project, pages }: { project: Project; pages: DocPage[] }) {
   );
 }
 
+/** Seeing the page counts as reading the mentions of you on it. */
+function useReadMentions(page: DocPage) {
+  const inbox = useQuery(api.inbox.list);
+  const unread = inbox?.some(
+    (item) => item.kind === "page" && item.page._id === page._id && !item.read
+  );
+  useEffect(() => {
+    if (unread) {
+      run(convex.mutation(api.inbox.readPage, { pageId: page._id }));
+    }
+  }, [unread, page._id]);
+}
+
 /** The page's icon, title and text, edited in place. */
 function EditablePage({
   project,
@@ -111,6 +125,7 @@ function EditablePage({
   full,
 }: PageViewProps & { full: Doc<"docPages"> }) {
   const [, navigate] = useLocation();
+  const me = useMe();
   const editor = useRef<PageEditorHandle>(null);
   // The title being typed, until the field is left.
   const [title, setTitle] = useState<string>();
@@ -217,6 +232,9 @@ function EditablePage({
           key={page._id}
           latest={{ content: full.content, revision: full.revision }}
           onPublish={onPublish}
+          people={project.members
+            .map((member) => member.userId)
+            .filter((userId) => userId !== me._id)}
           ref={editor}
         />
       </div>
@@ -273,6 +291,7 @@ function PageSkeleton() {
 export function PageView({ project, docs, page }: PageViewProps) {
   const full = useQuery(api.docs.get, { pageId: page._id });
   const children = docs.children.get(page._id) ?? [];
+  useReadMentions(page);
   const editable = canEdit(project);
   let body = <PageSkeleton />;
   if (full && editable) {

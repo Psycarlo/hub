@@ -5,13 +5,15 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { deletePage } from "./cleanup";
 import {
+  canSee,
   ifVisible,
   requirePage,
   requireProject,
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { pageExcerpt } from "./shared/docs";
+import { mentionExcerpt, pageExcerpt } from "./shared/docs";
+import { mentionedUsers } from "./shared/mentions";
 import { mergeText } from "./shared/merge";
 import { rankBetween } from "./shared/model";
 
@@ -74,6 +76,53 @@ export const get = query({
     return access?.page ?? null;
   },
 });
+
+/**
+ * Everyone the text newly mentions who can see the page gets a notification;
+ * anyone it no longer mentions loses theirs.
+ */
+async function notifyMentions(
+  ctx: MutationCtx,
+  page: Pick<Doc<"docPages">, "_id" | "projectId">,
+  actorId: Id<"users">,
+  before: string,
+  after: string
+): Promise<void> {
+  const was = mentionedUsers(before);
+  const now = mentionedUsers(after);
+  for (const mentioned of was.filter((id) => !now.includes(id))) {
+    const userId = ctx.db.normalizeId("users", mentioned);
+    if (!userId) {
+      continue;
+    }
+    const gone = await ctx.db
+      .query("notifications")
+      .withIndex("by_page_and_user", (q) =>
+        q.eq("pageId", page._id).eq("userId", userId)
+      )
+      .collect();
+    for (const notification of gone) {
+      await ctx.db.delete(notification._id);
+    }
+  }
+  for (const mentioned of now.filter((id) => !was.includes(id))) {
+    const userId = ctx.db.normalizeId("users", mentioned);
+    if (
+      userId &&
+      userId !== actorId &&
+      (await canSee(ctx, userId, page.projectId))
+    ) {
+      await ctx.db.insert("notifications", {
+        actorId,
+        archived: false,
+        content: mentionExcerpt(after, mentioned),
+        pageId: page._id,
+        read: false,
+        userId,
+      });
+    }
+  }
+}
 
 async function siblings(
   ctx: QueryCtx,
@@ -146,6 +195,13 @@ export const create = mutation({
       pageId,
       revision: 1,
     });
+    await notifyMentions(
+      ctx,
+      { _id: pageId, projectId: args.projectId },
+      user._id,
+      "",
+      content
+    );
     return pageId;
   },
 });
@@ -228,6 +284,7 @@ export const save = mutation({
       revision,
     });
     await prune(ctx, pageId, revision);
+    await notifyMentions(ctx, page, user._id, page.content, merged);
     return { content: merged, revision };
   },
 });

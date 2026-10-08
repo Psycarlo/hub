@@ -7,6 +7,7 @@ import {
   parseMarkdown,
   serializeMarkdown,
 } from "@/components/markdown-editor/content";
+import { mentionToken } from "@/lib/mentions";
 
 const LINE_BREAKS = /(?:\r\n?|\n)+/u;
 
@@ -66,8 +67,19 @@ function textWithin(slice: Slice): Fragment | undefined {
     : undefined;
 }
 
+// Mentions copy as their token, which pasting turns back into the mention.
 function leafText(node: Node): string {
-  return node.type.name === "hardBreak" ? "\n" : "";
+  switch (node.type.name) {
+    case "hardBreak": {
+      return "\n";
+    }
+    case "mention": {
+      return mentionToken(String(node.attrs.id));
+    }
+    default: {
+      return "";
+    }
+  }
 }
 
 /** VS Code names the language of the code it copies. */

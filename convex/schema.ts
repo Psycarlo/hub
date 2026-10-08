@@ -187,19 +187,34 @@ export default defineSchema({
     .index("by_card_and_comment", ["cardId", "commentId"])
     .index("by_key", ["key"]),
 
-  /** Someone was mentioned in a card comment. */
-  notifications: defineTable({
-    actorId: v.id("users"),
-    archived: v.boolean(),
-    cardId: v.id("cards"),
-    commentId: v.id("comments"),
-    content: v.string(),
-    read: v.boolean(),
-    userId: v.id("users"),
-  })
+  /** Someone was mentioned in a card comment, or on a doc page. */
+  notifications: defineTable(
+    v.union(
+      v.object({
+        actorId: v.id("users"),
+        archived: v.boolean(),
+        cardId: v.id("cards"),
+        commentId: v.id("comments"),
+        /** The comment's text. */
+        content: v.string(),
+        read: v.boolean(),
+        userId: v.id("users"),
+      }),
+      v.object({
+        actorId: v.id("users"),
+        archived: v.boolean(),
+        /** The line of the page that mentions them, as it read then. */
+        content: v.string(),
+        pageId: v.id("docPages"),
+        read: v.boolean(),
+        userId: v.id("users"),
+      })
+    )
+  )
     .index("by_user_and_archived", ["userId", "archived"])
     .index("by_comment", ["commentId"])
-    .index("by_card", ["cardId"]),
+    .index("by_card", ["cardId"])
+    .index("by_page_and_user", ["pageId", "userId"]),
 
   crmTables: defineTable({
     createdBy: v.id("users"),

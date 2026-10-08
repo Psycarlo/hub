@@ -25,6 +25,11 @@ import {
 } from "@/components/markdown-editor/content";
 import { ImageUpload } from "@/components/markdown-editor/image-upload";
 import {
+  MentionCommand,
+  MentionMenu,
+  MentionMenuStore,
+} from "@/components/markdown-editor/mention";
+import {
   SlashCommand,
   SlashMenu,
   SlashMenuStore,
@@ -34,8 +39,10 @@ import {
   LinkTarget,
   SelectionToolbar,
 } from "@/components/markdown-editor/toolbar";
+import { distinctNames } from "@/components/mention-textarea";
 import type { PageVersion } from "@/features/docs/page-sync";
 import { PageSync } from "@/features/docs/page-sync";
+import { useUsers } from "@/hooks/use-users";
 
 export interface PageEditorHandle {
   /** Saves pending edits now. */
@@ -54,11 +61,14 @@ interface PageEditorProps {
   ) => Promise<PageVersion | undefined>;
   /** More "/" commands, after the built-in blocks. */
   commands?: readonly BlockCommand[];
+  /** Who "@" offers to mention. */
+  people?: readonly string[];
   ref?: Ref<PageEditorHandle>;
 }
 
 const PROMPT = "Press ‘/’ for commands…";
 const NO_COMMANDS: readonly BlockCommand[] = [];
+const NO_PEOPLE: readonly string[] = [];
 
 // The empty line with the cursor says what it is, or how to pick a block.
 function placeholder({
@@ -82,12 +92,15 @@ export function PageEditor({
   latest,
   onPublish,
   commands = NO_COMMANDS,
+  people = NO_PEOPLE,
   ref,
 }: PageEditorProps) {
   // The version the editor opened; later ones are merged in as they arrive.
   // oxlint-disable-next-line react/hook-use-state -- read once, never set
   const [opened] = useState(latest);
   const slash = useMemo(() => new SlashMenuStore(), []);
+  const mentions = useMemo(() => new MentionMenuStore(), []);
+  const users = useUsers();
   const toolbar = useRef<HTMLDivElement>(null);
   const sync = useRef<PageSync | null>(null);
   const publishRef = useRef(onPublish);
@@ -99,9 +112,10 @@ export function PageEditor({
       LinkTarget,
       MoveBlock,
       SlashCommand.configure({ store: slash }),
+      MentionCommand.configure({ store: mentions }),
       Placeholder.configure({ includeChildren: true, placeholder }),
     ],
-    [slash]
+    [slash, mentions]
   );
 
   const editor = useEditor({
@@ -139,6 +153,13 @@ export function PageEditor({
   useEffect(() => {
     slash.setCommands([...BLOCK_TYPES, ...INSERTS, ...commands]);
   }, [slash, commands]);
+
+  const names = distinctNames(people, users);
+  useEffect(() => {
+    mentions.setPeople(
+      people.map((userId) => ({ name: names.get(userId) ?? "", userId }))
+    );
+  });
 
   // Starts keeping the text and the server in step, once the editor is up.
   const connect = useEffectEvent((current: Editor) => {
@@ -219,6 +240,7 @@ export function PageEditor({
         <>
           <BlockHandle editor={editor} />
           <SlashMenu editor={editor} store={slash} />
+          <MentionMenu editor={editor} store={mentions} />
           <SelectionToolbar
             editor={editor}
             onLeave={() => {
