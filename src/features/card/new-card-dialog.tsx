@@ -1,17 +1,13 @@
-import { cn } from "cn";
 import { format, parseISO } from "date-fns";
-import type { LucideIcon } from "lucide-react";
 import {
   CalendarIcon,
   ChartNoAxesColumnIcon,
   ChevronRightIcon,
   CircleDashedIcon,
   IterationCwIcon,
-  TagIcon,
-  UserRoundIcon,
   XIcon,
 } from "lucide-react";
-import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from "react";
+import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,13 +21,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { BoardScope, CardPlacement } from "@/features/board/board-context";
 import { useBoard } from "@/features/board/board-context";
@@ -41,19 +30,23 @@ import {
   inOfferedOrder,
   sprintChoices,
 } from "@/features/card/card-fields";
-import type { Option } from "@/features/card/card-options";
 import {
   PRIORITY_OPTIONS,
   sprintOptions,
   STATUS_OPTIONS,
-  useOptionShortcuts,
 } from "@/features/card/card-options";
-import { LabelDot, People, Person } from "@/features/card/card-parts";
 import { LabelPicker } from "@/features/card/label-picker";
+import {
+  AssigneesPill,
+  PickedLabels,
+  PILL_BUTTON,
+  PillSelect,
+  Placeholder,
+} from "@/features/card/property-pills";
 import { useStoredDraft } from "@/hooks/use-stored-draft";
 import { createCard } from "@/lib/actions";
 import { readDraft, writeDraft } from "@/lib/drafts";
-import type { CardFields, UserId } from "@/lib/model";
+import type { CardFields } from "@/lib/model";
 import { cardKey, rankBetween } from "@/lib/model";
 
 export type NewCardDefaults = CardPlacement & Pick<CardFields, "assignees">;
@@ -75,110 +68,26 @@ function draftKey({ board, me }: BoardScope): string {
   return `new-card:${me}:${board._id}`;
 }
 
-const PILL =
-  "h-7 w-auto max-w-56 gap-1.5 rounded-full border-transparent bg-foreground/5 px-2.5 text-xs font-medium hover:bg-foreground/10 data-popup-open:bg-foreground/10 dark:bg-foreground/5 dark:hover:bg-foreground/10 [&_svg:not([class*='size-'])]:size-3.5";
-// Select triggers end with a chevron; pills read as buttons without it.
-const PILL_SELECT = cn(PILL, "[&>svg:last-child]:hidden");
-/** A pill that opens a popover rather than a select. */
-const PILL_BUTTON = cn(
-  PILL,
-  "focus-visible:ring-ring/50 flex items-center transition-colors outline-none focus-visible:ring-3"
-);
-
-function Placeholder({
-  icon: Icon,
-  children,
-}: {
-  icon: LucideIcon;
-  children: ReactNode;
-}) {
-  return (
-    <span className="text-muted-foreground flex items-center gap-1.5">
-      <Icon aria-hidden />
-      {children}
-    </span>
-  );
-}
-
-interface PillSelectProps<T> {
-  label: string;
-  icon: LucideIcon;
-  value: T | null;
-  options: Option<T | null>[];
-  onChange: (value: T | null) => void;
-}
-
-function PillSelect<T>({
-  label,
-  icon,
-  value,
-  options,
-  onChange,
-}: PillSelectProps<T>) {
-  const { onKeyDown, ...open } = useOptionShortcuts(options, onChange);
-  return (
-    <Select {...open} onValueChange={onChange} value={value}>
-      <SelectTrigger aria-label={label} className={PILL_SELECT}>
-        <SelectValue className="items-center gap-1.5">
-          {(current: T | null) =>
-            current === null ? (
-              <Placeholder icon={icon}>{label}</Placeholder>
-            ) : (
-              options.find((option) => option.value === current)?.label
-            )
-          }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent onKeyDown={onKeyDown}>
-        {options.map((option) => (
-          <SelectItem
-            key={String(option.value)}
-            shortcut={option.shortcut}
-            value={option.value}
-          >
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function AssigneesPill({
-  people,
-  value,
-  onChange,
-}: {
-  people: UserId[];
-  value: UserId[];
-  onChange: (assignees: UserId[]) => void;
-}) {
-  return (
-    <Select
-      multiple
-      onValueChange={(next: string[]) => onChange(inOfferedOrder(people, next))}
-      value={value}
-    >
-      <SelectTrigger aria-label="Assignees" className={PILL_SELECT}>
-        <SelectValue className="items-center gap-1.5">
-          {(current: string[]) =>
-            current.length === 0 ? (
-              <Placeholder icon={UserRoundIcon}>Assignees</Placeholder>
-            ) : (
-              <People people={current} />
-            )
-          }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {people.map((userId) => (
-          <SelectItem key={userId} value={userId}>
-            <Person userId={userId} />
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+/**
+ * A blank card with what the board starts its cards with, plus whoever it was
+ * added for. Anyone who has left the project and any deleted label drop out.
+ */
+function prefilled(
+  { board, content, people }: BoardScope,
+  defaults: NewCardDefaults
+): Draft {
+  const preset = board.cardDefaults;
+  return {
+    ...BLANK,
+    assignees: inOfferedOrder(people, [
+      ...(preset?.assignees ?? []),
+      ...defaults.assignees,
+    ]),
+    labels: cardLabels(content.labels, preset?.labels ?? []).map(
+      ({ id }) => id
+    ),
+    priority: preset?.priority,
+  };
 }
 
 function LabelsPill({
@@ -189,7 +98,6 @@ function LabelsPill({
   onChange: (labels: string[]) => void;
 }) {
   const { content } = useBoard();
-  const labels = cardLabels(content.labels, value);
   return (
     <LabelPicker
       aria-label="Labels"
@@ -197,24 +105,7 @@ function LabelsPill({
       onChange={onChange}
       value={value}
     >
-      {labels.length === 0 ? (
-        <Placeholder icon={TagIcon}>Labels</Placeholder>
-      ) : (
-        <>
-          <span className="flex -space-x-0.5">
-            {labels.map((label) => (
-              <LabelDot
-                className="size-2.5"
-                color={label.color}
-                key={label.id}
-              />
-            ))}
-          </span>
-          <span className="truncate">
-            {labels.map((label) => label.name).join(", ")}
-          </span>
-        </>
-      )}
+      <PickedLabels labels={cardLabels(content.labels, value)} />
     </LabelPicker>
   );
 }
@@ -280,7 +171,7 @@ function NewCardForm({
   const { board, content, people } = scope;
   const { draft, change, discard, restored } = useStoredDraft(
     draftKey(scope),
-    { ...BLANK, assignees: defaults.assignees },
+    prefilled(scope, defaults),
     isBlank
   );
   // Where the card goes follows where it was added, even for a draft started elsewhere.

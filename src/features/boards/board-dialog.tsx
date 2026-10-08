@@ -38,6 +38,10 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { boardPath } from "@/features/board/board-context";
 import {
+  CardDefaultsField,
+  NO_CARD_DEFAULTS,
+} from "@/features/boards/card-defaults-field";
+import {
   codeError,
   KeyField,
   useTakenCodes,
@@ -45,7 +49,7 @@ import {
 import { LabelsEditor, useLabelsDraft } from "@/features/boards/labels-editor";
 import type { BoardDraft, LabelChanges } from "@/lib/actions";
 import { createBoard, deleteBoard, updateBoard } from "@/lib/actions";
-import type { Board, BoardLabel } from "@/lib/model";
+import type { Board, BoardLabel, CardDefaults } from "@/lib/model";
 import { suggestCode } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { canEdit } from "@/lib/project";
@@ -155,9 +159,10 @@ function initialDraft(
   choices: Project[]
 ) {
   if (board) {
-    return board;
+    return { ...board, cardDefaults: board.cardDefaults ?? NO_CARD_DEFAULTS };
   }
   return {
+    cardDefaults: NO_CARD_DEFAULTS,
     description: "",
     projectId: project?._id ?? choices[0]?._id,
     title: "",
@@ -165,13 +170,22 @@ function initialDraft(
   };
 }
 
+/** Everyone on a project, who the board's new cards can go to once it's there. */
+function peopleIn(projects: Project[], projectId?: Id<"projects">) {
+  const project = projects.find((item) => item._id === projectId);
+  return project ? project.members.map((member) => member.userId) : [];
+}
+
 /** Creates the board or saves its settings; resolves with its code once saved. */
 function saveBoard(
   board: Board | undefined,
   draft: BoardDraft,
-  labels?: LabelChanges
+  labels?: LabelChanges,
+  cardDefaults?: CardDefaults
 ) {
-  return board ? updateBoard(board, { ...draft, labels }) : createBoard(draft);
+  return board
+    ? updateBoard(board, { ...draft, cardDefaults, labels })
+    : createBoard(draft);
 }
 
 function BoardForm({
@@ -196,6 +210,7 @@ function BoardForm({
   const [projectId, setProjectId] = useState(initial.projectId);
   const [usesSprints, setUsesSprints] = useState(initial.usesSprints ?? false);
   const labelsDraft = useLabelsDraft(labels);
+  const [cardDefaults, setCardDefaults] = useState(initial.cardDefaults);
   const [saving, setSaving] = useState(false);
   const taken = useTakenCodes(board?._id);
   const code = typedCode ?? suggestCode(title, taken);
@@ -221,7 +236,12 @@ function BoardForm({
       usesSprints,
     };
     setSaving(true);
-    const saved = await saveBoard(board, draft, labelsDraft.changes);
+    const saved = await saveBoard(
+      board,
+      draft,
+      labelsDraft.changes,
+      cardDefaults
+    );
     setSaving(false);
     if (!saved) {
       return;
@@ -300,6 +320,15 @@ function BoardForm({
       </label>
 
       {labelsDraft.editor && <LabelsEditor {...labelsDraft.editor} />}
+
+      {labelsDraft.current && (
+        <CardDefaultsField
+          labels={labelsDraft.current}
+          onChange={setCardDefaults}
+          people={peopleIn(choices, projectId)}
+          value={cardDefaults}
+        />
+      )}
 
       <DialogFooter className="mt-1">
         {board && <DeleteBoard board={board} onDeleted={onDone} />}

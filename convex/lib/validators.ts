@@ -56,6 +56,14 @@ export const vBoardLabel = v.object({
   name: v.string(),
 });
 
+/** What a board's new cards start with, before anything is picked. */
+export const vCardDefaults = v.object({
+  assignees: v.array(v.id("users")),
+  /** Ids of the board's labels. */
+  labels: v.array(v.string()),
+  priority: v.optional(vPriority),
+});
+
 /** A sprint as a card's history keeps it, should it be deleted later. */
 const vSprintRef = v.object({ id: v.id("sprints"), title: v.string() });
 

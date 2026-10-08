@@ -7,6 +7,7 @@ import {
   vAppRole,
   vBoardLabel,
   vCardChange,
+  vCardDefaults,
   vField,
   vFiat,
   vPriority,
@@ -94,6 +95,8 @@ export default defineSchema({
     .index("by_project_and_user", ["projectId", "userId"]),
 
   boards: defineTable({
+    /** What its new cards start with. Missing when they start blank. */
+    cardDefaults: v.optional(vCardDefaults),
     code: v.string(),
     createdBy: v.id("users"),
     description: v.string(),

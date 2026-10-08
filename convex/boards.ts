@@ -6,13 +6,14 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import type { ProjectAccess } from "./lib/access";
 import {
+  canSee,
   ifVisible,
   requireBoard,
   requireProject,
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { vBoardLabel } from "./lib/validators";
+import { vBoardLabel, vCardDefaults } from "./lib/validators";
 import type { BoardLabel, Status } from "./shared/model";
 import {
   canManageRole,
@@ -30,10 +31,13 @@ import {
 const MAX_TITLE = 80;
 const MAX_DESCRIPTION = 500;
 
+export type CardDefaults = NonNullable<Doc<"boards">["cardDefaults"]>;
+
 export type BoardView = Pick<
   Doc<"boards">,
   | "_id"
   | "_creationTime"
+  | "cardDefaults"
   | "projectId"
   | "code"
   | "formerCodes"
@@ -47,6 +51,7 @@ function toView(board: Doc<"boards">): BoardView {
   return {
     _creationTime: board._creationTime,
     _id: board._id,
+    cardDefaults: board.cardDefaults,
     code: board.code,
     createdBy: board.createdBy,
     description: board.description,
@@ -281,6 +286,36 @@ function mergeLabels(
   return merged;
 }
 
+/**
+ * Defaults naming only the board's labels and people who can see it, each
+ * once, or none when they'd fill nothing in.
+ */
+async function cleanDefaults(
+  ctx: QueryCtx,
+  defaults: CardDefaults,
+  /** The board as it's about to be saved. */
+  board: Doc<"boards">
+): Promise<CardDefaults | undefined> {
+  const assignees: Id<"users">[] = [];
+  for (const userId of new Set(defaults.assignees)) {
+    if (await canSee(ctx, userId, board.projectId)) {
+      assignees.push(userId);
+    }
+  }
+  const labels = await labelsOf(ctx, board);
+  const known = new Set(labels.map(({ id }) => id));
+  const cleaned = {
+    assignees,
+    labels: [...new Set(defaults.labels)].filter((id) => known.has(id)),
+    priority: defaults.priority,
+  };
+  return cleaned.assignees.length > 0 ||
+    cleaned.labels.length > 0 ||
+    cleaned.priority
+    ? cleaned
+    : undefined;
+}
+
 /** Board settings are for whoever made the board, and the project's owners. */
 function canManageBoard(
   access: ProjectAccess & { board: Doc<"boards"> }
@@ -330,6 +365,8 @@ export const create = mutation({
 export const update = mutation({
   args: {
     boardId: v.id("boards"),
+    /** What new cards start with; nothing picked clears them. */
+    cardDefaults: v.optional(vCardDefaults),
     code: v.optional(v.string()),
     description: v.optional(v.string()),
     /** Only what changed, so labels added from cards meanwhile stay. */
@@ -388,6 +425,14 @@ export const update = mutation({
           });
         }
       }
+    }
+    // Defaults let go of deleted labels too, and of people a move leaves behind.
+    const defaults = changes.cardDefaults ?? board.cardDefaults;
+    if (defaults && (changes.cardDefaults || patch.labels || patch.projectId)) {
+      patch.cardDefaults = await cleanDefaults(ctx, defaults, {
+        ...board,
+        ...patch,
+      });
     }
     await ctx.db.patch(boardId, patch);
     return { code: patch.code ?? board.code };

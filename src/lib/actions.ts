@@ -4,7 +4,14 @@ import type { OptimisticLocalStore } from "convex/browser";
 import { toast } from "sonner";
 
 import { convex } from "@/lib/convex";
-import type { Board, BoardLabel, Card, CardFields, Sprint } from "@/lib/model";
+import type {
+  Board,
+  BoardLabel,
+  Card,
+  CardDefaults,
+  CardFields,
+  Sprint,
+} from "@/lib/model";
 import { sortLabels } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import type { Upload } from "@/lib/upload";
@@ -122,7 +129,10 @@ export function createBoard(draft: BoardDraft) {
 
 export function updateBoard(
   board: Board,
-  changes: Partial<BoardDraft> & { labels?: LabelChanges }
+  changes: Partial<BoardDraft> & {
+    labels?: LabelChanges;
+    cardDefaults?: CardDefaults;
+  }
 ) {
   return run(
     convex.mutation(api.boards.update, { boardId: board._id, ...changes })

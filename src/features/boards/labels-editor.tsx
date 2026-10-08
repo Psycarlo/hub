@@ -85,6 +85,8 @@ export function useLabelsDraft(labels: BoardLabel[] | undefined) {
   const base = edit?.base ?? labels;
   return {
     changes: edit && labelChanges(edit.base, edit.draft),
+    /** The labels as they'd be saved, once loaded. */
+    current: edit ? settled(edit.base, edit.draft) : labels,
     /** What the editor takes, once the labels are loaded. */
     editor: base && {
       base,

@@ -5,6 +5,7 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 
 import { plural } from "@/lib/utils";
 
+export type { CardDefaults } from "@convex/boards";
 export type {
   BoardLabel,
   Priority,
