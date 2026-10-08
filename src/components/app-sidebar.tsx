@@ -8,7 +8,7 @@ import {
   ShieldIcon,
   SquareKanbanIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 
 import { Logo, LogoMark } from "@/components/logo";
@@ -55,6 +55,7 @@ import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { canEdit, projectPath, splitPersonal } from "@/lib/project";
+import { readStorage, writeStorage } from "@/lib/utils";
 
 /** Asks people without a photo to add one, until they do or wave it away. */
 function PhotoNotice() {
@@ -82,6 +83,28 @@ function useOpenBoard(boards: Board[]): Board | undefined {
   const [, params] = useRoute(BOARD_ROUTE);
   const slug = params ? parseSlug(params.slug) : undefined;
   return slug ? findBoard(boards, slug.code) : undefined;
+}
+
+/** Whether the page is in the project, not one whose link starts the same. */
+function inProject(location: string, project: Project): boolean {
+  const base = projectPath(project);
+  return location === base || location.startsWith(`${base}/`);
+}
+
+/** Projects opened or folded by id, as kept on this device. */
+function readOpened(key: string): Record<string, boolean> {
+  const raw = readStorage(key);
+  if (raw === null) {
+    return {};
+  }
+  try {
+    const value: unknown = JSON.parse(raw);
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, boolean>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 interface ProjectItemProps {
@@ -223,20 +246,28 @@ export function AppSidebar({
   const [location] = useLocation();
   const openBoard = useOpenBoard(boards);
   const { isMobile, state } = useSidebar();
-  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  const storageKey = `hub-sidebar-open:${me._id}`;
+  const [opened, setOpened] = useState(() => readOpened(storageKey));
   const { personal, shared } = splitPersonal(projects, me._id);
 
-  const isOpen = (project: Project): boolean => {
-    const choice = folded[project._id];
-    if (choice !== undefined) {
-      return choice;
+  useEffect(() => {
+    writeStorage(storageKey, JSON.stringify(opened));
+  }, [storageKey, opened]);
+
+  const isOpen = (project: Project): boolean =>
+    opened[project._id] ??
+    (project === personal || shared.length <= OPEN_BY_DEFAULT);
+
+  // Entering a project opens it, so the sidebar shows where the page is.
+  // Leaving doesn't fold it: only the chevron does.
+  const current = projects.find((project) => inProject(location, project));
+  const [entered, setEntered] = useState<string>();
+  if (current?._id !== entered) {
+    setEntered(current?._id);
+    if (current && !isOpen(current)) {
+      setOpened({ ...opened, [current._id]: true });
     }
-    return (
-      project === personal ||
-      shared.length <= OPEN_BY_DEFAULT ||
-      location.startsWith(projectPath(project))
-    );
-  };
+  }
 
   const item = (project: Project) => (
     <ProjectItem
@@ -244,7 +275,7 @@ export function AppSidebar({
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       key={project._id}
       location={location}
-      onOpenChange={(open) => setFolded({ ...folded, [project._id]: open })}
+      onOpenChange={(open) => setOpened({ ...opened, [project._id]: open })}
       open={isOpen(project)}
       openBoard={openBoard}
       portfolios={portfolios.filter(
