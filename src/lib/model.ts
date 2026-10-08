@@ -13,6 +13,7 @@ export type {
   Status,
 } from "@convex/shared/model";
 export {
+  BURST_MS,
   CODE,
   isClosed,
   labelKey,

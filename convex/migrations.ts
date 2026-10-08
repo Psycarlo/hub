@@ -11,7 +11,7 @@ const BATCH = 100;
 async function lastDone(ctx: QueryCtx, card: Doc<"cards">): Promise<number> {
   const events = ctx.db
     .query("cardEvents")
-    .withIndex("by_card", (q) => q.eq("cardId", card._id))
+    .withIndex("by_card_and_at", (q) => q.eq("cardId", card._id))
     .order("desc");
   for await (const { at, change } of events) {
     if (change.kind === "status" && change.to === "done") {

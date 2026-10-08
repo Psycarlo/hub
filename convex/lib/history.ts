@@ -1,11 +1,8 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { BoardLabel } from "../shared/model";
-import { isClosed, legacyLabels } from "../shared/model";
+import { BURST_MS, isClosed, legacyLabels } from "../shared/model";
 import type { CardChange } from "./validators";
-
-/** Changes to the same field this close together show as one. */
-const FOLD_MS = 2 * 60_000;
 
 function sameMembers(a: readonly string[], b: readonly string[]): boolean {
   const members = new Set(a);
@@ -127,23 +124,31 @@ function fold(earlier: CardChange, later: CardChange): CardChange | undefined {
   }
 }
 
-async function commentedSince(
+/**
+ * When the card's latest comment was made, or 0 without one. Replies don't
+ * count: the activity shows them in their thread, not where they fall in time.
+ */
+async function lastCommented(
   ctx: QueryCtx,
-  cardId: Id<"cards">,
-  at: number
-): Promise<boolean> {
-  const latest = await ctx.db
+  cardId: Id<"cards">
+): Promise<number> {
+  const comments = ctx.db
     .query("comments")
     .withIndex("by_card", (q) => q.eq("cardId", cardId))
-    .order("desc")
-    .first();
-  return latest !== null && latest._creationTime > at;
+    .order("desc");
+  for await (const { _creationTime, parentId } of comments) {
+    if (!parentId) {
+      return _creationTime;
+    }
+  }
+  return 0;
 }
 
 /**
- * Adds a change to the card's history. One made soon after the person's last,
- * to the same field and with no comment in between, folds into it, so picking
- * labels one by one reads as one change; and a change undone that way drops out.
+ * Adds a change to the card's history. The activity tells someone's burst of
+ * changes as one, so a change to a field they already changed in the burst
+ * folds into that one: picking labels one by one reads as one change, and a
+ * change undone drops out.
  */
 export async function recordChange(
   ctx: MutationCtx,
@@ -152,22 +157,31 @@ export async function recordChange(
   change: CardChange
 ): Promise<void> {
   const at = Date.now();
-  const latest = await ctx.db
+  const commented = await lastCommented(ctx, cardId);
+  const recent = ctx.db
     .query("cardEvents")
-    .withIndex("by_card", (q) => q.eq("cardId", cardId))
-    .order("desc")
-    .first();
-  const folded =
-    latest?.actorId === actorId &&
-    at - latest.at < FOLD_MS &&
-    !(await commentedSince(ctx, cardId, latest.at))
-      ? fold(latest.change, change)
-      : undefined;
-  if (latest && folded) {
-    await (changesNothing(folded)
-      ? ctx.db.delete(latest._id)
-      : ctx.db.patch(latest._id, { at, change: folded }));
-  } else if (!changesNothing(change)) {
+    .withIndex("by_card_and_at", (q) => q.eq("cardId", cardId))
+    .order("desc");
+  // The burst, newest first, ends at someone else's change, a comment or a pause.
+  let after = at;
+  for await (const event of recent) {
+    if (
+      event.actorId !== actorId ||
+      event.at <= commented ||
+      after - event.at > BURST_MS
+    ) {
+      break;
+    }
+    const folded = fold(event.change, change);
+    if (folded) {
+      await (changesNothing(folded)
+        ? ctx.db.delete(event._id)
+        : ctx.db.patch(event._id, { at, change: folded }));
+      return;
+    }
+    after = event.at;
+  }
+  if (!changesNothing(change)) {
     await ctx.db.insert("cardEvents", { actorId, at, cardId, change });
   }
 }

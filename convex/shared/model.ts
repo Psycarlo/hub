@@ -36,6 +36,12 @@ export const MAX_CARD_FILES = 50;
 /** Files one comment can carry. */
 export const MAX_COMMENT_FILES = 10;
 
+/**
+ * Someone's changes to a card, each this soon after the one before and with
+ * no comment between, are a burst its activity tells as one.
+ */
+export const BURST_MS = 5 * 60_000;
+
 /** A label of a board, which its cards keep by id. */
 export interface BoardLabel {
   id: string;

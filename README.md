@@ -152,7 +152,7 @@ Optionally set `VITE_APP_NAME` in Vercel to rename the hub.
 - **Data.** Everything is in Convex and live: open screens update as teammates change things. Drags and inline edits show at once and roll back if the server refuses them.
 - **Docs.** A page keeps a revision number and its recent texts. A save names the revision it was edited from; when someone saved in between, the server merges both edits line by line from that revision. Open editors merge incoming saves the same way, without moving the cursor.
 - **Files.** Uploads go straight from the browser to R2 through a signed link. The app shows them through `/media/<key>` on the Convex site URL, which checks the file exists and redirects to a signed R2 link. Keys start with a random UUID, so these links work like capabilities: anyone holding one can load that file. Files on cards and comments end their key in the file's name, so downloads keep it.
-- **Activity.** Each change to a card is recorded on the server as it's saved. Changes by the same person to the same field within two minutes, with no comment between them, fold into one, so picking labels one by one reads as a single change.
+- **Activity.** Each change to a card is recorded on the server as it's saved. Someone's changes each within five minutes of the one before, with no comment between them, are a burst the activity tells in one line, like "moved it from Todo to Done and added label Bug". Within a burst, changes to the same field fold into one, so picking labels one by one reads as a single change and a change undone drops out.
 - **Card numbers** come from a counter on the board, so two people adding cards at once never get the same number.
 
 ## Tech stack

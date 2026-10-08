@@ -29,7 +29,7 @@ import type { Comment } from "@/hooks/use-comments";
 import { useComments } from "@/hooks/use-comments";
 import { useUser } from "@/hooks/use-users";
 import type { BoardContent, BoardLabel, Card } from "@/lib/model";
-import { priorityLabel, statusLabel } from "@/lib/model";
+import { BURST_MS, priorityLabel, statusLabel } from "@/lib/model";
 import { plural } from "@/lib/utils";
 
 /** Files named one by one; past this many, they're counted instead. */
@@ -38,9 +38,17 @@ const NAMED_FILES = 3;
 type Change = CardEvent["change"];
 type ChangeOf<Kind extends Change["kind"]> = Extract<Change, { kind: Kind }>;
 
+/** Someone's burst of changes, told as one, perhaps starting with the card's creation. */
+interface Burst {
+  actorId: string;
+  /** When the last of them was made. */
+  at: number;
+  created: boolean;
+  events: CardEvent[];
+}
+
 type Entry =
-  | { kind: "created"; at: number }
-  | { kind: "event"; at: number; event: CardEvent }
+  | ({ kind: "burst" } & Burst)
   | { kind: "thread"; at: number; comment: Comment; replies: Comment[] };
 
 /** What a change says happened, after the name of who made it. */
@@ -327,17 +335,34 @@ function describe(
   }
 }
 
-function EventEntry({ event }: { event: CardEvent }) {
+/** A lone change shows its own marker; a burst of them, who made it. */
+function BurstEntry({ actorId, at, created, events }: Burst) {
   const { content } = useBoard();
-  const { marker, text } = describe(event.change, event.actorId, content);
+  const told = events.map((event) =>
+    describe(event.change, event.actorId, content)
+  );
+  const [only] = told;
+  const marker =
+    !created && told.length === 1 && only ? (
+      only.marker
+    ) : (
+      <UserAvatar aria-hidden size="xs" userId={actorId} />
+    );
   return (
-    <Row at={event.at} marker={marker}>
-      <Name userId={event.actorId} /> {text}
+    <Row at={at} marker={marker}>
+      <Name userId={actorId} />{" "}
+      {joined([
+        ...(created ? ["created the card"] : []),
+        ...told.map(({ text }) => text),
+      ])}
     </Row>
   );
 }
 
-/** The card's creation, changes and comments, oldest first. */
+/**
+ * The card's creation, changes and comments, oldest first. Someone's burst of
+ * changes is one entry, as the server folds them in `recordChange`.
+ */
 function entriesOf(
   card: Card,
   history: CardEvent[],
@@ -354,9 +379,21 @@ function entriesOf(
       }
     }
   }
-  const entries: Entry[] = [
-    { at: card._creationTime, kind: "created" },
-    ...history.map((event): Entry => ({ at: event.at, event, kind: "event" })),
+  const moments: Entry[] = [
+    {
+      actorId: card.createdBy,
+      at: card._creationTime,
+      created: true,
+      events: [],
+      kind: "burst",
+    },
+    ...history.map((event): Entry => ({
+      actorId: event.actorId,
+      at: event.at,
+      created: false,
+      events: [event],
+      kind: "burst",
+    })),
     ...comments
       .filter((comment) => !comment.parentId)
       .map((comment): Entry => ({
@@ -366,7 +403,22 @@ function entriesOf(
         replies: replies.get(comment._id) ?? [],
       })),
   ];
-  return entries.toSorted((a, b) => a.at - b.at);
+  const entries: Entry[] = [];
+  for (const moment of moments.toSorted((a, b) => a.at - b.at)) {
+    const last = entries.at(-1);
+    if (
+      moment.kind === "burst" &&
+      last?.kind === "burst" &&
+      last.actorId === moment.actorId &&
+      moment.at - last.at <= BURST_MS
+    ) {
+      last.at = moment.at;
+      last.events.push(...moment.events);
+    } else {
+      entries.push(moment);
+    }
+  }
+  return entries;
 }
 
 /** What's happened to the card, with its comments, and where to add one. */
@@ -393,38 +445,23 @@ export function CardActivity({
         Activity
       </h3>
       <ol className="before:bg-border relative flex flex-col gap-4 before:absolute before:top-3 before:bottom-3 before:left-3 before:w-px">
-        {entries.map((entry) => {
-          switch (entry.kind) {
-            case "created": {
-              return (
-                <Row
-                  at={entry.at}
-                  key="created"
-                  marker={
-                    <UserAvatar aria-hidden size="xs" userId={card.createdBy} />
-                  }
-                >
-                  <Name userId={card.createdBy} /> created the card
-                </Row>
-              );
-            }
-            case "event": {
-              return <EventEntry event={entry.event} key={entry.event._id} />;
-            }
-            default: {
-              return (
-                // Sits over the timeline's line, like the markers.
-                <li className="relative z-10" key={entry.comment._id}>
-                  <CommentThread
-                    card={card}
-                    comment={entry.comment}
-                    replies={entry.replies}
-                  />
-                </li>
-              );
-            }
-          }
-        })}
+        {entries.map((entry) =>
+          entry.kind === "burst" ? (
+            <BurstEntry
+              {...entry}
+              key={entry.created ? "created" : entry.events[0]?._id}
+            />
+          ) : (
+            // Sits over the timeline's line, like the markers.
+            <li className="relative z-10" key={entry.comment._id}>
+              <CommentThread
+                card={card}
+                comment={entry.comment}
+                replies={entry.replies}
+              />
+            </li>
+          )
+        )}
       </ol>
       {canEdit && <Composer card={card} />}
     </section>

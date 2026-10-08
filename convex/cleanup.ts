@@ -101,7 +101,7 @@ export const card = internalMutation({
     }
     const events = await ctx.db
       .query("cardEvents")
-      .withIndex("by_card", (q) => q.eq("cardId", cardId))
+      .withIndex("by_card_and_at", (q) => q.eq("cardId", cardId))
       .take(BATCH);
     for (const event of events) {
       await ctx.db.delete(event._id);

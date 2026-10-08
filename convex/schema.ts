@@ -150,11 +150,11 @@ export default defineSchema({
   /** Who changed what on a card, for its activity. */
   cardEvents: defineTable({
     actorId: v.id("users"),
-    /** When, in ms. Quick edits to the same field fold into one event, which moves this on. */
+    /** When, in ms. Edits to the same field in one burst fold into one event, which moves this on. */
     at: v.number(),
     cardId: v.id("cards"),
     change: vCardChange,
-  }).index("by_card", ["cardId"]),
+  }).index("by_card_and_at", ["cardId", "at"]),
 
   comments: defineTable({
     authorId: v.id("users"),
