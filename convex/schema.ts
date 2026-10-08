@@ -5,9 +5,9 @@ import { v } from "convex/values";
 import {
   vActivityType,
   vAppRole,
+  vBoardLabel,
   vField,
   vFiat,
-  vLabel,
   vPriority,
   vProjectColor,
   vProjectRole,
@@ -88,6 +88,8 @@ export default defineSchema({
     description: v.string(),
     /** Codes the board went by before, so old links still find it. Kept from other boards. */
     formerCodes: v.optional(v.array(v.string())),
+    /** What its cards can be labeled. Missing on boards from before labels had names. */
+    labels: v.optional(v.array(vBoardLabel)),
     nextCardNumber: v.number(),
     nextSprintNumber: v.number(),
     projectId: v.id("projects"),
@@ -115,7 +117,8 @@ export default defineSchema({
     description: v.string(),
     /** `YYYY-MM-DD`. */
     due: v.optional(v.string()),
-    labels: v.array(vLabel),
+    /** Ids of the board's labels. */
+    labels: v.array(v.string()),
     number: v.number(),
     priority: v.optional(vPriority),
     rank: v.number(),

@@ -12,8 +12,18 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import type { Status } from "./shared/model";
-import { canManageRole, codeProblem } from "./shared/model";
+import { vBoardLabel } from "./lib/validators";
+import type { BoardLabel, Status } from "./shared/model";
+import {
+  canManageRole,
+  codeProblem,
+  LABEL_ID,
+  labelKey,
+  legacyLabels,
+  MAX_LABEL_NAME,
+  MAX_LABELS,
+  sortLabels,
+} from "./shared/model";
 
 const MAX_TITLE = 80;
 const MAX_DESCRIPTION = 500;
@@ -82,7 +92,7 @@ export const codes = query({
   },
 });
 
-/** Cards and sprints of a board. */
+/** Cards, sprints and labels of a board. */
 export const content = query({
   args: { boardId: v.id("boards") },
   handler: async (ctx, { boardId }) => {
@@ -105,6 +115,7 @@ export const content = query({
       cards: cards.toSorted(
         (a, b) => a.rank - b.rank || a._creationTime - b._creationTime
       ),
+      labels: sortLabels(board.labels ?? legacyLabels(cards)),
       nextCardNumber: board.nextCardNumber,
       nextSprintNumber: board.nextSprintNumber,
       sprints: sprints.toSorted((a, b) => a.number - b.number),
@@ -215,6 +226,61 @@ async function freeCode(
   return code;
 }
 
+function cardsOf(
+  ctx: QueryCtx,
+  boardId: Id<"boards">
+): Promise<Doc<"cards">[]> {
+  return ctx.db
+    .query("cards")
+    .withIndex("by_board", (q) => q.eq("boardId", boardId))
+    .collect();
+}
+
+/** A board's labels, from the colors its cards wear when it has no list of its own yet. */
+async function labelsOf(
+  ctx: QueryCtx,
+  board: Doc<"boards">
+): Promise<BoardLabel[]> {
+  return board.labels ?? legacyLabels(await cardsOf(ctx, board._id));
+}
+
+/** The labels with `removed` gone and `changed` renamed, recolored or added. */
+function mergeLabels(
+  labels: BoardLabel[],
+  changed: BoardLabel[],
+  removed: string[]
+): BoardLabel[] {
+  const gone = new Set(removed);
+  const merged = labels.filter(({ id }) => !gone.has(id));
+  const kept = changed.filter(({ id }) => !gone.has(id));
+  for (const { color, id, name: raw } of kept) {
+    const name = raw.trim().slice(0, MAX_LABEL_NAME);
+    if (!name) {
+      throw new ConvexError("Give every label a name.");
+    }
+    const label = { color, id, name };
+    const index = merged.findIndex((existing) => existing.id === id);
+    if (index !== -1) {
+      merged[index] = label;
+    } else if (LABEL_ID.test(id)) {
+      merged.push(label);
+    } else {
+      throw new ConvexError("That label can’t be added.");
+    }
+  }
+  const names = new Set<string>();
+  for (const { name } of merged) {
+    if (names.has(labelKey(name))) {
+      throw new ConvexError(`There’s already a label named “${name}”.`);
+    }
+    names.add(labelKey(name));
+  }
+  if (merged.length > MAX_LABELS) {
+    throw new ConvexError(`A board can have up to ${MAX_LABELS} labels.`);
+  }
+  return merged;
+}
+
 /** Board settings are for whoever made the board, and the project's owners. */
 function canManageBoard(
   access: ProjectAccess & { board: Doc<"boards"> }
@@ -237,6 +303,7 @@ export async function insertBoard(
     code,
     createdBy: board.createdBy,
     description: board.description.trim().slice(0, MAX_DESCRIPTION),
+    labels: [],
     nextCardNumber: 1,
     nextSprintNumber: 1,
     projectId: board.projectId,
@@ -265,6 +332,10 @@ export const update = mutation({
     boardId: v.id("boards"),
     code: v.optional(v.string()),
     description: v.optional(v.string()),
+    /** Only what changed, so labels added from cards meanwhile stay. */
+    labels: v.optional(
+      v.object({ changed: v.array(vBoardLabel), removed: v.array(v.string()) })
+    ),
     projectId: v.optional(v.id("projects")),
     title: v.optional(v.string()),
     usesSprints: v.optional(v.boolean()),
@@ -305,8 +376,34 @@ export const update = mutation({
       await requireProject(ctx, changes.projectId, "edit");
       patch.projectId = changes.projectId;
     }
+    if (changes.labels !== undefined) {
+      const { changed, removed } = changes.labels;
+      patch.labels = mergeLabels(await labelsOf(ctx, board), changed, removed);
+      // Cards let go of deleted labels, which a new label never takes the id of.
+      const gone = new Set(removed);
+      for (const card of await cardsOf(ctx, boardId)) {
+        if (card.labels.some((id) => gone.has(id))) {
+          await ctx.db.patch(card._id, {
+            labels: card.labels.filter((id) => !gone.has(id)),
+          });
+        }
+      }
+    }
     await ctx.db.patch(boardId, patch);
     return { code: patch.code ?? board.code };
+  },
+});
+
+/** A new label on a board, which anyone who can edit its cards may add. */
+export const addLabel = mutation({
+  args: { boardId: v.id("boards"), label: vBoardLabel },
+  handler: async (ctx, { boardId, label }) => {
+    const { board } = await requireBoard(ctx, boardId, "edit");
+    const labels = await labelsOf(ctx, board);
+    if (labels.some(({ id }) => id === label.id)) {
+      return;
+    }
+    await ctx.db.patch(boardId, { labels: mergeLabels(labels, [label], []) });
   },
 });
 

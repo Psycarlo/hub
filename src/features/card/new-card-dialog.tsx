@@ -37,21 +37,21 @@ import type { CardPlacement } from "@/features/board/board-context";
 import { useBoard } from "@/features/board/board-context";
 import {
   assignable,
+  cardLabels,
   inOfferedOrder,
-  labelName,
   sprintChoices,
 } from "@/features/card/card-fields";
 import type { Option } from "@/features/card/card-options";
 import {
-  LABEL_OPTIONS,
   PRIORITY_OPTIONS,
   sprintOptions,
   STATUS_OPTIONS,
 } from "@/features/card/card-options";
 import { LabelDot, People, Person } from "@/features/card/card-parts";
+import { LabelPicker } from "@/features/card/label-picker";
 import { createCard } from "@/lib/actions";
-import type { CardFields, Label, UserId } from "@/lib/model";
-import { cardKey, LABELS, rankBetween } from "@/lib/model";
+import type { CardFields, UserId } from "@/lib/model";
+import { cardKey, rankBetween } from "@/lib/model";
 
 export type NewCardDefaults = CardPlacement & Pick<CardFields, "assignees">;
 
@@ -62,6 +62,11 @@ const PILL =
   "h-7 w-auto max-w-56 gap-1.5 rounded-full border-transparent bg-foreground/5 px-2.5 text-xs font-medium hover:bg-foreground/10 data-popup-open:bg-foreground/10 dark:bg-foreground/5 dark:hover:bg-foreground/10 [&_svg:not([class*='size-'])]:size-3.5";
 // Select triggers end with a chevron; pills read as buttons without it.
 const PILL_SELECT = cn(PILL, "[&>svg:last-child]:hidden");
+/** A pill that opens a popover rather than a select. */
+const PILL_BUTTON = cn(
+  PILL,
+  "focus-visible:ring-ring/50 flex items-center transition-colors outline-none focus-visible:ring-3"
+);
 
 function Placeholder({
   icon: Icon,
@@ -158,45 +163,37 @@ function LabelsPill({
   value,
   onChange,
 }: {
-  value: Label[];
-  onChange: (labels: Label[]) => void;
+  value: string[];
+  onChange: (labels: string[]) => void;
 }) {
+  const { content } = useBoard();
+  const labels = cardLabels(content.labels, value);
   return (
-    <Select
-      multiple
-      onValueChange={(next: Label[]) =>
-        onChange(LABELS.filter((label) => next.includes(label)))
-      }
+    <LabelPicker
+      aria-label="Labels"
+      className={PILL_BUTTON}
+      onChange={onChange}
       value={value}
     >
-      <SelectTrigger aria-label="Labels" className={PILL_SELECT}>
-        <SelectValue className="items-center gap-1.5">
-          {(current: Label[]) =>
-            current.length === 0 ? (
-              <Placeholder icon={TagIcon}>Labels</Placeholder>
-            ) : (
-              <>
-                <span className="flex -space-x-0.5">
-                  {current.map((label) => (
-                    <LabelDot key={label} label={label} />
-                  ))}
-                </span>
-                <span className="truncate">
-                  {current.map(labelName).join(", ")}
-                </span>
-              </>
-            )
-          }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {LABEL_OPTIONS.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      {labels.length === 0 ? (
+        <Placeholder icon={TagIcon}>Labels</Placeholder>
+      ) : (
+        <>
+          <span className="flex -space-x-0.5">
+            {labels.map((label) => (
+              <LabelDot
+                className="size-2.5"
+                color={label.color}
+                key={label.id}
+              />
+            ))}
+          </span>
+          <span className="truncate">
+            {labels.map((label) => label.name).join(", ")}
+          </span>
+        </>
+      )}
+    </LabelPicker>
   );
 }
 
@@ -217,13 +214,7 @@ function DuePill({
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger
-        aria-label="Due date"
-        className={cn(
-          PILL,
-          "focus-visible:ring-ring/50 flex items-center transition-colors outline-none focus-visible:ring-3"
-        )}
-      >
+      <PopoverTrigger aria-label="Due date" className={PILL_BUTTON}>
         {date ? (
           <>
             <CalendarIcon aria-hidden />

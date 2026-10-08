@@ -8,7 +8,9 @@ import {
   CircleDotIcon,
 } from "lucide-react";
 
-import type { Label, Priority, Sprint, Status, UserId } from "@/lib/model";
+import type { BoardLabel, Priority, Sprint, Status, UserId } from "@/lib/model";
+import type { Color } from "@/lib/palette";
+import { COLORS } from "@/lib/palette";
 
 interface IconStyle {
   icon: LucideIcon;
@@ -27,17 +29,24 @@ export const PRIORITY_STYLES: Record<Priority, IconStyle> = {
   medium: { className: "text-amber-500", icon: ChevronUpIcon },
 };
 
-export const LABEL_COLORS: Record<Label, string> = {
-  blue: "text-blue-500",
-  green: "text-green-500",
-  orange: "text-orange-500",
-  purple: "text-violet-500",
-  red: "text-red-500",
-  yellow: "text-yellow-400",
-};
+/** The labels a card wears, in the board's order, leaving out any since deleted. */
+export function cardLabels(
+  labels: readonly BoardLabel[],
+  worn: readonly string[]
+): BoardLabel[] {
+  const ids = new Set(worn);
+  return labels.filter(({ id }) => ids.has(id));
+}
 
-export function labelName(label: Label): string {
-  return label.charAt(0).toUpperCase() + label.slice(1);
+/** A new label's color: whichever the fewest labels have, so labels stay told apart. */
+export function nextLabelColor(labels: readonly BoardLabel[]): Color {
+  const uses = (color: Color) =>
+    labels.filter((label) => label.color === color).length;
+  // Sorting keeps ties in palette order.
+  const [color = "gray"] = COLORS.filter((item) => item !== "gray").toSorted(
+    (a, b) => uses(a) - uses(b)
+  );
+  return color;
 }
 
 /** Sprints a card can move to: any not yet ended, plus its current one. */

@@ -4,7 +4,8 @@ import type { OptimisticLocalStore } from "convex/browser";
 import { toast } from "sonner";
 
 import { convex } from "@/lib/convex";
-import type { Board, Card, CardFields, Sprint } from "@/lib/model";
+import type { Board, BoardLabel, Card, CardFields, Sprint } from "@/lib/model";
+import { sortLabels } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { errorMessage } from "@/lib/utils";
 
@@ -24,6 +25,12 @@ export interface BoardDraft {
   title: string;
   description: string;
   usesSprints: boolean;
+}
+
+/** Labels changed in a board's settings: only those, so ones added meanwhile stay. */
+export interface LabelChanges {
+  changed: BoardLabel[];
+  removed: string[];
 }
 
 export interface ProjectDraft {
@@ -111,9 +118,34 @@ export function createBoard(draft: BoardDraft) {
   return run(convex.mutation(api.boards.create, draft));
 }
 
-export function updateBoard(board: Board, changes: Partial<BoardDraft>) {
+export function updateBoard(
+  board: Board,
+  changes: Partial<BoardDraft> & { labels?: LabelChanges }
+) {
   return run(
     convex.mutation(api.boards.update, { boardId: board._id, ...changes })
+  );
+}
+
+/** Adds a label to the board, shown at once so cards can wear it right away. */
+export function createLabel(board: Board, label: BoardLabel) {
+  const query = { boardId: board._id };
+  return run(
+    convex.mutation(
+      api.boards.addLabel,
+      { ...query, label },
+      {
+        optimisticUpdate: (store) => {
+          const content = store.getQuery(api.boards.content, query);
+          if (content && !content.labels.some(({ id }) => id === label.id)) {
+            store.setQuery(api.boards.content, query, {
+              ...content,
+              labels: sortLabels([...content.labels, label]),
+            });
+          }
+        },
+      }
+    )
   );
 }
 

@@ -10,7 +10,6 @@ import {
 } from "../shared/crm";
 import {
   APP_ROLES,
-  LABELS,
   PRIORITIES,
   PROJECT_ROLES,
   SPRINT_STATUSES,
@@ -40,7 +39,6 @@ export const vAppRole = oneOf(APP_ROLES);
 export const vProjectRole = oneOf(PROJECT_ROLES);
 export const vStatus = oneOf(STATUSES.map(({ id }) => id));
 export const vPriority = oneOf(PRIORITIES.map(({ id }) => id));
-export const vLabel = oneOf(LABELS);
 export const vSprintStatus = oneOf(SPRINT_STATUSES);
 export const vFieldType = oneOf(FIELD_TYPES);
 export const vStageKind = oneOf(STAGE_KINDS);
@@ -49,6 +47,12 @@ export const vCurrency = oneOf(CURRENCIES);
 export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
 export const vFiat = oneOf(FIATS);
 export const vTransactionKind = oneOf(TRANSACTION_KINDS);
+
+export const vBoardLabel = v.object({
+  color: vColor,
+  id: v.string(),
+  name: v.string(),
+});
 
 export const vFieldOption = v.object({
   color: vColor,

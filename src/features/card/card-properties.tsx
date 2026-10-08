@@ -19,13 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useBoard } from "@/features/board/board-context";
 import {
   assignable,
+  cardLabels,
   inOfferedOrder,
-  LABEL_COLORS,
-  labelName,
   sprintChoices,
 } from "@/features/card/card-fields";
 import type { Option } from "@/features/card/card-options";
@@ -34,10 +32,10 @@ import {
   sprintOptions,
   STATUS_OPTIONS,
 } from "@/features/card/card-options";
-import { LabelDot, Muted, People, Person } from "@/features/card/card-parts";
+import { LabelChip, Muted, People, Person } from "@/features/card/card-parts";
+import { LabelPicker } from "@/features/card/label-picker";
 import { updateCard } from "@/lib/actions";
-import type { Card, CardFields, UserId } from "@/lib/model";
-import { LABELS } from "@/lib/model";
+import type { BoardLabel, Card, CardFields, UserId } from "@/lib/model";
 
 const NAME = "font-normal text-muted-foreground";
 const VALUE =
@@ -190,11 +188,76 @@ function DueDate({
   );
 }
 
-function Property({ label, children }: { label: string; children: ReactNode }) {
+function LabelChips({ labels }: { labels: BoardLabel[] }) {
+  return labels.length > 0 ? (
+    <span className="flex min-w-0 flex-wrap gap-1">
+      {labels.map((label) => (
+        <LabelChip key={label.id} label={label} />
+      ))}
+    </span>
+  ) : (
+    <Muted>No labels</Muted>
+  );
+}
+
+function Labels({
+  id,
+  card,
+  onChange,
+}: {
+  id: string;
+  card: Card;
+  onChange: (labels: string[]) => void;
+}) {
+  const { content } = useBoard();
   return (
     <>
-      <dt className={cn("text-sm select-none", NAME)}>{label}</dt>
-      <dd className="flex h-8 min-w-0 items-center gap-2 px-2 text-sm [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
+      <Label className={cn(NAME, "self-start leading-8")} htmlFor={id}>
+        Labels
+      </Label>
+      <LabelPicker
+        className={cn(
+          VALUE,
+          "focus-visible:ring-ring/50 flex h-auto min-h-8 items-center justify-between gap-2 py-1.5 text-left text-sm transition-colors outline-none select-none focus-visible:ring-3"
+        )}
+        id={id}
+        onChange={onChange}
+        value={card.labels}
+      >
+        <LabelChips labels={cardLabels(content.labels, card.labels)} />
+        <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
+      </LabelPicker>
+    </>
+  );
+}
+
+function Property({
+  label,
+  children,
+  wraps = false,
+}: {
+  label: string;
+  children: ReactNode;
+  /** Whether the value may run onto more lines. */
+  wraps?: boolean;
+}) {
+  return (
+    <>
+      <dt
+        className={cn(
+          "text-sm select-none",
+          NAME,
+          wraps && "self-start leading-8"
+        )}
+      >
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "flex h-8 min-w-0 items-center gap-2 px-2 text-sm [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+          wraps && "h-auto min-h-8 py-1.5"
+        )}
+      >
         {children}
       </dd>
     </>
@@ -228,19 +291,8 @@ function PropertyList({ card, className }: { card: Card; className?: string }) {
           <Muted>No due date</Muted>
         )}
       </Property>
-      <Property label="Labels">
-        {card.labels.length > 0 ? (
-          <>
-            {card.labels.map((label) => (
-              <LabelDot key={label} label={label} />
-            ))}
-            <span className="sr-only">
-              {card.labels.map((label) => labelName(label)).join(", ")}
-            </span>
-          </>
-        ) : (
-          <Muted>No labels</Muted>
-        )}
+      <Property label="Labels" wraps>
+        <LabelChips labels={cardLabels(content.labels, card.labels)} />
       </Property>
     </dl>
   );
@@ -304,30 +356,11 @@ export function CardProperties({
         />
       )}
       <DueDate card={card} id={`${id}-due`} onChange={(due) => save({ due })} />
-      <span className={cn("text-sm select-none", NAME)} id={`${id}-labels`}>
-        Labels
-      </span>
-      <ToggleGroup
-        aria-labelledby={`${id}-labels`}
-        className="h-8 gap-2 px-2"
-        multiple
-        onValueChange={(labels) =>
-          save({ labels: LABELS.filter((label) => labels.includes(label)) })
-        }
-        value={card.labels}
-      >
-        {LABELS.map((label) => (
-          <ToggleGroupItem
-            aria-label={label}
-            className={cn(
-              "size-5 rounded-full inset-ring-2 inset-ring-current transition-colors duration-150 hover:bg-current/30 data-pressed:bg-current",
-              LABEL_COLORS[label]
-            )}
-            key={label}
-            value={label}
-          />
-        ))}
-      </ToggleGroup>
+      <Labels
+        card={card}
+        id={`${id}-labels`}
+        onChange={(labels) => save({ labels })}
+      />
     </div>
   );
 }

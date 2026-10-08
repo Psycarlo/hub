@@ -7,9 +7,9 @@ import { Link } from "wouter";
 
 import { OPENED_FROM_BOARD, useBoard } from "@/features/board/board-context";
 import { CARD_SURFACE } from "@/features/board/card-surface";
-import { LABEL_COLORS, PRIORITY_STYLES } from "@/features/card/card-fields";
-import { AvatarStack } from "@/features/card/card-parts";
-import type { Card, Label, Priority } from "@/lib/model";
+import { cardLabels, PRIORITY_STYLES } from "@/features/card/card-fields";
+import { AvatarStack, LabelChip, LabelDot } from "@/features/card/card-parts";
+import type { BoardLabel, Card, Priority } from "@/lib/model";
 import { cardKey, PRIORITIES } from "@/lib/model";
 
 function priorityLabel(priority: Priority): string {
@@ -43,21 +43,58 @@ function DueDate({ due, done }: { due: string; done: boolean }) {
   );
 }
 
-function LabelDots({ labels }: { labels: Label[] }) {
+/** Rows show this many labels by name; the rest as a count. */
+const ROW_LABELS = 2;
+
+function useCardLabels(card: Card): BoardLabel[] {
+  return cardLabels(useBoard().content.labels, card.labels);
+}
+
+function LabelChips({
+  labels,
+  className,
+}: {
+  labels: BoardLabel[];
+  className?: string;
+}) {
   return (
-    <span className="flex -space-x-0.5">
+    <span className={cn("flex min-w-0 flex-wrap gap-1", className)}>
       {labels.map((label) => (
-        <span
-          aria-hidden
-          className={cn(
-            "ring-card size-2.5 rounded-full bg-current ring-2",
-            LABEL_COLORS[label]
-          )}
-          key={label}
-        />
+        <LabelChip key={label.id} label={label} />
       ))}
-      <span className="sr-only">Labels: {labels.join(", ")}</span>
     </span>
+  );
+}
+
+/** Labels where a row has little room: a few by name, then how many more. */
+function RowLabels({ labels }: { labels: BoardLabel[] }) {
+  const hidden = labels.length - ROW_LABELS;
+  return (
+    <>
+      <span aria-hidden className="flex -space-x-0.5 sm:hidden">
+        {labels.map((label) => (
+          <LabelDot
+            className="ring-card size-2.5 ring-2"
+            color={label.color}
+            key={label.id}
+          />
+        ))}
+      </span>
+      <span aria-hidden className="flex items-center gap-1 max-sm:hidden">
+        <LabelChips
+          className="flex-nowrap"
+          labels={labels.slice(0, ROW_LABELS)}
+        />
+        {hidden > 0 && (
+          <span className="text-muted-foreground text-xs tabular-nums">
+            +{hidden}
+          </span>
+        )}
+      </span>
+      <span className="sr-only">
+        Labels: {labels.map((label) => label.name).join(", ")}
+      </span>
+    </>
   );
 }
 
@@ -66,7 +103,6 @@ function CardMeta({ card }: { card: Card }) {
     <>
       {card.priority && <PriorityIcon priority={card.priority} />}
       {card.due && <DueDate done={card.status === "done"} due={card.due} />}
-      {card.labels.length > 0 && <LabelDots labels={card.labels} />}
       {card.assignees.length > 0 && (
         <AvatarStack className="ml-auto" people={card.assignees} />
       )}
@@ -137,6 +173,7 @@ function CardLink({
 export function CardTile(props: SortableCardProps) {
   const { card } = props;
   const { board } = useBoard();
+  const labels = useCardLabels(card);
   const ref = useSortableCard(props);
   return (
     <CardLink card={card} className="flex flex-col gap-2.5 p-3" ref={ref}>
@@ -144,6 +181,7 @@ export function CardTile(props: SortableCardProps) {
         className="line-clamp-3 text-sm leading-snug"
         title={card.title}
       />
+      {labels.length > 0 && <LabelChips labels={labels} />}
       <span className="flex min-h-5 items-center gap-2">
         <span className="text-muted-foreground text-xs tabular-nums">
           {cardKey(board, card)}
@@ -162,6 +200,7 @@ export function CardRow({
   ref?: Ref<HTMLAnchorElement>;
 }) {
   const { board } = useBoard();
+  const labels = useCardLabels(card);
   return (
     <CardLink
       card={card}
@@ -173,6 +212,7 @@ export function CardRow({
       </span>
       <CardTitle className="min-w-0 flex-1 truncate" title={card.title} />
       <span className="flex shrink-0 items-center gap-2">
+        {labels.length > 0 && <RowLabels labels={labels} />}
         <CardMeta card={card} />
       </span>
     </CardLink>

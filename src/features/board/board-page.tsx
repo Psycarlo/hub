@@ -228,6 +228,7 @@ export function BoardPage({
       )}
       <BoardDialog
         board={board}
+        labels={content?.labels}
         onOpenChange={setEditing}
         open={editing}
         projects={projects}

@@ -41,9 +41,10 @@ import {
   KeyField,
   useTakenCodes,
 } from "@/features/boards/key-field";
-import type { BoardDraft } from "@/lib/actions";
+import { LabelsEditor, useLabelsDraft } from "@/features/boards/labels-editor";
+import type { BoardDraft, LabelChanges } from "@/lib/actions";
 import { createBoard, deleteBoard, updateBoard } from "@/lib/actions";
-import type { Board } from "@/lib/model";
+import type { Board, BoardLabel } from "@/lib/model";
 import { suggestCode } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { canEdit } from "@/lib/project";
@@ -138,6 +139,8 @@ function DeleteBoard({
 
 interface BoardFormProps {
   board?: Board;
+  /** The board's labels, once loaded, for its settings to edit. */
+  labels?: BoardLabel[];
   projects: Project[];
   /** Project a new board starts in. */
   project?: Project;
@@ -162,11 +165,21 @@ function initialDraft(
 }
 
 /** Creates the board or saves its settings; resolves with its code once saved. */
-function saveBoard(board: Board | undefined, draft: BoardDraft) {
-  return board ? updateBoard(board, draft) : createBoard(draft);
+function saveBoard(
+  board: Board | undefined,
+  draft: BoardDraft,
+  labels?: LabelChanges
+) {
+  return board ? updateBoard(board, { ...draft, labels }) : createBoard(draft);
 }
 
-function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
+function BoardForm({
+  board,
+  labels,
+  projects,
+  project,
+  onDone,
+}: BoardFormProps) {
   const id = useId();
   const [, navigate] = useLocation();
   // Boards only go in projects the person can add to; a board already elsewhere stays.
@@ -181,13 +194,18 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
   const [description, setDescription] = useState(initial.description);
   const [projectId, setProjectId] = useState(initial.projectId);
   const [usesSprints, setUsesSprints] = useState(initial.usesSprints ?? false);
+  const labelsDraft = useLabelsDraft(labels);
   const [saving, setSaving] = useState(false);
   const taken = useTakenCodes(board?._id);
   const code = typedCode ?? suggestCode(title, taken);
 
   const keyError = codeError(code, taken, board?.code);
   const valid =
-    title.trim() !== "" && code !== "" && !keyError && projectId !== undefined;
+    title.trim() !== "" &&
+    code !== "" &&
+    !keyError &&
+    projectId !== undefined &&
+    !labelsDraft.problem;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -202,7 +220,7 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
       usesSprints,
     };
     setSaving(true);
-    const saved = await saveBoard(board, draft);
+    const saved = await saveBoard(board, draft, labelsDraft.changes);
     setSaving(false);
     if (!saved) {
       return;
@@ -278,6 +296,8 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
           onCheckedChange={setUsesSprints}
         />
       </label>
+
+      {labelsDraft.editor && <LabelsEditor {...labelsDraft.editor} />}
 
       <DialogFooter className="mt-1">
         {board && <DeleteBoard board={board} onDeleted={onDone} />}

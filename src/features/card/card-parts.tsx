@@ -4,9 +4,10 @@ import { Fragment } from "react";
 
 import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { UserAvatar } from "@/components/user-avatar";
-import { LABEL_COLORS } from "@/features/card/card-fields";
 import { useUser } from "@/hooks/use-users";
-import type { Label } from "@/lib/model";
+import type { BoardLabel } from "@/lib/model";
+import type { Color } from "@/lib/palette";
+import { SWATCH_COLORS } from "@/lib/palette";
 
 const STACKED = 3;
 
@@ -14,12 +15,32 @@ export function Muted({ children }: { children: ReactNode }) {
   return <span className="text-muted-foreground">{children}</span>;
 }
 
-export function LabelDot({ label }: { label: Label }) {
+export function LabelDot({
+  color,
+  className,
+}: {
+  color: Color;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden
-      className={cn("size-2.5 rounded-full bg-current", LABEL_COLORS[label])}
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        SWATCH_COLORS[color],
+        className
+      )}
     />
+  );
+}
+
+/** A label as a pill: its color, then its name. */
+export function LabelChip({ label }: { label: BoardLabel }) {
+  return (
+    <span className="border-border inline-flex h-5 max-w-36 min-w-0 items-center gap-1.5 rounded-full border px-1.5 text-xs">
+      <LabelDot color={label.color} />
+      <span className="truncate">{label.name}</span>
+    </span>
   );
 }
 

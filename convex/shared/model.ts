@@ -1,5 +1,7 @@
 /** Boards, cards and sprints: what both the server and the app know about them. */
 
+import type { Color } from "./palette";
+
 export const STATUSES = [
   { id: "todo", label: "To do" },
   { id: "progress", label: "In progress" },
@@ -14,19 +16,59 @@ export const PRIORITIES = [
 
 export const SPRINT_STATUSES = ["future", "active", "ended"] as const;
 
-export const LABELS = [
+export type Status = (typeof STATUSES)[number]["id"];
+export type Priority = (typeof PRIORITIES)[number]["id"];
+export type SprintStatus = (typeof SPRINT_STATUSES)[number];
+
+/** A label of a board, which its cards keep by id. */
+export interface BoardLabel {
+  id: string;
+  name: string;
+  color: Color;
+}
+
+export const MAX_LABEL_NAME = 40;
+export const MAX_LABELS = 100;
+/** Ids of labels made by name. Never a word, so never one of the colors below. */
+export const LABEL_ID = /^[\da-f]{8}$/u;
+
+/**
+ * Before labels had names, cards were labeled with these colors. A board that
+ * hasn't kept a list of its own yet has one label per color its cards wear,
+ * named after the color, with the color as id.
+ */
+export const LEGACY_LABELS = [
   "red",
   "orange",
   "yellow",
   "green",
   "blue",
   "purple",
-] as const;
+] as const satisfies readonly Color[];
 
-export type Status = (typeof STATUSES)[number]["id"];
-export type Priority = (typeof PRIORITIES)[number]["id"];
-export type Label = (typeof LABELS)[number];
-export type SprintStatus = (typeof SPRINT_STATUSES)[number];
+export function legacyLabels(
+  cards: readonly { labels: readonly string[] }[]
+): BoardLabel[] {
+  const worn = new Set(cards.flatMap((card) => card.labels));
+  return LEGACY_LABELS.filter((color) => worn.has(color)).map((color) => ({
+    color,
+    id: color,
+    name: `${color[0]?.toUpperCase()}${color.slice(1)}`,
+  }));
+}
+
+/** A label name as it's compared, so "Bug" and "bug " are the same label. */
+export function labelKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export function sortLabels<T extends Pick<BoardLabel, "name">>(
+  labels: readonly T[]
+): T[] {
+  return labels.toSorted((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true })
+  );
+}
 
 /** Global roles: admins run the hub, members see the projects they're on. */
 export const APP_ROLES = ["admin", "member"] as const;

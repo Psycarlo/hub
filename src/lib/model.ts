@@ -1,22 +1,26 @@
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import type { BoardView } from "@convex/boards";
+import type { BoardLabel } from "@convex/shared/model";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 
 import { plural } from "@/lib/utils";
 
 export type {
-  Label,
+  BoardLabel,
   Priority,
   ProjectRole,
   Status,
 } from "@convex/shared/model";
 export {
   CODE,
-  LABELS,
+  labelKey,
   MAX_CODE,
+  MAX_LABEL_NAME,
+  MAX_LABELS,
   PRIORITIES,
   rankBetween,
   RESERVED_CODES,
+  sortLabels,
   STATUSES,
   statusLabel,
   suggestCode,
@@ -29,6 +33,8 @@ export type Sprint = Doc<"sprints">;
 
 export interface BoardContent {
   cards: Card[];
+  /** By name. */
+  labels: BoardLabel[];
   sprints: Sprint[];
   nextCardNumber: number;
   nextSprintNumber: number;

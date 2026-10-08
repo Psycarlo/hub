@@ -5,8 +5,8 @@ import type { QueryCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { deleteCard } from "./cleanup";
 import { canSee, requireBoard, requireCard } from "./lib/access";
-import { vLabel, vPriority, vStatus } from "./lib/validators";
-import { LABELS } from "./shared/model";
+import { vPriority, vStatus } from "./lib/validators";
+import { LEGACY_LABELS } from "./shared/model";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const MAX_TITLE = 300;
@@ -22,8 +22,12 @@ function cleanDue(due: string | null | undefined): string | undefined {
   return due;
 }
 
-function cleanLabels(labels: Doc<"cards">["labels"]): Doc<"cards">["labels"] {
-  return LABELS.filter((label) => labels.includes(label));
+/** Each label once, leaving out any the board doesn't have, like one deleted meanwhile. */
+function cleanLabels(board: Doc<"boards">, labels: string[]): string[] {
+  const known = new Set<string>(
+    board.labels?.map(({ id }) => id) ?? LEGACY_LABELS
+  );
+  return [...new Set(labels)].filter((id) => known.has(id));
 }
 
 async function checkSprint(
@@ -66,7 +70,7 @@ export const create = mutation({
     boardId: v.id("boards"),
     description: v.string(),
     due: v.optional(v.string()),
-    labels: v.array(vLabel),
+    labels: v.array(v.string()),
     priority: v.optional(vPriority),
     rank: v.number(),
     sprintId: v.optional(v.id("sprints")),
@@ -87,7 +91,7 @@ export const create = mutation({
       createdBy: user._id,
       description: args.description.slice(0, MAX_DESCRIPTION),
       due: cleanDue(args.due),
-      labels: cleanLabels(args.labels),
+      labels: cleanLabels(board, args.labels),
       number,
       priority: args.priority,
       rank: args.rank,
@@ -106,7 +110,7 @@ export const update = mutation({
     cardId: v.id("cards"),
     description: v.optional(v.string()),
     due: v.optional(v.union(v.string(), v.null())),
-    labels: v.optional(v.array(vLabel)),
+    labels: v.optional(v.array(v.string())),
     priority: v.optional(v.union(vPriority, v.null())),
     rank: v.optional(v.number()),
     sprintId: v.optional(v.union(v.id("sprints"), v.null())),
@@ -146,7 +150,7 @@ export const update = mutation({
       patch.due = cleanDue(changes.due);
     }
     if (changes.labels !== undefined) {
-      patch.labels = cleanLabels(changes.labels);
+      patch.labels = cleanLabels(board, changes.labels);
     }
     if (changes.sprintId !== undefined) {
       patch.sprintId = await checkSprint(ctx, card.boardId, changes.sprintId);
