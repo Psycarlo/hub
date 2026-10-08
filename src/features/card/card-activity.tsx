@@ -82,10 +82,10 @@ function day(due: string): string {
   return format(parseISO(due), "MMM d, yyyy");
 }
 
-/** Covers the timeline's line where an entry sits on it. */
+/** Covers the timeline's line where an entry sits on it, in the page's own grain. */
 function Marker({ children }: { children: ReactNode }) {
   return (
-    <span className="bg-popover relative z-10 flex size-6 shrink-0 items-center justify-center">
+    <span className="bg-background bg-grain relative z-10 flex size-6 shrink-0 items-center justify-center">
       {children}
     </span>
   );
@@ -441,9 +441,9 @@ export function CardActivity({
       aria-labelledby={id}
       className={cn("flex flex-col gap-4", className)}
     >
-      <h3 className="font-medium" id={id}>
+      <h2 className="font-medium" id={id}>
         Activity
-      </h3>
+      </h2>
       <ol className="before:bg-border relative flex flex-col gap-4 before:absolute before:top-3 before:bottom-3 before:left-3 before:w-px">
         {entries.map((entry) =>
           entry.kind === "burst" ? (

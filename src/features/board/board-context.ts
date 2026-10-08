@@ -6,7 +6,7 @@ import { cardKey } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { projectPath } from "@/lib/project";
 
-/** History state that lets the card dialog close with a plain back navigation. */
+/** History state that lets leaving a card's page be a plain back navigation. */
 export const OPENED_FROM_BOARD = { fromBoard: true };
 
 /** Where a new card starts, from the column or list it was added in. */

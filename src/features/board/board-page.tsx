@@ -1,10 +1,20 @@
 import { cn } from "cn";
-import { Settings2Icon } from "lucide-react";
+import { Settings2Icon, SquareKanbanIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import {
+  Activity,
+  use,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Redirect, useLocation, useSearchParams } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
+import { ProjectAvatar } from "@/components/project-avatar";
+import type { Crumb } from "@/components/top-bar";
+import { TopBar } from "@/components/top-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssigneeFilter } from "@/features/board/assignee-filter";
@@ -19,14 +29,14 @@ import { DoneView } from "@/features/board/done-view";
 import { BoardKanban } from "@/features/board/kanban";
 import { SprintView } from "@/features/board/sprint-view";
 import { BoardDialog } from "@/features/boards/board-dialog";
-import { CardDialog } from "@/features/card/card-dialog";
+import { CardPage, CardPageSkeleton } from "@/features/card/card-page";
 import type { NewCardDefaults } from "@/features/card/new-card-dialog";
 import { NewCardDialog } from "@/features/card/new-card-dialog";
 import { useBoardContent } from "@/hooks/use-board-content";
 import { useMe } from "@/hooks/use-users";
-import type { Board, Card } from "@/lib/model";
+import type { Board } from "@/lib/model";
 import type { Project } from "@/lib/project";
-import { canEdit, canManage } from "@/lib/project";
+import { canEdit, canManage, projectPath } from "@/lib/project";
 
 const TABS = ["backlog", "sprint", "done"] as const;
 const DEFAULT_TAB = "sprint";
@@ -41,17 +51,51 @@ function tabQuery(tab: Tab): URLSearchParams {
   return new URLSearchParams(tab === DEFAULT_TAB ? {} : { tab });
 }
 
-// Keeps the last opened card so the dialog can animate out after it closes.
-function useSelectedCard(cards: Card[] | undefined, cardNumber?: number) {
-  const [lastCard, setLastCard] = useState<Card>();
-  const selected =
-    cardNumber === undefined
-      ? undefined
-      : cards?.find((card) => card.number === cardNumber);
-  if (selected && selected !== lastCard) {
-    setLastCard(selected);
-  }
-  return { selected, shown: selected ?? lastCard };
+/** The way to a board, which links back to it while one of its cards is open. */
+export function boardCrumbs(
+  label: string,
+  project?: Project,
+  href?: string
+): Crumb[] {
+  const crumb: Crumb = {
+    href,
+    icon: (
+      <SquareKanbanIcon className="text-muted-foreground size-4 shrink-0" />
+    ),
+    label,
+  };
+  return project
+    ? [
+        {
+          href: projectPath(project),
+          icon: <ProjectAvatar project={project} />,
+          label: project.title,
+        },
+        crumb,
+      ]
+    : [crumb];
+}
+
+/**
+ * A card opens at its top, and leaving it scrolls back to where the board was
+ * left: the board stays mounted under the card, but the page scroll is shared.
+ */
+function useBoardScroll(cardNumber?: number) {
+  const open = useRef(cardNumber !== undefined);
+  const boardScroll = useRef(0);
+  useEffect(() => {
+    const save = () => {
+      if (!open.current) {
+        boardScroll.current = window.scrollY;
+      }
+    };
+    window.addEventListener("scroll", save, { passive: true });
+    return () => window.removeEventListener("scroll", save);
+  }, []);
+  useLayoutEffect(() => {
+    open.current = cardNumber !== undefined;
+    window.scrollTo(0, open.current ? 0 : boardScroll.current);
+  }, [cardNumber]);
 }
 
 export function BoardSkeleton({ list = false }: { list?: boolean }) {
@@ -114,6 +158,38 @@ function SprintTabs({ tab, onTabChange, ready, actions }: SprintTabsProps) {
   );
 }
 
+interface OpenCardProps {
+  number: number;
+  crumbs: Crumb[];
+  boardHref: string;
+  /** Whether the board's cards have loaded. */
+  loaded: boolean;
+  onLeave: () => void;
+}
+
+/** The card a link points at, or back to the board once it turns out to be gone. */
+function OpenCard({
+  number,
+  crumbs,
+  boardHref,
+  loaded,
+  onLeave,
+}: OpenCardProps) {
+  const card = use(BoardContext)?.content.cards.find(
+    (item) => item.number === number
+  );
+  if (card) {
+    return (
+      <CardPage card={card} crumbs={crumbs} key={card._id} onLeave={onLeave} />
+    );
+  }
+  return loaded ? (
+    <Redirect replace to={boardHref} />
+  ) : (
+    <CardPageSkeleton crumbs={crumbs} />
+  );
+}
+
 interface BoardPageProps {
   board: Board;
   project: Project;
@@ -143,15 +219,18 @@ export function BoardPage({
   // A board without sprints has one view, so its links keep no tab.
   const query = board.usesSprints ? tabQuery(tab) : new URLSearchParams();
   const boardHref = boardPath(project, board, query);
-  const { selected, shown: shownCard } = useSelectedCard(
-    content?.cards,
-    cardNumber
+  const cardOpen = cardNumber !== undefined;
+  const crumbs = boardCrumbs(
+    board.title,
+    project,
+    cardOpen ? boardHref : undefined
   );
   const people = project.members.map((member) => member.userId);
+  useBoardScroll(cardNumber);
 
   const showTab = (value: Tab) => setParams(tabQuery(value));
 
-  const closeCard = () => {
+  const leaveCard = () => {
     if (history.state?.fromBoard) {
       history.back();
     } else {
@@ -205,35 +284,38 @@ export function BoardPage({
 
   return (
     <BoardContext value={scope}>
-      <main
-        className={cn(
-          "flex grow flex-col px-4 sm:px-6",
-          fitsScreen ? "h-[calc(100dvh-3.5rem)] min-h-96 pb-4" : "pb-8"
-        )}
-      >
-        {board.usesSprints ? (
-          <SprintTabs
-            actions={actions}
-            onTabChange={showTab}
-            ready={scope !== null}
-            tab={tab}
-          />
-        ) : (
-          <div className="flex min-h-0 grow flex-col gap-4">
-            {actions}
-            {scope ? <BoardKanban /> : <BoardSkeleton />}
-          </div>
-        )}
-      </main>
-      {scope && shownCard && (
-        <CardDialog
-          card={shownCard}
-          onClose={closeCard}
-          open={selected !== undefined}
+      {!cardOpen && <TopBar crumbs={crumbs} />}
+      {/* Kept under an open card, so leaving it finds the board as it was. */}
+      <Activity mode={cardOpen ? "hidden" : "visible"}>
+        <main
+          className={cn(
+            "flex grow flex-col px-4 sm:px-6",
+            fitsScreen ? "h-[calc(100dvh-3.5rem)] min-h-96 pb-4" : "pb-8"
+          )}
+        >
+          {board.usesSprints ? (
+            <SprintTabs
+              actions={actions}
+              onTabChange={showTab}
+              ready={scope !== null}
+              tab={tab}
+            />
+          ) : (
+            <div className="flex min-h-0 grow flex-col gap-4">
+              {actions}
+              {scope ? <BoardKanban /> : <BoardSkeleton />}
+            </div>
+          )}
+        </main>
+      </Activity>
+      {cardNumber !== undefined && (
+        <OpenCard
+          boardHref={boardHref}
+          crumbs={crumbs}
+          loaded={loaded}
+          number={cardNumber}
+          onLeave={leaveCard}
         />
-      )}
-      {loaded && cardNumber !== undefined && !shownCard && (
-        <Redirect replace to={boardHref} />
       )}
       {scope && adding && (
         <NewCardDialog

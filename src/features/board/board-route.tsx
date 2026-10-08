@@ -1,17 +1,17 @@
-import { SquareKanbanIcon } from "lucide-react";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 
-import { ProjectAvatar } from "@/components/project-avatar";
-import type { Crumb } from "@/components/top-bar";
 import { TopBar } from "@/components/top-bar";
 import { buttonVariants } from "@/components/ui/button";
 import { Empty, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { boardPath, cardPath } from "@/features/board/board-context";
-import { BoardPage, BoardSkeleton } from "@/features/board/board-page";
+import {
+  BoardPage,
+  BoardSkeleton,
+  boardCrumbs,
+} from "@/features/board/board-page";
 import type { Board } from "@/lib/model";
 import type { Project } from "@/lib/project";
-import { projectPath } from "@/lib/project";
 
 // Up to 10 characters: boards made before the 7-character cap keep their codes.
 const SLUG = /^(?<code>[A-Z][A-Z0-9]{0,9})(?:-(?<number>\d+))?$/u;
@@ -36,25 +36,6 @@ export function parseSlug(
     code: groups.code,
     number: groups.number ? Number(groups.number) : undefined,
   };
-}
-
-function boardCrumbs(label: string, project?: Project): Crumb[] {
-  const crumb: Crumb = {
-    icon: (
-      <SquareKanbanIcon className="text-muted-foreground size-4 shrink-0" />
-    ),
-    label,
-  };
-  return project
-    ? [
-        {
-          href: projectPath(project),
-          icon: <ProjectAvatar project={project} />,
-          label: project.title,
-        },
-        crumb,
-      ]
-    : [crumb];
 }
 
 interface BoardRouteProps {
@@ -94,16 +75,13 @@ export function BoardRoute({
       return <Redirect replace to={search ? `${path}?${search}` : path} />;
     }
     return (
-      <>
-        <TopBar crumbs={boardCrumbs(board.title, project)} />
-        <BoardPage
-          board={board}
-          cardNumber={parsed.number}
-          key={board._id}
-          project={project}
-          projects={projects}
-        />
-      </>
+      <BoardPage
+        board={board}
+        cardNumber={parsed.number}
+        key={board._id}
+        project={project}
+        projects={projects}
+      />
     );
   }
   return (
