@@ -1,7 +1,6 @@
 import { api } from "@convex/_generated/api";
-import { cn } from "cn";
 import { useQuery } from "convex/react";
-import { SquareKanbanIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import type { FormEvent } from "react";
 import { useId, useState } from "react";
 import { useLocation } from "wouter";
@@ -20,7 +19,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogClose,
@@ -109,7 +112,7 @@ function SlugField({
           /p/
         </span>
         <input
-          aria-describedby={`${id}-hint`}
+          aria-describedby={taken ? `${id}-error` : undefined}
           aria-invalid={taken ? true : undefined}
           autoCapitalize="off"
           autoComplete="off"
@@ -120,17 +123,11 @@ function SlugField({
           value={value}
         />
       </div>
-      <p
-        className={cn(
-          "-mt-1 text-xs",
-          taken ? "text-destructive" : "text-muted-foreground"
-        )}
-        id={`${id}-hint`}
-      >
-        {taken
-          ? "Another project uses this link."
-          : "Letters, numbers and hyphens."}
-      </p>
+      {taken && (
+        <p className="text-destructive -mt-1 text-xs" id={`${id}-error`}>
+          Another project uses this link.
+        </p>
+      )}
     </div>
   );
 }
@@ -168,7 +165,6 @@ function NameFields({
           autoFocus={!project}
           id={id}
           onChange={(event) => onTitleChange(event.target.value)}
-          placeholder="Website relaunch"
           value={title}
         />
       </div>
@@ -180,13 +176,18 @@ function NameFields({
 /** What a new project's board is called unless renamed. */
 const STARTER_TITLE = "Issues";
 
-/** The board a new project starts with; its key follows the project's name until typed. */
+/**
+ * The board a new project starts with; its key follows the project's name,
+ * or the board's before there is one, until typed.
+ */
 function useStarterBoard(projectTitle: string) {
   const taken = useTakenCodes();
   const [enabled, setEnabled] = useState(true);
   const [title, setTitle] = useState(STARTER_TITLE);
   const [typedCode, setTypedCode] = useState<string>();
-  const code = typedCode ?? suggestCode(projectTitle, taken);
+  const code =
+    typedCode ??
+    (suggestCode(projectTitle, taken) || suggestCode(title, taken));
   const error = codeError(code, taken);
   return {
     code,
@@ -206,24 +207,14 @@ type StarterBoard = ReturnType<typeof useStarterBoard>;
 
 function StarterBoardField({ board }: { board: StarterBoard }) {
   const id = useId();
+  const [customizing, setCustomizing] = useState(false);
   return (
-    <Collapsible
-      className="bg-muted/60 rounded-[calc(var(--radius-lg)+0.75rem)]"
-      open={board.enabled}
-    >
+    <div className="flex flex-col">
       <label
-        className="flex cursor-pointer items-center gap-3 p-3 select-none"
+        className="flex cursor-pointer items-center gap-3 select-none"
         htmlFor={`${id}-switch`}
       >
-        <span className="bg-card shadow-surface flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <SquareKanbanIcon
-            className={cn(
-              "size-4 transition-colors duration-150",
-              board.enabled ? "text-foreground" : "text-muted-foreground"
-            )}
-          />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-sm font-medium" id={`${id}-label`}>
             Start with a board
           </span>
@@ -239,25 +230,47 @@ function StarterBoardField({ board }: { board: StarterBoard }) {
           onCheckedChange={(checked) => board.setEnabled(checked)}
         />
       </label>
-      <CollapsibleContent>
-        <div className="grid grid-cols-[1fr_7.5rem] gap-3 px-3 pb-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-title`}>Board name</Label>
-            <Input
-              autoComplete="off"
-              id={`${id}-title`}
-              onChange={(event) => board.setTitle(event.target.value)}
-              value={board.title}
-            />
-          </div>
-          <KeyField
-            error={board.error}
-            onChange={(value) => board.setCode(value)}
-            value={board.code}
-          />
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+      <Collapsible open={board.enabled}>
+        <CollapsibleContent>
+          {/* Stays open while the name or key needs fixing. */}
+          <Collapsible
+            className="pt-3"
+            onOpenChange={setCustomizing}
+            open={customizing || !board.valid}
+          >
+            <CollapsibleTrigger className="group/details text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 relative flex w-full items-center gap-1 rounded-md text-sm transition-colors duration-150 outline-none after:absolute after:inset-x-0 after:-inset-y-1.5 focus-visible:ring-3">
+              <ChevronRightIcon
+                aria-hidden
+                className="size-4 transition-transform duration-200 ease-out group-data-panel-open/details:rotate-90"
+              />
+              Board name and key
+              <span className="ml-auto truncate pl-3 transition-opacity duration-150 group-data-panel-open/details:opacity-0">
+                {board.title.trim()} ·{" "}
+                <span className="font-mono">{board.code}</span>
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="grid grid-cols-[1fr_7.5rem] gap-3 pt-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor={`${id}-title`}>Board name</Label>
+                  <Input
+                    autoComplete="off"
+                    id={`${id}-title`}
+                    onChange={(event) => board.setTitle(event.target.value)}
+                    value={board.title}
+                  />
+                </div>
+                <KeyField
+                  error={board.error}
+                  onChange={(value) => board.setCode(value)}
+                  value={board.code}
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 

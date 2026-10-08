@@ -1,6 +1,5 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { useId } from "react";
 
@@ -73,13 +72,12 @@ export function KeyField({
   value: string;
 }) {
   const id = useId();
-  const key = value || "KEY";
   return (
     <>
       <div className="flex flex-col gap-2">
         <Label htmlFor={id}>Key</Label>
         <Input
-          aria-describedby={`${id}-hint`}
+          aria-describedby={error ? `${id}-error` : undefined}
           aria-invalid={error ? true : undefined}
           autoCapitalize="characters"
           autoComplete="off"
@@ -90,15 +88,14 @@ export function KeyField({
           value={value}
         />
       </div>
-      <p
-        className={cn(
-          "col-span-2 -mt-1 text-xs",
-          error ? "text-destructive" : "text-muted-foreground"
-        )}
-        id={`${id}-hint`}
-      >
-        {error ?? `Cards are numbered ${key}-1, ${key}-2, …`}
-      </p>
+      {error && (
+        <p
+          className="text-destructive col-span-2 -mt-1 text-xs"
+          id={`${id}-error`}
+        >
+          {error}
+        </p>
+      )}
     </>
   );
 }
