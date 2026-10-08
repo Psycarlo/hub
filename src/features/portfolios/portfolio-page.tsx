@@ -154,9 +154,12 @@ function TransactionRows({
 export function PortfolioPage({
   project,
   portfolio,
+  alone = false,
 }: {
   project: Project;
   portfolio: Portfolio;
+  /** The project's only portfolio, with no list of them to go back to. */
+  alone?: boolean;
 }) {
   const me = useMe();
   const editable = canEdit(project);
@@ -214,13 +217,17 @@ export function PortfolioPage({
             icon: <ProjectAvatar project={project} />,
             label: project.title,
           },
-          {
-            href: portfoliosPath(project),
-            icon: (
-              <ChartSplineIcon className="text-muted-foreground size-4 shrink-0" />
-            ),
-            label: "Portfolios",
-          },
+          ...(alone
+            ? []
+            : [
+                {
+                  href: portfoliosPath(project),
+                  icon: (
+                    <ChartSplineIcon className="text-muted-foreground size-4 shrink-0" />
+                  ),
+                  label: "Portfolios",
+                },
+              ]),
           {
             icon: (
               <BitcoinIcon className="text-muted-foreground size-4 shrink-0" />

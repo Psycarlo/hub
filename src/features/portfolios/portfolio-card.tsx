@@ -58,7 +58,7 @@ function HoldingsCardLink({
 
 /**
  * The project's portfolios as cards, worth what bitcoin costs now; `withTotal`
- * leads with one for all of them together.
+ * leads with one for all of them together, once there's more than one.
  */
 export function PortfolioGrid({
   project,
@@ -73,7 +73,7 @@ export function PortfolioGrid({
   const price = useBtcPrices().data?.[fiat];
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {withTotal && (
+      {withTotal && portfolios.length > 1 && (
         <HoldingsCardLink
           description={`${plural(portfolios.length, "portfolio")} together`}
           href={portfoliosPath(project)}

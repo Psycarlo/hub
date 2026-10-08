@@ -188,29 +188,33 @@ function PortfoliosView({
 }: PortfoliosViewProps) {
   const [, navigate] = useLocation();
   const id = portfolioParam ? parsePortfolioParam(portfolioParam) : undefined;
-  const portfolio = id ? portfolios.find((item) => item._id === id) : undefined;
+  // A list of one would only repeat it, so its own page stands in.
+  const alone = portfolios.length === 1;
+  const lone = !portfolioParam && alone ? portfolios[0] : undefined;
+  const portfolio = id ? portfolios.find((item) => item._id === id) : lone;
   const path = portfolio ? portfolioPath(project, portfolio) : undefined;
   // The link follows the name as it changes; any name before the id still opens it.
   useEffect(() => {
-    if (path && portfolioParam && !path.endsWith(`/${portfolioParam}`)) {
+    if (path && !(portfolioParam && path.endsWith(`/${portfolioParam}`))) {
       navigate(path, { replace: true });
     }
   }, [navigate, portfolioParam, path]);
 
+  if (portfolio) {
+    return (
+      <PortfolioPage
+        alone={alone}
+        key={portfolio._id}
+        portfolio={portfolio}
+        project={project}
+      />
+    );
+  }
   if (!portfolioParam) {
     return (
       <PortfoliosPage
         loaded={loaded}
         portfolios={portfolios}
-        project={project}
-      />
-    );
-  }
-  if (portfolio) {
-    return (
-      <PortfolioPage
-        key={portfolio._id}
-        portfolio={portfolio}
         project={project}
       />
     );
