@@ -1,13 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  ChevronDownIcon,
-  ChevronsUpIcon,
-  ChevronUpIcon,
-  CircleCheckIcon,
-  CircleDashedIcon,
-  CircleDotIcon,
-} from "lucide-react";
+import { CircleCheckIcon, CircleDashedIcon, CircleDotIcon } from "lucide-react";
 
+import {
+  PriorityHighIcon,
+  PriorityLowIcon,
+  PriorityMediumIcon,
+  PriorityUrgentIcon,
+} from "@/features/card/priority-icons";
 import type { BoardLabel, Priority, Sprint, Status, UserId } from "@/lib/model";
 import type { Color } from "@/lib/palette";
 import { COLORS } from "@/lib/palette";
@@ -24,9 +23,10 @@ export const STATUS_STYLES: Record<Status, IconStyle> = {
 };
 
 export const PRIORITY_STYLES: Record<Priority, IconStyle> = {
-  high: { className: "text-red-500", icon: ChevronsUpIcon },
-  low: { className: "text-sky-500", icon: ChevronDownIcon },
-  medium: { className: "text-amber-500", icon: ChevronUpIcon },
+  high: { className: "text-muted-foreground", icon: PriorityHighIcon },
+  low: { className: "text-muted-foreground", icon: PriorityLowIcon },
+  medium: { className: "text-muted-foreground", icon: PriorityMediumIcon },
+  urgent: { className: "text-foreground", icon: PriorityUrgentIcon },
 };
 
 /** The labels a card wears, in the board's order, leaving out any since deleted. */

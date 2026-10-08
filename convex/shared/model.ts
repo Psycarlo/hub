@@ -9,6 +9,7 @@ export const STATUSES = [
 ] as const;
 
 export const PRIORITIES = [
+  { id: "urgent", label: "Urgent" },
   { id: "high", label: "High" },
   { id: "medium", label: "Medium" },
   { id: "low", label: "Low" },
