@@ -15,7 +15,7 @@ import {
   cardPath,
 } from "@/features/board/board-context";
 import { DoneView } from "@/features/board/done-view";
-import { Kanban } from "@/features/board/kanban";
+import { BoardKanban } from "@/features/board/kanban";
 import { SprintView } from "@/features/board/sprint-view";
 import { BoardDialog } from "@/features/boards/board-dialog";
 import { CardDialog } from "@/features/card/card-dialog";
@@ -208,7 +208,7 @@ export function BoardPage({
         ) : (
           <div className="flex grow flex-col gap-4">
             {actions}
-            {scope ? <Kanban /> : <BoardSkeleton />}
+            {scope ? <BoardKanban /> : <BoardSkeleton />}
           </div>
         )}
       </main>

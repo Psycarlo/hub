@@ -115,7 +115,7 @@ function NoActiveSprint() {
 }
 
 export function SprintView() {
-  const { content } = useBoard();
+  const { cards, content } = useBoard();
   const sprint = activeSprint(content);
   if (!sprint) {
     return <NoActiveSprint />;
@@ -123,7 +123,10 @@ export function SprintView() {
   return (
     <div className="flex grow flex-col gap-4">
       <SprintHeader sprint={sprint} />
-      <Kanban sprint={sprint} />
+      <Kanban
+        cards={cards.filter((card) => card.sprintId === sprint._id)}
+        sprint={sprint}
+      />
     </div>
   );
 }

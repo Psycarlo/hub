@@ -12,7 +12,7 @@ export function DoneView() {
       (card) =>
         card.status === "done" && !(active && card.sprintId === active._id)
     )
-    .toSorted((a, b) => b.updatedAt - a.updatedAt);
+    .toSorted((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
 
   if (done.length === 0) {
     return (

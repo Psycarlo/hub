@@ -172,6 +172,17 @@ export async function recordChange(
   }
 }
 
+/** When the card got to done, should the patch move it there; cleared should it move it out. */
+function doneStamp(
+  card: Doc<"cards">,
+  patch: Partial<Doc<"cards">>
+): Pick<Doc<"cards">, "doneAt"> | undefined {
+  if (patch.status === undefined || patch.status === card.status) {
+    return undefined;
+  }
+  return { doneAt: patch.status === "done" ? Date.now() : undefined };
+}
+
 /** Patches a card, adding what that changes to its history. */
 export async function patchCard(
   ctx: MutationCtx,
@@ -183,5 +194,5 @@ export async function patchCard(
   for (const change of await changesOf(ctx, board, card, patch)) {
     await recordChange(ctx, card._id, actorId, change);
   }
-  await ctx.db.patch(card._id, patch);
+  await ctx.db.patch(card._id, { ...patch, ...doneStamp(card, patch) });
 }

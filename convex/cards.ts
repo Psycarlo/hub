@@ -87,12 +87,14 @@ export const create = mutation({
       throw new ConvexError("Give the card a title.");
     }
     const number = board.nextCardNumber;
+    const now = Date.now();
     await ctx.db.patch(board._id, { nextCardNumber: number + 1 });
     const cardId = await ctx.db.insert("cards", {
       assignees: await checkPeople(ctx, board.projectId, args.assignees),
       boardId: board._id,
       createdBy: user._id,
       description: args.description.slice(0, MAX_DESCRIPTION),
+      doneAt: args.status === "done" ? now : undefined,
       due: cleanDue(args.due),
       labels: cleanLabels(board, args.labels),
       number,
@@ -101,7 +103,7 @@ export const create = mutation({
       sprintId: await checkSprint(ctx, board._id, args.sprintId),
       status: args.status,
       title,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
     return { _id: cardId, number };
   },

@@ -126,6 +126,8 @@ export default defineSchema({
     createdBy: v.id("users"),
     /** Markdown. */
     description: v.string(),
+    /** When it last moved to done, in ms. Only on done cards. */
+    doneAt: v.optional(v.number()),
     /** `YYYY-MM-DD`. */
     due: v.optional(v.string()),
     /** Ids of the board's labels. */

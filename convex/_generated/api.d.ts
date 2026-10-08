@@ -28,6 +28,7 @@ import type * as lib_history from "../lib/history.js";
 import type * as lib_media from "../lib/media.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as media from "../media.js";
+import type * as migrations from "../migrations.js";
 import type * as portfolios from "../portfolios.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   "lib/media": typeof lib_media;
   "lib/validators": typeof lib_validators;
   media: typeof media;
+  migrations: typeof migrations;
   portfolios: typeof portfolios;
   projects: typeof projects;
   r2: typeof r2;

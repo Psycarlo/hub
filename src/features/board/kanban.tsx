@@ -3,6 +3,11 @@ import { DragDropProvider, useDroppable } from "@dnd-kit/react";
 
 import { useBoard } from "@/features/board/board-context";
 import { CardTile } from "@/features/board/card-tile";
+import {
+  HiddenCards,
+  outsideWindow,
+  useDoneWindow,
+} from "@/features/board/display-options";
 import { AddButton } from "@/features/board/quick-add";
 import { useCardDrag } from "@/features/board/use-card-drag";
 import { moveCards } from "@/lib/actions";
@@ -42,14 +47,18 @@ function Column({ status, label, cards, onAdd }: ColumnProps) {
   );
 }
 
-/** Cards in a column per status: the sprint's, or every card on a board without sprints. */
-export function Kanban({ sprint }: { sprint?: Sprint }) {
-  const { canEdit, cards, newCard } = useBoard();
+interface KanbanProps {
+  cards: Card[];
+  /** The sprint the cards are in, which new cards join. */
+  sprint?: Sprint;
+}
+
+/** Cards in a column per status. */
+export function Kanban({ cards, sprint }: KanbanProps) {
+  const { canEdit, newCard } = useBoard();
   const columns: Record<Status, Card[]> = { done: [], progress: [], todo: [] };
   for (const card of cards) {
-    if (!sprint || card.sprintId === sprint._id) {
-      columns[card.status].push(card);
-    }
+    columns[card.status].push(card);
   }
   const drag = useCardDrag(columns, (moves) =>
     moveCards(
@@ -75,5 +84,22 @@ export function Kanban({ sprint }: { sprint?: Sprint }) {
         ))}
       </div>
     </DragDropProvider>
+  );
+}
+
+/** Every card on a board without sprints, but those done before the display options reach. */
+export function BoardKanban() {
+  const { board, cards } = useBoard();
+  const [doneWindow, setDoneWindow] = useDoneWindow(board);
+  const shown = cards.filter((card) => !outsideWindow(card, doneWindow));
+  return (
+    <>
+      <Kanban cards={shown} />
+      <HiddenCards
+        hidden={cards.length - shown.length}
+        onChange={setDoneWindow}
+        value={doneWindow}
+      />
+    </>
   );
 }
