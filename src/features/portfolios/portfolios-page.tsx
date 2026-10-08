@@ -1,7 +1,7 @@
 import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
 import { ChartSplineIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ProjectAvatar } from "@/components/project-avatar";
 import { TopBar } from "@/components/top-bar";
@@ -15,9 +15,10 @@ import {
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import { Section } from "@/features/projects/project-page";
 import type { Portfolio } from "@/lib/portfolio";
-import { totalSats } from "@/lib/portfolio";
+import { countedPortfolios, totalSats } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { canEdit, projectPath } from "@/lib/project";
+import { plural } from "@/lib/utils";
 
 /** A project's portfolios: what they hold together, then each one. */
 export function PortfoliosPage({
@@ -33,16 +34,30 @@ export function PortfoliosPage({
   const [creating, setCreating] = useState(false);
   const editable = canEdit(project);
   // Null once the project is out of reach; the route moves on then.
-  const transactions = useQuery(api.portfolios.transactions, {
+  const projectTransactions = useQuery(api.portfolios.transactions, {
     projectId: project._id,
   });
+  const counted = countedPortfolios(portfolios).length;
+  // Only what the total counts, so the chart ends where the total does.
+  const transactions = useMemo(() => {
+    const ids = new Set(
+      countedPortfolios(portfolios).map((portfolio) => portfolio._id)
+    );
+    return projectTransactions?.filter((transaction) =>
+      ids.has(transaction.portfolioId)
+    );
+  }, [projectTransactions, portfolios]);
 
   let body = (
     <>
       <HoldingsCard
-        label="All portfolios"
+        label={
+          counted === portfolios.length
+            ? "All portfolios"
+            : `${counted} of ${plural(portfolios.length, "portfolio")}`
+        }
         sats={totalSats(portfolios)}
-        transactions={transactions ?? undefined}
+        transactions={transactions}
       />
       <Section title="Portfolios">
         <PortfolioGrid portfolios={portfolios} project={project} />

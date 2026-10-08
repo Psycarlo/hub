@@ -137,12 +137,8 @@ export function ValueChart({
     return defineChart({
       clip: true,
       focus: "nearest-x",
-      focusRing: {
-        fill: "var(--card)",
-        radius: 4,
-        stroke: LINE,
-        strokeWidth: 2,
-      },
+      // The crosshair's marker stands in for the ring, so it can skip the spring.
+      focusRing: false,
       gradients: [
         {
           id: FILL,
@@ -169,7 +165,15 @@ export function ValueChart({
           y1: lo,
         }),
         lineY(rows, { key: "t", stroke: LINE, strokeWidth: 2, x, y: "value" }),
+        // Pinned to the pointer: a spring here trails behind it.
         crosshair({
+          marker: {
+            fill: "var(--card)",
+            radius: 4,
+            stroke: LINE,
+            strokeWidth: 2,
+          },
+          motion: false,
           stroke: "var(--muted-foreground)",
           strokeDasharray: "3 3",
           strokeOpacity: 0.5,
@@ -204,6 +208,7 @@ export function ValueChart({
       theme: { grid: "var(--border)", muted: "var(--muted-foreground)" },
       tooltip: {
         anchor: { x: "value", y: "plot-top" },
+        motion: false,
         offset: 6,
         placement: ["top", "top-left", "top-right"],
         sticky: false,

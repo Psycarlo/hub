@@ -14,6 +14,7 @@ import type {
 export interface PortfolioDraft {
   title: string;
   description: string;
+  excludedFromTotal: boolean;
 }
 
 export interface TransactionDraft {

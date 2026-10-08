@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   portfolioPath,
@@ -94,6 +95,9 @@ function PortfolioForm({ project, portfolio, onDone }: PortfolioFormProps) {
   const [, navigate] = useLocation();
   const [title, setTitle] = useState(portfolio?.title ?? "");
   const [description, setDescription] = useState(portfolio?.description ?? "");
+  const [excludedFromTotal, setExcludedFromTotal] = useState(
+    portfolio?.excludedFromTotal ?? false
+  );
   const [saving, setSaving] = useState(false);
   const valid = title.trim() !== "";
 
@@ -102,7 +106,11 @@ function PortfolioForm({ project, portfolio, onDone }: PortfolioFormProps) {
     if (!valid) {
       return;
     }
-    const draft = { description: description.trim(), title: title.trim() };
+    const draft = {
+      description: description.trim(),
+      excludedFromTotal,
+      title: title.trim(),
+    };
     if (portfolio) {
       updatePortfolio(portfolio, draft);
       onDone();
@@ -152,6 +160,30 @@ function PortfolioForm({ project, portfolio, onDone }: PortfolioFormProps) {
         Everyone on the project sees the portfolio; whoever can edit the project
         can add transactions.
       </p>
+
+      <label
+        className="flex cursor-pointer items-center gap-3 select-none"
+        htmlFor={`${id}-excluded`}
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-sm font-medium" id={`${id}-excluded-label`}>
+            Leave out of total
+          </span>
+          <span
+            className="text-muted-foreground text-xs"
+            id={`${id}-excluded-hint`}
+          >
+            Its holdings don’t count toward the project’s portfolios together.
+          </span>
+        </span>
+        <Switch
+          aria-describedby={`${id}-excluded-hint`}
+          aria-labelledby={`${id}-excluded-label`}
+          checked={excludedFromTotal}
+          id={`${id}-excluded`}
+          onCheckedChange={setExcludedFromTotal}
+        />
+      </label>
 
       <DialogFooter className="mt-1">
         {portfolio && (

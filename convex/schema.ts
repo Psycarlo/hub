@@ -282,6 +282,8 @@ export default defineSchema({
   portfolios: defineTable({
     createdBy: v.id("users"),
     description: v.string(),
+    /** Left out of the project's total, like savings kept apart. */
+    excludedFromTotal: v.optional(v.boolean()),
     projectId: v.id("projects"),
     /** What its transactions add up to, kept here so lists needn't read them all. */
     sats: v.number(),

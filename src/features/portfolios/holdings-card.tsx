@@ -120,10 +120,11 @@ export function HoldingsCard({ label, sats, transactions }: HoldingsCardProps) {
   return (
     <section
       aria-label={label}
-      className="bg-card shadow-surface flex flex-col gap-4 rounded-2xl p-5 sm:p-6"
+      className="bg-card shadow-surface @container flex flex-col gap-4 rounded-2xl p-5 sm:p-6"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+      {/* Wide, the range sits beside the currency switch; narrow, it drops to a full row below. */}
+      <div className="flex flex-wrap items-start gap-4 @2xl:flex-nowrap @2xl:gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 @2xl:mr-2">
           <h2 className="text-muted-foreground text-sm">{label}</h2>
           <div className="text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">
             {value}
@@ -143,6 +144,26 @@ export function HoldingsCard({ label, sats, transactions }: HoldingsCardProps) {
           </p>
         </div>
         <Tabs
+          className="order-last w-full @2xl:order-none @2xl:w-auto @2xl:shrink-0"
+          onValueChange={(next: Range) => {
+            setRange(next);
+            writeStorage(RANGE_KEY, next);
+          }}
+          value={range}
+        >
+          <TabsList aria-label="Time range" className="w-full @2xl:w-fit">
+            {RANGES.map((item) => (
+              <TabsTrigger
+                className="flex-1 justify-center @2xl:flex-none"
+                key={item.value}
+                value={item.value}
+              >
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <Tabs
           className="shrink-0"
           onValueChange={(next: ChartMode) => {
             setMode(next);
@@ -157,21 +178,6 @@ export function HoldingsCard({ label, sats, transactions }: HoldingsCardProps) {
         </Tabs>
       </div>
       {chart}
-      <Tabs
-        onValueChange={(next: Range) => {
-          setRange(next);
-          writeStorage(RANGE_KEY, next);
-        }}
-        value={range}
-      >
-        <TabsList aria-label="Time range">
-          {RANGES.map((item) => (
-            <TabsTrigger key={item.value} value={item.value}>
-              {item.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
     </section>
   );
 }

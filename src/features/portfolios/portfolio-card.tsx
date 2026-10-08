@@ -12,7 +12,13 @@ import {
 import { useMe } from "@/hooks/use-users";
 import { useBtcPrices } from "@/lib/bitcoin-price";
 import type { Portfolio } from "@/lib/portfolio";
-import { fiatValue, formatBtc, formatFiat, totalSats } from "@/lib/portfolio";
+import {
+  countedPortfolios,
+  fiatValue,
+  formatBtc,
+  formatFiat,
+  totalSats,
+} from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { plural } from "@/lib/utils";
 
@@ -23,6 +29,7 @@ function HoldingsCardLink({
   description,
   sats,
   price,
+  excluded = false,
 }: {
   href: string;
   icon: ReactNode;
@@ -31,6 +38,8 @@ function HoldingsCardLink({
   sats: number;
   /** What one bitcoin costs now, once known. */
   price?: number;
+  /** Left out of the project's total. */
+  excluded?: boolean;
 }) {
   const { currency: fiat } = useMe();
   return (
@@ -40,6 +49,11 @@ function HoldingsCardLink({
           {icon}
         </span>
         <h3 className="min-w-0 truncate leading-snug font-medium">{title}</h3>
+        {excluded && (
+          <span className="text-muted-foreground ml-auto shrink-0 text-xs">
+            Not in total
+          </span>
+        )}
       </div>
       {description && (
         <p className="text-muted-foreground line-clamp-2 text-sm">
@@ -71,11 +85,16 @@ export function PortfolioGrid({
 }) {
   const { currency: fiat } = useMe();
   const price = useBtcPrices().data?.[fiat];
+  const counted = countedPortfolios(portfolios).length;
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {withTotal && portfolios.length > 1 && (
+      {withTotal && counted > 1 && (
         <HoldingsCardLink
-          description={`${plural(portfolios.length, "portfolio")} together`}
+          description={
+            counted === portfolios.length
+              ? `${plural(counted, "portfolio")} together`
+              : `${counted} of ${plural(portfolios.length, "portfolio")} together`
+          }
           href={portfoliosPath(project)}
           icon={<ChartSplineIcon />}
           price={price}
@@ -86,6 +105,7 @@ export function PortfolioGrid({
       {portfolios.map((portfolio) => (
         <HoldingsCardLink
           description={portfolio.description}
+          excluded={portfolio.excludedFromTotal}
           href={portfolioPath(project, portfolio)}
           icon={<BitcoinIcon />}
           key={portfolio._id}

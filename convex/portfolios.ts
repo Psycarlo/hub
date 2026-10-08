@@ -144,6 +144,7 @@ async function settle(
 export const create = mutation({
   args: {
     description: v.string(),
+    excludedFromTotal: v.boolean(),
     projectId: v.id("projects"),
     title: v.string(),
   },
@@ -152,6 +153,7 @@ export const create = mutation({
     return await ctx.db.insert("portfolios", {
       createdBy: user._id,
       description: args.description.trim().slice(0, MAX_DESCRIPTION),
+      excludedFromTotal: args.excludedFromTotal,
       projectId: args.projectId,
       sats: 0,
       title: cleanTitle(args.title),
@@ -162,6 +164,7 @@ export const create = mutation({
 export const update = mutation({
   args: {
     description: v.optional(v.string()),
+    excludedFromTotal: v.optional(v.boolean()),
     portfolioId: v.id("portfolios"),
     title: v.optional(v.string()),
   },
@@ -178,6 +181,9 @@ export const update = mutation({
     }
     if (changes.description !== undefined) {
       patch.description = changes.description.trim().slice(0, MAX_DESCRIPTION);
+    }
+    if (changes.excludedFromTotal !== undefined) {
+      patch.excludedFromTotal = changes.excludedFromTotal;
     }
     await ctx.db.patch(portfolioId, patch);
   },

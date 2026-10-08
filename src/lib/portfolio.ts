@@ -146,6 +146,19 @@ export function sellableAt(transactions: Transaction[], at: number): number {
   return Math.max(0, least ?? held);
 }
 
-export function totalSats(portfolios: Pick<Portfolio, "sats">[]): number {
-  return portfolios.reduce((sum, portfolio) => sum + portfolio.sats, 0);
+/** The portfolios that make up the project's total, leaving out any set apart. */
+export function countedPortfolios<
+  T extends Pick<Portfolio, "excludedFromTotal">,
+>(portfolios: T[]): T[] {
+  return portfolios.filter((portfolio) => !portfolio.excludedFromTotal);
+}
+
+/** What the portfolios hold together, leaving out any set apart from the total. */
+export function totalSats(
+  portfolios: Pick<Portfolio, "excludedFromTotal" | "sats">[]
+): number {
+  return countedPortfolios(portfolios).reduce(
+    (sum, portfolio) => sum + portfolio.sats,
+    0
+  );
 }
