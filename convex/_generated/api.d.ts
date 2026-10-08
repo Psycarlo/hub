@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as boards from "../boards.js";
 import type * as cards from "../cards.js";
@@ -23,6 +24,7 @@ import type * as lib_access from "../lib/access.js";
 import type * as lib_email from "../lib/email.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_files from "../lib/files.js";
+import type * as lib_history from "../lib/history.js";
 import type * as lib_media from "../lib/media.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as media from "../media.js";
@@ -47,6 +49,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  attachments: typeof attachments;
   auth: typeof auth;
   boards: typeof boards;
   cards: typeof cards;
@@ -62,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "lib/email": typeof lib_email;
   "lib/env": typeof lib_env;
   "lib/files": typeof lib_files;
+  "lib/history": typeof lib_history;
   "lib/media": typeof lib_media;
   "lib/validators": typeof lib_validators;
   media: typeof media;

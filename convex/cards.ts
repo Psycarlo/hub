@@ -2,15 +2,18 @@ import { ConvexError, v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { deleteCard } from "./cleanup";
-import { canSee, requireBoard, requireCard } from "./lib/access";
+import { canSee, ifVisible, requireBoard, requireCard } from "./lib/access";
+import { patchCard } from "./lib/history";
 import { vPriority, vStatus } from "./lib/validators";
 import { LEGACY_LABELS } from "./shared/model";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const MAX_TITLE = 300;
 const MAX_DESCRIPTION = 50_000;
+/** How much of a card's history its activity shows. */
+const MAX_HISTORY = 200;
 
 function cleanDue(due: string | null | undefined): string | undefined {
   if (!due) {
@@ -118,7 +121,7 @@ export const update = mutation({
     title: v.optional(v.string()),
   },
   handler: async (ctx, { cardId, ...changes }) => {
-    const { board, card } = await requireCard(ctx, cardId, "edit");
+    const { board, card, user } = await requireCard(ctx, cardId, "edit");
     const patch: Partial<Doc<"cards">> = { updatedAt: Date.now() };
     if (changes.title !== undefined) {
       const title = changes.title.trim().slice(0, MAX_TITLE);
@@ -155,7 +158,7 @@ export const update = mutation({
     if (changes.sprintId !== undefined) {
       patch.sprintId = await checkSprint(ctx, card.boardId, changes.sprintId);
     }
-    await ctx.db.patch(cardId, patch);
+    await patchCard(ctx, user._id, board, card, patch);
   },
 });
 
@@ -176,7 +179,7 @@ export const move = mutation({
     if (!first) {
       return;
     }
-    const { board } = await requireCard(ctx, first.cardId, "edit");
+    const { board, user } = await requireCard(ctx, first.cardId, "edit");
     const now = Date.now();
     for (const { cardId, rank, sprintId, status } of moves) {
       const card = await ctx.db.get(cardId);
@@ -190,8 +193,29 @@ export const move = mutation({
       if (sprintId !== undefined) {
         patch.sprintId = await checkSprint(ctx, board._id, sprintId);
       }
-      await ctx.db.patch(cardId, patch);
+      await patchCard(ctx, user._id, board, card, patch);
     }
+  },
+});
+
+/** What's been changed on a card, oldest first, up to its last few hundred changes. */
+export const history = query({
+  args: { cardId: v.id("cards") },
+  handler: async (ctx, { cardId }) => {
+    if (!(await ifVisible(requireCard(ctx, cardId, "view")))) {
+      return [];
+    }
+    const events = await ctx.db
+      .query("cardEvents")
+      .withIndex("by_card", (q) => q.eq("cardId", cardId))
+      .order("desc")
+      .take(MAX_HISTORY);
+    return events.toReversed().map(({ _id, actorId, at, change }) => ({
+      _id,
+      actorId,
+      at,
+      change,
+    }));
   },
 });
 

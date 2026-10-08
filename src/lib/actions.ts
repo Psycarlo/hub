@@ -7,6 +7,8 @@ import { convex } from "@/lib/convex";
 import type { Board, BoardLabel, Card, CardFields, Sprint } from "@/lib/model";
 import { sortLabels } from "@/lib/model";
 import type { Project } from "@/lib/project";
+import type { Upload } from "@/lib/upload";
+import { uploadAttachment } from "@/lib/upload";
 import { errorMessage } from "@/lib/utils";
 
 /** Runs a change and tells the person if it fails. Resolves with its result, or undefined. */
@@ -279,10 +281,51 @@ export function deleteSprint(sprint: Sprint) {
   return run(convex.mutation(api.sprints.remove, { sprintId: sprint._id }));
 }
 
-export function addComment(card: Card, content: string) {
-  return run(convex.mutation(api.comments.add, { cardId: card._id, content }));
+export interface CommentDraft {
+  content: string;
+  files: Upload[];
+  /** The comment it replies to. */
+  parentId?: Id<"comments">;
+}
+
+export function addComment(card: Card, comment: CommentDraft) {
+  return run(
+    convex.mutation(api.comments.add, { cardId: card._id, ...comment })
+  );
 }
 
 export function deleteComment(commentId: Id<"comments">) {
   return run(convex.mutation(api.comments.remove, { commentId }));
+}
+
+/** Deletes an upload that won't be attached after all. */
+export async function discardUpload(key: string): Promise<void> {
+  try {
+    await convex.mutation(api.attachments.discard, { key });
+  } catch {
+    // Quietly: nothing's lost if the file stays.
+  }
+}
+
+async function uploadToCard(card: Card, file: File): Promise<void> {
+  const upload = await uploadAttachment(file);
+  try {
+    await convex.mutation(api.attachments.add, {
+      cardId: card._id,
+      file: upload,
+    });
+  } catch (error) {
+    // Not attached, so nothing would ever point at the upload.
+    discardUpload(upload.key);
+    throw error;
+  }
+}
+
+/** Uploads a file and attaches it to the card. Resolves once it shows there, or failed. */
+export async function attachFile(card: Card, file: File): Promise<void> {
+  await run(uploadToCard(card, file));
+}
+
+export function removeAttachment(attachmentId: Id<"attachments">) {
+  return run(convex.mutation(api.attachments.remove, { attachmentId }));
 }

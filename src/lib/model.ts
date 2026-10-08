@@ -14,10 +14,13 @@ export type {
 export {
   CODE,
   labelKey,
+  MAX_CARD_FILES,
   MAX_CODE,
+  MAX_COMMENT_FILES,
   MAX_LABEL_NAME,
   MAX_LABELS,
   PRIORITIES,
+  priorityLabel,
   rankBetween,
   RESERVED_CODES,
   sortLabels,

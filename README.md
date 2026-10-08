@@ -9,7 +9,7 @@ Hub is the team workspace that grew out of [Freehub](../freehub): the same scree
 
 - **Projects.** Everything lives in a project: its boards, CRM tables and docs. Only the people assigned to a project see it.
 - **Personal.** Everyone also gets a project of their own, called Personal, above the shared ones in the sidebar and on the home page. It has boards, CRM tables and docs like any project, and only its owner sees it, admins included, until they share it from its settings with people who can edit or only view.
-- **Boards.** Cards in To do, In progress and Done columns, with drag and drop, assignees, priorities, due dates and labels. A board can also plan in sprints, turned on in its settings, which adds a backlog and a done list. Cards are numbered per board (`WEB-12`) and have comments with `@mentions`. A board always belongs to a project.
+- **Boards.** Cards in To do, In progress and Done columns, with drag and drop, assignees, priorities, due dates and labels. A board can also plan in sprints, turned on in its settings, which adds a backlog and a done list. Cards are numbered per board (`WEB-12`) and keep their files and an activity log of every change, with the comments in between. Comments take `@mentions`, files and replies. A board always belongs to a project.
 - **CRM.** Tables with your own fields (text, numbers, money, dates, selects, members, links to other tables and more), a pipeline view for tables with stages, insights, CSV import and export, bulk changes, and an activity log on each record.
 - **Docs.** Pages inside pages, edited in place like Notion: `/` for blocks, drag handles, tables and images. Two people editing the same page at once get each other's edits merged line by line.
 - **Inbox.** Mentions in card comments, with read and archived state kept on the server.
@@ -136,10 +136,11 @@ Optionally set `VITE_APP_NAME` in Vercel to rename the hub.
 | `convex/schema.ts` | Tables and indexes |
 | `convex/auth.ts` | Email and password sign-in, and the invite check on sign-up |
 | `convex/lib/access.ts` | Who may view, edit or run each project, board, table and page |
-| `convex/projects.ts`, `boards.ts`, `cards.ts`, `sprints.ts`, `comments.ts`, `inbox.ts`, `crm.ts`, `docs.ts` | Queries and mutations per feature |
+| `convex/projects.ts`, `boards.ts`, `cards.ts`, `sprints.ts`, `comments.ts`, `attachments.ts`, `inbox.ts`, `crm.ts`, `docs.ts` | Queries and mutations per feature |
+| `convex/lib/history.ts` | A card's activity log: what each change was, recorded as it's saved |
 | `convex/users.ts`, `invites.ts` | Profiles, photos, passwords, roles and the invite list |
 | `convex/r2.ts`, `media.ts`, `http.ts` | Uploads to R2, and `/media/<key>`, which redirects to a signed R2 link |
-| `convex/cleanup.ts` | Deleting what's under a deleted project, board, table or page, in batches |
+| `convex/cleanup.ts` | Deleting what's under a deleted project, board, card, table or page, in batches |
 | `convex/shared/` | Code both sides use: board and CRM models, slugs, mentions, the line-by-line merge |
 | `src/lib/actions.ts`, `crm-actions.ts`, `docs-actions.ts` | Mutations as the app calls them, with optimistic updates for drags and edits |
 | `src/components/ui/` | shadcn/ui components on Base UI |
@@ -150,7 +151,8 @@ Optionally set `VITE_APP_NAME` in Vercel to rename the hub.
 
 - **Data.** Everything is in Convex and live: open screens update as teammates change things. Drags and inline edits show at once and roll back if the server refuses them.
 - **Docs.** A page keeps a revision number and its recent texts. A save names the revision it was edited from; when someone saved in between, the server merges both edits line by line from that revision. Open editors merge incoming saves the same way, without moving the cursor.
-- **Files.** Uploads go straight from the browser to R2 through a signed link. The app shows them through `/media/<key>` on the Convex site URL, which checks the file exists and redirects to a signed R2 link. Keys are random, so these links work like capabilities: anyone holding one can load that file.
+- **Files.** Uploads go straight from the browser to R2 through a signed link. The app shows them through `/media/<key>` on the Convex site URL, which checks the file exists and redirects to a signed R2 link. Keys start with a random UUID, so these links work like capabilities: anyone holding one can load that file. Files on cards and comments end their key in the file's name, so downloads keep it.
+- **Activity.** Each change to a card is recorded on the server as it's saved. Changes by the same person to the same field within two minutes, with no comment between them, fold into one, so picking labels one by one reads as a single change.
 - **Card numbers** come from a counter on the board, so two people adding cards at once never get the same number.
 
 ## Tech stack

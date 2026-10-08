@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import type { ReactNode } from "react";
 import { Fragment } from "react";
 
@@ -13,6 +14,26 @@ const STACKED = 3;
 
 export function Muted({ children }: { children: ReactNode }) {
   return <span className="text-muted-foreground">{children}</span>;
+}
+
+function ago(at: number): string {
+  return Date.now() - at < 60_000
+    ? "Just now"
+    : formatDistanceToNowStrict(at, { addSuffix: true });
+}
+
+/** When something happened, like "2 days ago", with the exact time on hover. */
+export function When({ at, className }: { at: number; className?: string }) {
+  const date = new Date(at);
+  return (
+    <time
+      className={cn("text-muted-foreground shrink-0 text-xs", className)}
+      dateTime={date.toISOString()}
+      title={format(date, "PPpp")}
+    >
+      {ago(at)}
+    </time>
+  );
 }
 
 export function LabelDot({

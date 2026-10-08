@@ -20,6 +20,11 @@ export type Status = (typeof STATUSES)[number]["id"];
 export type Priority = (typeof PRIORITIES)[number]["id"];
 export type SprintStatus = (typeof SPRINT_STATUSES)[number];
 
+/** Files a card can have attached, besides those in its comments. */
+export const MAX_CARD_FILES = 50;
+/** Files one comment can carry. */
+export const MAX_COMMENT_FILES = 10;
+
 /** A label of a board, which its cards keep by id. */
 export interface BoardLabel {
   id: string;
@@ -101,6 +106,10 @@ export function canManageRole(role: ProjectRole | null | undefined): boolean {
 
 export function statusLabel(status: Status): string {
   return STATUSES.find(({ id }) => id === status)?.label ?? status;
+}
+
+export function priorityLabel(priority: Priority): string {
+  return PRIORITIES.find(({ id }) => id === priority)?.label ?? priority;
 }
 
 /** A rank between two neighbours, or past whichever end is open. */

@@ -6,6 +6,7 @@ import {
   vActivityType,
   vAppRole,
   vBoardLabel,
+  vCardChange,
   vField,
   vFiat,
   vPriority,
@@ -131,12 +132,45 @@ export default defineSchema({
     .index("by_board_and_number", ["boardId", "number"])
     .index("by_sprint", ["sprintId"]),
 
+  /** Who changed what on a card, for its activity. */
+  cardEvents: defineTable({
+    actorId: v.id("users"),
+    /** When, in ms. Quick edits to the same field fold into one event, which moves this on. */
+    at: v.number(),
+    cardId: v.id("cards"),
+    change: vCardChange,
+  }).index("by_card", ["cardId"]),
+
   comments: defineTable({
     authorId: v.id("users"),
     cardId: v.id("cards"),
     /** Text with mentions as `<@userId>` tokens. */
     content: v.string(),
-  }).index("by_card", ["cardId"]),
+    /** Set on a deleted comment kept, without its text, for the replies under it. */
+    deleted: v.optional(v.boolean()),
+    /** The comment this replies to. Replies are one level deep. */
+    parentId: v.optional(v.id("comments")),
+  })
+    .index("by_card", ["cardId"])
+    .index("by_parent", ["parentId"]),
+
+  /** Files attached to a card, or to one of its comments. */
+  attachments: defineTable({
+    cardId: v.id("cards"),
+    /** The comment the file came with; missing when it's on the card itself. */
+    commentId: v.optional(v.id("comments")),
+    /** R2 key of the upload. */
+    key: v.string(),
+    /** The file's name, as it was uploaded. */
+    name: v.string(),
+    /** In bytes. */
+    size: v.number(),
+    /** MIME type, or empty when the browser didn't know it. */
+    type: v.string(),
+    uploadedBy: v.id("users"),
+  })
+    .index("by_card_and_comment", ["cardId", "commentId"])
+    .index("by_key", ["key"]),
 
   /** Someone was mentioned in a card comment. */
   notifications: defineTable({

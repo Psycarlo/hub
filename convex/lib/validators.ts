@@ -1,4 +1,4 @@
-import type { VLiteral, VString, VUnion } from "convex/values";
+import type { Infer, VLiteral, VString, VUnion } from "convex/values";
 import { v } from "convex/values";
 
 import {
@@ -53,6 +53,58 @@ export const vBoardLabel = v.object({
   id: v.string(),
   name: v.string(),
 });
+
+/** A sprint as a card's history keeps it, should it be deleted later. */
+const vSprintRef = v.object({ id: v.id("sprints"), title: v.string() });
+
+/** One change to a card, as its activity tells it. Labels are kept whole, like sprints. */
+export const vCardChange = v.union(
+  v.object({ from: v.string(), kind: v.literal("title"), to: v.string() }),
+  v.object({ kind: v.literal("description") }),
+  v.object({ from: vStatus, kind: v.literal("status"), to: vStatus }),
+  v.object({
+    from: v.optional(vPriority),
+    kind: v.literal("priority"),
+    to: v.optional(vPriority),
+  }),
+  v.object({
+    from: v.optional(v.string()),
+    kind: v.literal("due"),
+    to: v.optional(v.string()),
+  }),
+  v.object({
+    from: v.array(v.id("users")),
+    kind: v.literal("assignees"),
+    to: v.array(v.id("users")),
+  }),
+  v.object({
+    from: v.array(vBoardLabel),
+    kind: v.literal("labels"),
+    to: v.array(vBoardLabel),
+  }),
+  v.object({
+    from: v.optional(vSprintRef),
+    kind: v.literal("sprint"),
+    to: v.optional(vSprintRef),
+  }),
+  v.object({
+    kind: v.literal("attachments"),
+    names: v.array(v.string()),
+    removed: v.boolean(),
+  })
+);
+
+export type CardChange = Infer<typeof vCardChange>;
+
+/** A file just uploaded to R2, described by the app that uploaded it. */
+export const vUpload = v.object({
+  key: v.string(),
+  name: v.string(),
+  size: v.number(),
+  type: v.string(),
+});
+
+export type Upload = Infer<typeof vUpload>;
 
 export const vFieldOption = v.object({
   color: vColor,

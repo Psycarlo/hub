@@ -10,11 +10,7 @@ import { CARD_SURFACE } from "@/features/board/card-surface";
 import { cardLabels, PRIORITY_STYLES } from "@/features/card/card-fields";
 import { AvatarStack, LabelChip, LabelDot } from "@/features/card/card-parts";
 import type { BoardLabel, Card, Priority } from "@/lib/model";
-import { cardKey, PRIORITIES } from "@/lib/model";
-
-function priorityLabel(priority: Priority): string {
-  return PRIORITIES.find(({ id }) => id === priority)?.label ?? priority;
-}
+import { cardKey, priorityLabel } from "@/lib/model";
 
 function PriorityIcon({ priority }: { priority: Priority }) {
   const { icon: Icon, className } = PRIORITY_STYLES[priority];

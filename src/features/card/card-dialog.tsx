@@ -19,8 +19,9 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { cardPath, useBoard } from "@/features/board/board-context";
+import { CardActivity } from "@/features/card/card-activity";
+import { CardFiles } from "@/features/card/card-files";
 import { CardProperties } from "@/features/card/card-properties";
-import { Comments } from "@/features/card/comments";
 import { deleteCard, updateCard } from "@/lib/actions";
 import type { Card } from "@/lib/model";
 import { cardKey } from "@/lib/model";
@@ -186,9 +187,10 @@ function CardDetails({ card, onClose }: { card: Card; onClose: () => void }) {
           ) : (
             <CardText card={card} />
           )}
+          <CardFiles card={card} />
         </div>
         <CardProperties className="md:row-span-2" card={card} />
-        <Comments card={card} className="min-w-0" />
+        <CardActivity card={card} className="min-w-0" />
       </div>
     </>
   );

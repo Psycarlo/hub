@@ -1,5 +1,5 @@
 /**
- * What's left once a project, board, table, page or portfolio is deleted. The parent
+ * What's left once a project, board, card, table, page or portfolio is deleted. The parent
  * goes first, so nobody sees it anymore; the rest is cleared here in batches
  * that stay well within a mutation's limits.
  */
@@ -9,10 +9,14 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
+import { dropFile } from "./lib/files";
 
 const BATCH = 100;
 
-/** A card with its comments and the notifications pointing at it. */
+/**
+ * A card with its comments and the notifications pointing at it. Its files
+ * and history can be many, so they're cleared afterwards in batches of their own.
+ */
 export async function deleteCard(
   ctx: MutationCtx,
   cardId: Id<"cards">
@@ -32,6 +36,7 @@ export async function deleteCard(
     await ctx.db.delete(notification._id);
   }
   await ctx.db.delete(cardId);
+  await ctx.scheduler.runAfter(0, internal.cleanup.card, { cardId });
 }
 
 /** A record with what was logged on it. */
@@ -80,6 +85,33 @@ export const revisions = internalMutation({
   },
 });
 
+/** Each file is also deleted from R2: a few per batch. */
+const FILE_BATCH = 20;
+
+export const card = internalMutation({
+  args: { cardId: v.id("cards") },
+  handler: async (ctx, { cardId }) => {
+    const files = await ctx.db
+      .query("attachments")
+      .withIndex("by_card_and_comment", (q) => q.eq("cardId", cardId))
+      .take(FILE_BATCH);
+    for (const file of files) {
+      await ctx.db.delete(file._id);
+      await dropFile(ctx, file.key);
+    }
+    const events = await ctx.db
+      .query("cardEvents")
+      .withIndex("by_card", (q) => q.eq("cardId", cardId))
+      .take(BATCH);
+    for (const event of events) {
+      await ctx.db.delete(event._id);
+    }
+    if (files.length === FILE_BATCH || events.length === BATCH) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.card, { cardId });
+    }
+  },
+});
+
 export const board = internalMutation({
   args: { boardId: v.id("boards") },
   handler: async (ctx, { boardId }) => {
@@ -87,8 +119,8 @@ export const board = internalMutation({
       .query("cards")
       .withIndex("by_board", (q) => q.eq("boardId", boardId))
       .take(BATCH / 4);
-    for (const card of cards) {
-      await deleteCard(ctx, card._id);
+    for (const item of cards) {
+      await deleteCard(ctx, item._id);
     }
     const sprints = await ctx.db
       .query("sprints")

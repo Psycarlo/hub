@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { requireBoard, requireSprint } from "./lib/access";
+import { patchCard } from "./lib/history";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const SPRINT_DAYS = 15;
@@ -118,7 +119,7 @@ export const start = mutation({
 export const end = mutation({
   args: { sprintId: v.id("sprints") },
   handler: async (ctx, { sprintId }) => {
-    const { board, sprint } = await requireSprint(ctx, sprintId, "edit");
+    const { board, sprint, user } = await requireSprint(ctx, sprintId, "edit");
     if (sprint.status !== "active") {
       throw new ConvexError("Only the active sprint can end.");
     }
@@ -136,7 +137,7 @@ export const end = mutation({
     }
     const now = Date.now();
     for (const card of unfinished) {
-      await ctx.db.patch(card._id, {
+      await patchCard(ctx, user._id, board, card, {
         sprintId: next,
         status: "todo",
         updatedAt: now,
@@ -150,13 +151,13 @@ export const end = mutation({
 export const remove = mutation({
   args: { sprintId: v.id("sprints") },
   handler: async (ctx, { sprintId }) => {
-    const { sprint } = await requireSprint(ctx, sprintId, "edit");
+    const { board, sprint, user } = await requireSprint(ctx, sprintId, "edit");
     const cards = await ctx.db
       .query("cards")
       .withIndex("by_sprint", (q) => q.eq("sprintId", sprint._id))
       .collect();
     for (const card of cards) {
-      await ctx.db.patch(card._id, { sprintId: undefined });
+      await patchCard(ctx, user._id, board, card, { sprintId: undefined });
     }
     await ctx.db.delete(sprintId);
   },

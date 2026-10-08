@@ -21,9 +21,9 @@ export const exists = internalQuery({
 });
 
 /**
- * Serves an uploaded file by redirecting to a signed R2 link. Keys are random
- * UUIDs, so the address works like a capability: images in docs and avatars
- * load in plain <img> tags, which can't send the session token.
+ * Serves an uploaded file by redirecting to a signed R2 link. Keys start with a
+ * random UUID, so the address works like a capability: images in docs and
+ * avatars load in plain <img> tags, which can't send the session token.
  */
 export const serve = httpAction(async (ctx, request) => {
   const { pathname } = new URL(request.url);
