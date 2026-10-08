@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
@@ -29,9 +30,9 @@ export function SplitButton({
 }: SplitButtonProps) {
   return (
     // Pressing the button shrinks the pair as one, not half of it.
-    <div className="flex gap-px transition-[scale] duration-150 ease-out has-[[data-main]:active]:scale-[0.96]">
+    <div className="flex transition-[scale] duration-150 ease-out has-[[data-main]:active]:scale-[0.96]">
       <Button
-        className="rounded-r-none"
+        className="rounded-r-none border-r-0"
         data-main=""
         onClick={onClick}
         size={size}
@@ -45,7 +46,12 @@ export function SplitButton({
           render={
             <Button
               aria-label={menuLabel}
-              className="rounded-l-none pr-2.5 pl-2"
+              className={cn(
+                "relative rounded-l-none border-l-0 pr-2.5 pl-2",
+                // Outline halves meet on their own ring; solid ones need a seam.
+                variant !== "outline" &&
+                  "before:absolute before:inset-y-2 before:left-0 before:w-px before:bg-current/25"
+              )}
               size={size}
               variant={variant}
             />
