@@ -18,6 +18,7 @@ import {
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
 import { FIATS, TRANSACTION_KINDS } from "../shared/portfolio";
+import { TIMEFRAMES } from "../shared/widgets";
 
 type OneOf<T extends string> = VUnion<T, VLiteral<T, "required">[], "required">;
 
@@ -47,6 +48,7 @@ export const vCurrency = oneOf(CURRENCIES);
 export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
 export const vFiat = oneOf(FIATS);
 export const vTransactionKind = oneOf(TRANSACTION_KINDS);
+export const vTimeframe = oneOf(TIMEFRAMES);
 
 export const vBoardLabel = v.object({
   color: vColor,
@@ -134,3 +136,18 @@ export const vMember = v.object({
   role: vProjectRole,
   userId: v.id("users"),
 });
+
+/**
+ * What a widget shows and how. Each kind of widget has settings of its own,
+ * told apart by `type`; a new kind adds its object here.
+ */
+export const vWidgetSettings = v.union(
+  v.object({
+    /** Missing follows the person's own currency. */
+    currency: v.optional(vFiat),
+    timeframe: vTimeframe,
+    type: v.literal("bitcoinPrice"),
+  })
+);
+
+export type WidgetSettings = Infer<typeof vWidgetSettings>;

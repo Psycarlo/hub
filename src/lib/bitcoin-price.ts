@@ -1,24 +1,35 @@
 /**
  * Bitcoin prices from Kraken's public API, straight from the browser. Pages
  * that show a price subscribe; while any does, the price is asked for again
- * every half minute, and not at all while the tab is hidden.
+ * every half minute, and not at all while the tab is hidden. Pages that show
+ * it live also open Kraken's socket, which sends every trade's price as it
+ * happens; while it does, there's no need to ask.
  */
 import { useEffect, useSyncExternalStore } from "react";
 
 import type { Fiat } from "@/lib/portfolio";
 
 const API = "https://api.kraken.com/0/public";
+const SOCKET = "wss://ws.kraken.com/v2";
 const PAIRS: Record<Fiat, string> = { EUR: "XBTEUR", USD: "XBTUSD" };
+/** The same pairs as the socket names them. */
+const SYMBOLS: Record<string, Fiat> = { "BTC/EUR": "EUR", "BTC/USD": "USD" };
 const REFRESH = 30_000;
 const MINUTE = 60_000;
+/** Live prices reach the page at most this often. */
+const TICK = 1000;
+/** The socket stays open this long after the last live price leaves the page. */
+const LINGER = 5000;
+/** Reconnecting waits twice as long after each failure, up to this. */
+const MAX_BACKOFF = 30_000;
 /** Kraken answers with at most this many of the latest candles. */
 const MAX_CANDLES = 720;
-/** Candle sizes Kraken offers, in minutes; the ones charts pick from. */
-const INTERVALS = [5, 30, 240, 1440, 10_080, 21_600] as const;
+/** Candle sizes Kraken offers, in minutes. */
+export type Interval = 1 | 5 | 15 | 30 | 60 | 240 | 1440 | 10_080 | 21_600;
+/** The ones charts pick from to cover a span, finest first. */
+const INTERVALS: readonly Interval[] = [5, 30, 240, 1440, 10_080, 21_600];
 /** Candles of up to this size are fetched again this often. */
 const MAX_STALE = 15 * MINUTE;
-
-export type Interval = (typeof INTERVALS)[number];
 
 export interface Prices extends Record<Fiat, number> {
   /** When Kraken gave them. */
@@ -139,6 +150,183 @@ export function useBtcPrices(): Feed<Prices> {
     };
   }, []);
   return snapshot;
+}
+
+interface TickerMessage {
+  channel?: string;
+  data?: { last?: unknown; symbol?: string }[];
+}
+
+/** The latest trade prices in a message from the socket; none for other messages. */
+function tradePrices(raw: unknown): [Fiat, number][] {
+  if (typeof raw !== "string") {
+    return [];
+  }
+  let message: TickerMessage;
+  try {
+    message = JSON.parse(raw) as TickerMessage;
+  } catch {
+    return [];
+  }
+  if (message.channel !== "ticker" || !Array.isArray(message.data)) {
+    return [];
+  }
+  return message.data.flatMap(({ last, symbol }): [Fiat, number][] => {
+    const fiat = symbol === undefined ? undefined : SYMBOLS[symbol];
+    return fiat && typeof last === "number" && last > 0 ? [[fiat, last]] : [];
+  });
+}
+
+/** How many on the page show the price live; the socket is open while any do. */
+let liveUsers = 0;
+let socket: WebSocket | undefined;
+/** Whether prices are coming in over the socket right now. */
+let streaming = false;
+/** Failed connections in a row, which the next one waits longer for. */
+let failures = 0;
+let retry: ReturnType<typeof setTimeout> | undefined;
+let linger: ReturnType<typeof setTimeout> | undefined;
+/** Prices in since the last flush, held so the page updates once a tick. */
+let pending: Partial<Prices> = {};
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+let flushedAt = 0;
+
+function setStreaming(next: boolean): void {
+  if (streaming !== next) {
+    streaming = next;
+    notify();
+  }
+}
+
+/** Shows the prices in so far, keeping the other currency's until it trades. */
+function flush(): void {
+  flushTimer = undefined;
+  const EUR = pending.EUR ?? ticker.data?.EUR;
+  const USD = pending.USD ?? ticker.data?.USD;
+  if (EUR === undefined || USD === undefined) {
+    return;
+  }
+  pending = {};
+  flushedAt = Date.now();
+  // Fresh, so the half-minute asking leaves it be.
+  ticker = {
+    data: { EUR, USD, at: flushedAt },
+    failed: false,
+    fetchedAt: flushedAt,
+  };
+  notify();
+}
+
+function receive(fiat: Fiat, price: number): void {
+  pending[fiat] = price;
+  if (flushTimer !== undefined) {
+    return;
+  }
+  const wait = flushedAt + TICK - Date.now();
+  if (wait > 0) {
+    flushTimer = setTimeout(flush, wait);
+  } else {
+    flush();
+  }
+}
+
+function connect(): void {
+  clearTimeout(retry);
+  retry = undefined;
+  if (socket || liveUsers === 0 || document.hidden) {
+    return;
+  }
+  const next = new WebSocket(SOCKET);
+  socket = next;
+  next.addEventListener("open", () =>
+    next.send(
+      JSON.stringify({
+        method: "subscribe",
+        params: { channel: "ticker", symbol: Object.keys(SYMBOLS) },
+      })
+    )
+  );
+  next.addEventListener("message", ({ data }) => {
+    const prices = tradePrices(data);
+    if (prices.length === 0) {
+      return;
+    }
+    failures = 0;
+    setStreaming(true);
+    for (const [fiat, price] of prices) {
+      receive(fiat, price);
+    }
+  });
+  next.addEventListener("close", () => {
+    // A socket closed on purpose has been let go already.
+    if (socket !== next) {
+      return;
+    }
+    socket = undefined;
+    setStreaming(false);
+    retry = setTimeout(connect, Math.min(1000 * 2 ** failures, MAX_BACKOFF));
+    failures += 1;
+  });
+}
+
+function disconnect(): void {
+  clearTimeout(retry);
+  retry = undefined;
+  const current = socket;
+  socket = undefined;
+  current?.close();
+  setStreaming(false);
+}
+
+function onVisibility(): void {
+  if (document.hidden) {
+    disconnect();
+  } else {
+    connect();
+  }
+}
+
+/** Keeps the socket open until the returned function is called. */
+function openLive(): () => void {
+  clearTimeout(linger);
+  if (liveUsers === 0) {
+    document.addEventListener("visibilitychange", onVisibility);
+    globalThis.addEventListener("online", connect);
+  }
+  liveUsers += 1;
+  connect();
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    liveUsers -= 1;
+    if (liveUsers > 0) {
+      return;
+    }
+    // Lingers, so coming straight back finds it still open.
+    linger = setTimeout(() => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      globalThis.removeEventListener("online", connect);
+      disconnect();
+    }, LINGER);
+  };
+}
+
+function streamingNow(): boolean {
+  return streaming;
+}
+
+/**
+ * The latest price as each trade happens, at most once a second. `live` says
+ * whether it's streaming in right now; otherwise it's asked for as usual.
+ */
+export function useLiveBtcPrices(): Feed<Prices> & { live: boolean } {
+  useEffect(openLive, []);
+  const prices = useBtcPrices();
+  const live = useSyncExternalStore(subscribe, streamingNow);
+  return { ...prices, live };
 }
 
 const histories = new Map<string, Feed<Candle[]>>();

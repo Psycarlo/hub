@@ -98,6 +98,7 @@ function Workspace() {
   const tables = useQuery(api.crm.navTables) ?? NO_TABLES;
   const pages = useQuery(api.docs.tree);
   const portfolioList = useQuery(api.portfolios.list);
+  const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
   const projects = projectList ?? NO_PROJECTS;
@@ -128,10 +129,11 @@ function Workspace() {
             <Route path="/">
               <HomePage
                 boards={boards}
-                loaded={projectsLoaded && boardsLoaded}
+                loaded={projectsLoaded && boardsLoaded && widgets !== undefined}
                 onNewProject={newProject}
                 projects={projects}
                 tables={tables}
+                widgets={widgets}
               />
             </Route>
             <Route path={BOARD_ROUTE}>

@@ -1,7 +1,8 @@
+import { DragDropProvider } from "@dnd-kit/react";
 import { cn } from "cn";
 import { FolderLockIcon, LockIcon, PlusIcon } from "lucide-react";
 import type { Variants } from "motion/react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import type { PointerEvent, ReactNode } from "react";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { Link } from "wouter";
@@ -11,13 +12,18 @@ import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCardDrag } from "@/features/board/use-card-drag";
 import { CARD_SURFACE, MemberAvatars } from "@/features/boards/board-card";
+import { AddWidget } from "@/features/widgets/add-widget";
+import { WidgetCard } from "@/features/widgets/widget-card";
 import { useMe } from "@/hooks/use-users";
 import type { NavTable } from "@/lib/crm";
 import type { Board } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { projectPath, splitPersonal } from "@/lib/project";
 import { plural } from "@/lib/utils";
+import { moveWidgets } from "@/lib/widget-actions";
+import type { Widget } from "@/lib/widgets";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 /** The gap between one part of the page rising in and the next. */
@@ -45,6 +51,14 @@ const GRID: Variants = {
   show: (delay = 0) => ({
     transition: { delayChildren: delay, staggerChildren: STEP },
   }),
+};
+
+/** Goes back the way it came, quicker. */
+const LEAVE = {
+  filter: "blur(4px)",
+  opacity: 0,
+  scale: 0.96,
+  transition: { duration: 0.15, ease: EASE },
 };
 
 type Intro = "hidden" | false;
@@ -228,6 +242,49 @@ function Section({
   );
 }
 
+/**
+ * The person's widgets, in the order they've dragged them into. Widgets added
+ * later rise in like the rest; removed ones sink away.
+ */
+function WidgetGrid({
+  widgets,
+  at,
+  initial,
+}: {
+  widgets: Widget[];
+  at: number;
+  initial: Intro;
+}) {
+  const drag = useCardDrag({ widgets }, (moves) =>
+    moveWidgets(moves.map(({ card, rank }) => ({ rank, widget: card })))
+  );
+  return (
+    <DragDropProvider {...drag.props}>
+      {/* Starts hidden every time, so a widget added later rises in; the
+          widgets already here only do on the page's entrance. */}
+      <motion.div
+        animate="show"
+        className="grid gap-3 empty:hidden sm:grid-cols-2 lg:grid-cols-3"
+        custom={at}
+        initial="hidden"
+        variants={GRID}
+      >
+        <AnimatePresence initial={initial !== false}>
+          {drag.groups.widgets.map((widget, index) => (
+            <WidgetCard
+              exit={LEAVE}
+              index={index}
+              key={widget._id}
+              variants={RISE}
+              widget={widget}
+            />
+          ))}
+        </AnimatePresence>
+      </motion.div>
+    </DragDropProvider>
+  );
+}
+
 function CardsSkeleton() {
   return (
     <div aria-busy className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -242,6 +299,8 @@ interface HomePageProps {
   boards: Board[];
   projects: Project[];
   tables: NavTable[];
+  /** Not there until they're in. */
+  widgets?: Widget[];
   loaded: boolean;
   onNewProject: () => void;
 }
@@ -250,6 +309,7 @@ export function HomePage({
   boards,
   projects,
   tables,
+  widgets,
   loaded,
   onNewProject,
 }: HomePageProps) {
@@ -265,8 +325,10 @@ export function HomePage({
   );
 
   const { personal, shared } = splitPersonal(projects, me._id);
-  // The greeting, then each section's heading and its cards, a step apart.
-  const projectsAt = personal ? STEP * 3 : STEP;
+  // The greeting, the widgets, then each section's heading and its cards, a step apart.
+  const widgetsShift = widgets?.length ? STEP : 0;
+  const personalAt = STEP + widgetsShift;
+  const projectsAt = (personal ? STEP * 3 : STEP) + widgetsShift;
   const cardsAt = projectsAt + STEP;
   const card = (project: Project) => (
     <ProjectCard
@@ -323,23 +385,27 @@ export function HomePage({
       <TopBar crumbs={[{ label: "Home" }]} />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 pt-4 pb-10 sm:px-6">
         <Reveal at={0} initial={intro}>
-          <div className="flex flex-col gap-1">
-            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              {TODAY.format(now)}
-            </p>
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {greeting(now.getHours())}, {me.name.split(" ")[0]}
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              {shared.length > 0
-                ? `You’re on ${plural(shared.length, "project")}.`
-                : "Welcome to the hub."}
-            </p>
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-1">
+              <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                {TODAY.format(now)}
+              </p>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {greeting(now.getHours())}, {me.name.split(" ")[0]}
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {shared.length > 0
+                  ? `You’re on ${plural(shared.length, "project")}.`
+                  : "Welcome to the hub."}
+              </p>
+            </div>
+            <AddWidget count={widgets?.length ?? 0} />
           </div>
         </Reveal>
+        {widgets && <WidgetGrid at={STEP} initial={intro} widgets={widgets} />}
         {personal && (
-          <Section at={STEP} initial={intro} title="Personal">
-            <CardGrid at={STEP * 2} initial={intro}>
+          <Section at={personalAt} initial={intro} title="Personal">
+            <CardGrid at={personalAt + STEP} initial={intro}>
               {card(personal)}
             </CardGrid>
           </Section>

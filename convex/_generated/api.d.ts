@@ -39,8 +39,10 @@ import type * as shared_model from "../shared/model.js";
 import type * as shared_palette from "../shared/palette.js";
 import type * as shared_portfolio from "../shared/portfolio.js";
 import type * as shared_slug from "../shared/slug.js";
+import type * as shared_widgets from "../shared/widgets.js";
 import type * as sprints from "../sprints.js";
 import type * as users from "../users.js";
+import type * as widgets from "../widgets.js";
 
 import type {
   ApiFromModules,
@@ -80,8 +82,10 @@ declare const fullApi: ApiFromModules<{
   "shared/palette": typeof shared_palette;
   "shared/portfolio": typeof shared_portfolio;
   "shared/slug": typeof shared_slug;
+  "shared/widgets": typeof shared_widgets;
   sprints: typeof sprints;
   users: typeof users;
+  widgets: typeof widgets;
 }>;
 
 /**

@@ -18,6 +18,7 @@ import {
   vTableIcon,
   vTransactionKind,
   vValues,
+  vWidgetSettings,
 } from "./lib/validators";
 
 // Tables follow the app's own order, from accounts to projects to what's in them.
@@ -44,6 +45,13 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("phone", ["phone"]),
+
+  /** What someone keeps on their home, in the order they arranged it. */
+  widgets: defineTable({
+    rank: v.number(),
+    settings: vWidgetSettings,
+    userId: v.id("users"),
+  }).index("by_user", ["userId"]),
 
   /** The hub's own look, in a single document. */
   hubSettings: defineTable({
