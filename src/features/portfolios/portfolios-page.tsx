@@ -60,9 +60,7 @@ export function PortfoliosPage({
       </div>
     );
   } else if (portfolios.length === 0) {
-    body = (
-      <NoPortfolios editable={editable} onNew={() => setCreating(true)} page />
-    );
+    body = <NoPortfolios editable={editable} onNew={() => setCreating(true)} />;
   }
 
   return (

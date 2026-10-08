@@ -10,7 +10,7 @@ import { IconButton } from "@/components/icon-button";
 import { ProjectAvatar } from "@/components/project-avatar";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription } from "@/components/ui/empty";
+import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { boardPath } from "@/features/board/board-context";
@@ -24,15 +24,14 @@ import { tablePath } from "@/features/crm/crm-context";
 import { NewTableDialog } from "@/features/crm/new-table-dialog";
 import { TableIcon } from "@/features/crm/table-icon";
 import { PageGrid, useNewPage } from "@/features/docs/docs-page";
-import {
-  NoPortfolios,
-  PortfolioGrid,
-} from "@/features/portfolios/portfolio-card";
+import { PortfolioGrid } from "@/features/portfolios/portfolio-card";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
+import type { ProjectItem } from "@/features/projects/new-in-project";
+import { NewInProject } from "@/features/projects/new-in-project";
 import { ProjectDialog } from "@/features/projects/project-dialog";
-import type { CrmRecord, CrmTable, ProjectContent } from "@/lib/crm";
+import type { CrmRecord, CrmTable, NavTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
-import type { DocsContent } from "@/lib/docs";
+import type { DocPage, DocsContent } from "@/lib/docs";
 import type { Board } from "@/lib/model";
 import { SWATCH_COLORS } from "@/lib/palette";
 import type { Portfolio } from "@/lib/portfolio";
@@ -152,8 +151,12 @@ function TableCard({
 interface ProjectPageProps {
   project: Project;
   docs: DocsContent;
+  docsLoaded: boolean;
   projects: Project[];
   boards: Board[];
+  boardsLoaded: boolean;
+  /** Tables in every project, known before their records load. */
+  tables: NavTable[];
   /** The project's portfolios. */
   portfolios: Portfolio[];
   portfoliosLoaded: boolean;
@@ -161,7 +164,53 @@ interface ProjectPageProps {
   loaded: boolean;
 }
 
-/** The project's boards with where each stands, and a way to start one. */
+/** The project's CRM tables with where their records stand. */
+function ProjectTables({
+  project,
+  tables,
+  content,
+  onNew,
+}: {
+  project: Project;
+  /** The project's tables, shown as placeholders until `content` arrives. */
+  tables: Pick<CrmTable, "_id">[];
+  content?: ProjectContent;
+  onNew: () => void;
+}) {
+  return (
+    <Section
+      action={
+        canEdit(project) && (
+          <Button onClick={onNew} variant="outline">
+            <PlusIcon />
+            New table
+          </Button>
+        )
+      }
+      title="CRM"
+    >
+      <div
+        aria-busy={!content}
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {content
+          ? content.tables.map((table) => (
+              <TableCard
+                key={table._id}
+                project={project}
+                records={content.byTable.get(table._id) ?? []}
+                table={table}
+              />
+            ))
+          : tables.map((table) => (
+              <Skeleton className="h-36 rounded-2xl" key={table._id} />
+            ))}
+      </div>
+    </Section>
+  );
+}
+
+/** The project's boards with where each stands. */
 function ProjectBoards({
   project,
   boards,
@@ -174,48 +223,11 @@ function ProjectBoards({
   members: string[];
   onNew: () => void;
 }) {
-  const progress = useQuery(
-    api.boards.progress,
-    boards.length > 0 ? { projectId: project._id } : "skip"
-  );
-  const editable = canEdit(project);
-
-  let body: ReactNode = (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {boards.map((board) => (
-        <BoardCard
-          board={board}
-          href={boardPath(board)}
-          key={board._id}
-          members={members}
-          progress={progress?.find((item) => item.boardId === board._id)}
-        />
-      ))}
-    </div>
-  );
-  if (boards.length === 0) {
-    body = editable ? (
-      <Empty className="bg-muted/60 rounded-2xl py-10">
-        <EmptyDescription className="mt-0 max-w-sm">
-          Plan work as cards on a board, with a backlog and sprints.
-        </EmptyDescription>
-        <Button onClick={onNew}>
-          <PlusIcon />
-          New board
-        </Button>
-      </Empty>
-    ) : (
-      <p className="text-muted-foreground text-sm">
-        No boards in this project yet.
-      </p>
-    );
-  }
-
+  const progress = useQuery(api.boards.progress, { projectId: project._id });
   return (
     <Section
       action={
-        editable &&
-        boards.length > 0 && (
+        canEdit(project) && (
           <Button onClick={onNew} variant="outline">
             <PlusIcon />
             New board
@@ -224,124 +236,231 @@ function ProjectBoards({
       }
       title="Boards"
     >
-      {body}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {boards.map((board) => (
+          <BoardCard
+            board={board}
+            href={boardPath(board)}
+            key={board._id}
+            members={members}
+            progress={progress?.find((item) => item.boardId === board._id)}
+          />
+        ))}
+      </div>
     </Section>
   );
 }
 
-/** The project's portfolios with their total, and a way to start one. */
-function ProjectPortfolios({
+/** Who and what the project is, and its settings for whoever manages it. */
+function ProjectHeader({
   project,
-  portfolios,
-  loaded,
+  members,
+  onSettings,
 }: {
   project: Project;
-  portfolios: Portfolio[];
-  loaded: boolean;
+  members: string[];
+  onSettings: () => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const editable = canEdit(project);
-
-  let body: ReactNode = (
-    <PortfolioGrid portfolios={portfolios} project={project} withTotal />
-  );
-  if (portfolios.length === 0 && !loaded) {
-    body = (
-      <div aria-busy className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Skeleton className="h-36 rounded-2xl" />
-        <Skeleton className="h-36 rounded-2xl max-sm:hidden" />
+  // A personal project nobody else was let into.
+  const alone = project.personalFor !== undefined && members.length <= 1;
+  return (
+    <header className="flex flex-wrap items-start gap-4">
+      <ProjectAvatar project={project} size="lg" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <h2 className="text-2xl font-semibold tracking-tight">
+          {project.title}
+        </h2>
+        {project.description && (
+          <p className="text-muted-foreground max-w-2xl text-sm">
+            {project.description}
+          </p>
+        )}
+        {!project.description && alone && (
+          <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
+            <LockIcon aria-hidden className="size-3.5" />
+            Only you can see this. Share it from its settings.
+          </p>
+        )}
       </div>
-    );
-  } else if (portfolios.length === 0) {
-    body = <NoPortfolios editable={editable} onNew={() => setCreating(true)} />;
-  }
+      <div className="flex items-center gap-2">
+        {!alone && <MemberAvatars members={members} />}
+        {canManage(project) && (
+          <IconButton
+            label={project.personalFor ? "Sharing" : "Project settings"}
+            onClick={onSettings}
+          >
+            <Settings2Icon />
+          </IconButton>
+        )}
+      </div>
+    </header>
+  );
+}
 
+/** A section for each kind of thing the project has; none for what it lacks. */
+function ProjectSections({
+  project,
+  tables,
+  content,
+  boards,
+  members,
+  pages,
+  portfolios,
+  onNew,
+}: {
+  project: Project;
+  /** The project's tables, shown as placeholders until `content` arrives. */
+  tables: Pick<CrmTable, "_id">[];
+  content?: ProjectContent;
+  boards: Board[];
+  members: string[];
+  /** The pages at the top of the project's docs. */
+  pages: DocPage[];
+  portfolios: Portfolio[];
+  onNew: (kind: ProjectItem) => void;
+}) {
+  const editable = canEdit(project);
   return (
     <>
-      <Section
-        action={
-          editable &&
-          portfolios.length > 0 && (
-            <Button onClick={() => setCreating(true)} variant="outline">
-              <PlusIcon />
-              New portfolio
-            </Button>
-          )
-        }
-        title="Portfolios"
-      >
-        {body}
-      </Section>
-      <PortfolioDialog
-        onOpenChange={setCreating}
-        open={creating}
-        project={project}
-      />
+      {tables.length > 0 && (
+        <ProjectTables
+          content={content}
+          onNew={() => onNew("table")}
+          project={project}
+          tables={tables}
+        />
+      )}
+      {boards.length > 0 && (
+        <ProjectBoards
+          boards={boards}
+          members={members}
+          onNew={() => onNew("board")}
+          project={project}
+        />
+      )}
+      {pages.length > 0 && (
+        <Section
+          action={
+            editable && (
+              <Button onClick={() => onNew("page")} variant="outline">
+                <PlusIcon />
+                New page
+              </Button>
+            )
+          }
+          title="Docs"
+        >
+          <PageGrid pages={pages} project={project} />
+        </Section>
+      )}
+      {portfolios.length > 0 && (
+        <Section
+          action={
+            editable && (
+              <Button onClick={() => onNew("portfolio")} variant="outline">
+                <PlusIcon />
+                New portfolio
+              </Button>
+            )
+          }
+          title="Portfolios"
+        >
+          <PortfolioGrid portfolios={portfolios} project={project} withTotal />
+        </Section>
+      )}
     </>
+  );
+}
+
+/** Where a project's boards, tables, docs and portfolios go, before it has any. */
+function NoContent({
+  editable,
+  onNew,
+}: {
+  editable: boolean;
+  onNew: (kind: ProjectItem) => void;
+}) {
+  return (
+    <Empty className="bg-muted/60 rounded-2xl py-10">
+      <EmptyTitle>Nothing here yet</EmptyTitle>
+      <EmptyDescription className="max-w-sm">
+        {editable
+          ? "Plan work on boards, track deals in CRM tables, write docs and follow bitcoin portfolios."
+          : "Boards, tables, docs and portfolios in this project show up here."}
+      </EmptyDescription>
+      {editable && <NewInProject onNew={onNew} />}
+    </Empty>
   );
 }
 
 export function ProjectPage({
   project,
   docs,
+  docsLoaded,
   projects,
   boards,
+  boardsLoaded,
+  tables,
   portfolios,
   portfoliosLoaded,
   content,
   loaded,
 }: ProjectPageProps) {
-  const [dialog, setDialog] = useState<"settings" | "board" | "table">();
+  const [dialog, setDialog] = useState<
+    "settings" | "board" | "table" | "portfolio"
+  >();
   const newPage = useNewPage(project);
   const editable = canEdit(project);
   const members = project.members.map((member) => member.userId);
-  // A personal project nobody else was let into.
-  const alone = project.personalFor !== undefined && members.length <= 1;
   const projectBoards = boards.filter(
     (board) => board.projectId === project._id
   );
-  const tables = content?.tables ?? [];
-  const dialogProps = (name: "settings" | "board" | "table") => ({
+  // Until the records arrive, the tables listed for the sidebar say whether
+  // there are any, so the section holds its place instead of jumping in.
+  const projectTables = loaded
+    ? (content?.tables ?? [])
+    : tables.filter((table) => table.projectId === project._id);
+  const dialogProps = (name: "settings" | "board" | "table" | "portfolio") => ({
     onOpenChange: (open: boolean) => setDialog(open ? name : undefined),
     open: dialog === name,
   });
+  const onNew = (kind: ProjectItem) => {
+    if (kind === "page") {
+      newPage();
+    } else {
+      setDialog(kind);
+    }
+  };
 
-  let crm: ReactNode = (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {tables.map((table) => (
-        <TableCard
-          key={table._id}
-          project={project}
-          records={content?.byTable.get(table._id) ?? []}
-          table={table}
-        />
-      ))}
-    </div>
+  // Only what the project has gets a section; nothing at all gets one note.
+  const hasAny =
+    projectTables.length > 0 ||
+    projectBoards.length > 0 ||
+    docs.roots.length > 0 ||
+    portfolios.length > 0;
+  const allLoaded = loaded && boardsLoaded && docsLoaded && portfoliosLoaded;
+
+  let body: ReactNode = (
+    <ProjectSections
+      boards={projectBoards}
+      content={loaded ? content : undefined}
+      members={members}
+      onNew={onNew}
+      pages={docs.roots}
+      portfolios={portfolios}
+      project={project}
+      tables={projectTables}
+    />
   );
-  if (tables.length === 0 && !loaded) {
-    crm = (
+  if (!(hasAny || allLoaded)) {
+    body = (
       <div aria-busy className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Skeleton className="h-36 rounded-2xl" />
         <Skeleton className="h-36 rounded-2xl max-sm:hidden" />
       </div>
     );
-  } else if (tables.length === 0) {
-    crm = editable ? (
-      <Empty className="bg-muted/60 rounded-2xl py-10">
-        <EmptyDescription className="mt-0 max-w-sm">
-          Track merchants, deals or contacts in tables with your own fields and
-          stages.
-        </EmptyDescription>
-        <Button onClick={() => setDialog("table")}>
-          <PlusIcon />
-          New table
-        </Button>
-      </Empty>
-    ) : (
-      <p className="text-muted-foreground text-sm">
-        No tables in this project yet.
-      </p>
-    );
+  } else if (!hasAny) {
+    body = <NoContent editable={editable} onNew={onNew} />;
   }
 
   return (
@@ -350,82 +469,18 @@ export function ProjectPage({
         crumbs={[
           { icon: <ProjectAvatar project={project} />, label: project.title },
         ]}
-      />
+      >
+        {editable && hasAny && (
+          <NewInProject onNew={onNew} size="sm" variant="outline" />
+        )}
+      </TopBar>
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 pt-4 pb-10 sm:px-6">
-        <header className="flex flex-wrap items-start gap-4">
-          <ProjectAvatar project={project} size="lg" />
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {project.title}
-            </h2>
-            {project.description && (
-              <p className="text-muted-foreground max-w-2xl text-sm">
-                {project.description}
-              </p>
-            )}
-            {!project.description && alone && (
-              <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
-                <LockIcon aria-hidden className="size-3.5" />
-                Only you can see this. Share it from its settings.
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {!alone && <MemberAvatars members={members} />}
-            {canManage(project) && (
-              <IconButton
-                label={project.personalFor ? "Sharing" : "Project settings"}
-                onClick={() => setDialog("settings")}
-              >
-                <Settings2Icon />
-              </IconButton>
-            )}
-          </div>
-        </header>
-        <Section
-          action={
-            editable &&
-            tables.length > 0 && (
-              <Button onClick={() => setDialog("table")} variant="outline">
-                <PlusIcon />
-                New table
-              </Button>
-            )
-          }
-          title="CRM"
-        >
-          {crm}
-        </Section>
-        <ProjectBoards
-          boards={projectBoards}
+        <ProjectHeader
           members={members}
-          onNew={() => setDialog("board")}
+          onSettings={() => setDialog("settings")}
           project={project}
         />
-        <Section
-          action={
-            editable && (
-              <Button onClick={newPage} variant="outline">
-                <PlusIcon />
-                New page
-              </Button>
-            )
-          }
-          title="Docs"
-        >
-          {docs.roots.length > 0 ? (
-            <PageGrid pages={docs.roots} project={project} />
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              No pages in this project yet.
-            </p>
-          )}
-        </Section>
-        <ProjectPortfolios
-          loaded={portfoliosLoaded}
-          portfolios={portfolios}
-          project={project}
-        />
+        {body}
       </main>
       <ProjectDialog
         {...dialogProps("settings")}
@@ -438,6 +493,7 @@ export function ProjectPage({
         projects={projects}
       />
       <NewTableDialog {...dialogProps("table")} project={project} />
+      <PortfolioDialog {...dialogProps("portfolio")} project={project} />
     </>
   );
 }

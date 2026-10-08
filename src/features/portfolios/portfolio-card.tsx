@@ -98,53 +98,33 @@ export function PortfolioGrid({
   );
 }
 
-/**
- * Where portfolios would be: a way to start one, for whoever can. `page` fills
- * a page of its own instead of a section.
- */
+/** Where portfolios would be: a way to start one, for whoever can. */
 export function NoPortfolios({
   editable,
   onNew,
-  page = false,
 }: {
   editable: boolean;
   onNew: () => void;
-  page?: boolean;
 }) {
-  const button = (
-    <Button onClick={onNew}>
-      <PlusIcon />
-      New portfolio
-    </Button>
-  );
-  if (page) {
-    return (
-      <Empty>
-        <ChartSplineIcon
-          aria-hidden
-          className="text-muted-foreground size-8"
-          strokeWidth={1.5}
-        />
-        <EmptyTitle>No portfolios yet</EmptyTitle>
-        <EmptyDescription>
-          {editable
-            ? "Track bitcoin bought and sold, and see what it’s worth over time."
-            : "Portfolios in this project show up here."}
-        </EmptyDescription>
-        {editable && button}
-      </Empty>
-    );
-  }
-  return editable ? (
-    <Empty className="bg-muted/60 rounded-2xl py-10">
-      <EmptyDescription className="mt-0 max-w-sm">
-        Track bitcoin bought and sold, and see what it’s worth over time.
+  return (
+    <Empty>
+      <ChartSplineIcon
+        aria-hidden
+        className="text-muted-foreground size-8"
+        strokeWidth={1.5}
+      />
+      <EmptyTitle>No portfolios yet</EmptyTitle>
+      <EmptyDescription>
+        {editable
+          ? "Track bitcoin bought and sold, and see what it’s worth over time."
+          : "Portfolios in this project show up here."}
       </EmptyDescription>
-      {button}
+      {editable && (
+        <Button onClick={onNew}>
+          <PlusIcon />
+          New portfolio
+        </Button>
+      )}
     </Empty>
-  ) : (
-    <p className="text-muted-foreground text-sm">
-      No portfolios in this project yet.
-    </p>
   );
 }

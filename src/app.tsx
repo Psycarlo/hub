@@ -172,6 +172,7 @@ function Workspace() {
                 <Suspense fallback={<RouteFallback />}>
                   <ProjectRoute
                     boards={boards}
+                    boardsLoaded={boardList !== undefined}
                     docs={docs}
                     docsLoaded={pages !== undefined}
                     loaded={projectsLoaded}
@@ -181,6 +182,7 @@ function Workspace() {
                     recordId={route.record}
                     slug={route.project}
                     tableSlug={route.table}
+                    tables={tables}
                   />
                 </Suspense>
               )}

@@ -24,6 +24,7 @@ import { PortfolioPage } from "@/features/portfolios/portfolio-page";
 import { PortfoliosPage } from "@/features/portfolios/portfolios-page";
 import { ProjectPage } from "@/features/projects/project-page";
 import { useProjectContent } from "@/hooks/use-project-content";
+import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Board } from "@/lib/model";
@@ -63,8 +64,12 @@ interface ProjectViewProps {
   project: Project;
   /** The project's doc pages. */
   docs: DocsContent;
+  docsLoaded: boolean;
   projects: Project[];
   boards: Board[];
+  boardsLoaded: boolean;
+  /** Tables in every project, known before their records load. */
+  tables: NavTable[];
   /** The project's portfolios. */
   portfolios: Portfolio[];
   portfoliosLoaded: boolean;
@@ -239,7 +244,6 @@ interface ProjectRouteProps extends Omit<
   loaded: boolean;
   /** Every project's doc pages, by project id. */
   docs: Map<string, DocsContent>;
-  docsLoaded: boolean;
   /** Portfolios in every project. */
   portfolios: Portfolio[];
 }
@@ -283,6 +287,7 @@ export function ProjectRoute({
     return (
       <ProjectView
         docs={docs.get(project._id) ?? EMPTY_DOCS}
+        docsLoaded={docsLoaded}
         key={project._id}
         portfolios={projectPortfolios}
         project={project}
