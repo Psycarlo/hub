@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { BitcoinIcon, ChartSplineIcon, PlusIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
@@ -14,6 +15,7 @@ import { useBtcPrices } from "@/lib/bitcoin-price";
 import type { Portfolio } from "@/lib/portfolio";
 import {
   countedPortfolios,
+  describeTotal,
   fiatValue,
   formatBtc,
   formatFiat,
@@ -61,7 +63,12 @@ function HoldingsCardLink({
         </p>
       )}
       <div className="mt-auto flex flex-col pt-2 tabular-nums">
-        <span className="text-lg font-semibold tracking-tight">
+        <span
+          className={cn(
+            "text-lg font-semibold tracking-tight",
+            excluded && "text-muted-foreground"
+          )}
+        >
           {price === undefined ? "—" : formatFiat(fiatValue(sats, price), fiat)}
         </span>
         <span className="text-muted-foreground text-sm">{formatBtc(sats)}</span>
@@ -93,7 +100,7 @@ export function PortfolioGrid({
           description={
             counted === portfolios.length
               ? `${plural(counted, "portfolio")} together`
-              : `${counted} of ${plural(portfolios.length, "portfolio")} together`
+              : describeTotal(portfolios).label
           }
           href={portfoliosPath(project)}
           icon={<ChartSplineIcon />}

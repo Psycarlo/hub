@@ -2,6 +2,8 @@ import type { Doc } from "@convex/_generated/dataModel";
 import type { Fiat } from "@convex/shared/portfolio";
 import { SATS_PER_BTC, signedSats } from "@convex/shared/portfolio";
 
+import { plural } from "@/lib/utils";
+
 export {
   DEFAULT_FIAT,
   FIATS,
@@ -18,6 +20,8 @@ export type Transaction = Doc<"portfolioTransactions">;
 export type Unit = "btc" | "sats";
 
 const BTC_DIGITS = 8;
+/** How long the left-out names may run in a total's label before it counts instead. */
+const MAX_EXCEPT_LENGTH = 24;
 const BTC_AMOUNT = /^(?<whole>\d*)(?:\.(?<fraction>\d*))?$/u;
 const SEPARATORS = /[\s,._'’]/gu;
 const DIGITS = /^\d+$/u;
@@ -28,6 +32,7 @@ const btc = new Intl.NumberFormat(undefined, {
 });
 const sats = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const fiats = new Map<string, Intl.NumberFormat>();
+const names = new Intl.ListFormat("en", { type: "conjunction" });
 
 export function formatBtc(amount: number): string {
   return `₿${btc.format(amount / SATS_PER_BTC)}`;
@@ -161,4 +166,30 @@ export function totalSats(
     (sum, portfolio) => sum + portfolio.sats,
     0
   );
+}
+
+/**
+ * What a total covers, short enough for a heading: every portfolio, all but
+ * one or two short names, or else a count. `note` names everything left out,
+ * once anything is.
+ */
+export function describeTotal(
+  portfolios: Pick<Portfolio, "excludedFromTotal" | "title">[]
+): { label: string; note?: string } {
+  const excluded = portfolios
+    .filter((portfolio) => portfolio.excludedFromTotal)
+    .map((portfolio) => portfolio.title);
+  if (excluded.length === 0) {
+    return { label: "All portfolios" };
+  }
+  const list = names.format(excluded);
+  const note = `Left out in portfolio settings: ${list}.`;
+  if (excluded.length <= 2 && list.length <= MAX_EXCEPT_LENGTH) {
+    return { label: `All except ${list}`, note };
+  }
+  const counted = portfolios.length - excluded.length;
+  return {
+    label: `${counted} of ${plural(portfolios.length, "portfolio")}`,
+    note,
+  };
 }

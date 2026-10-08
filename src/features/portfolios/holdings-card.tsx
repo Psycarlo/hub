@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChartMode, Range } from "@/features/portfolios/series";
@@ -58,13 +63,20 @@ function ChartNote({ children }: { children: string }) {
 interface HoldingsCardProps {
   /** What the card totals, like a portfolio's name. */
   label: string;
+  /** More about what the label covers, on hover or tap. */
+  note?: string;
   sats: number;
   /** Everything that made up `sats`, in the order it happened; undefined while loading. */
   transactions?: Transaction[];
 }
 
 /** What the holdings are worth now, and a chart of them over time. */
-export function HoldingsCard({ label, sats, transactions }: HoldingsCardProps) {
+export function HoldingsCard({
+  label,
+  note,
+  sats,
+  transactions,
+}: HoldingsCardProps) {
   const { currency: fiat } = useMe();
   const [range, setRange] = useState(storedRange);
   const [mode, setMode] = useState(storedMode);
@@ -125,7 +137,23 @@ export function HoldingsCard({ label, sats, transactions }: HoldingsCardProps) {
       {/* Wide, the range sits beside the currency switch; narrow, it drops to a full row below. */}
       <div className="flex flex-wrap items-start gap-4 @2xl:flex-nowrap @2xl:gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1 @2xl:mr-2">
-          <h2 className="text-muted-foreground text-sm">{label}</h2>
+          <h2 className="text-muted-foreground truncate text-sm">
+            {note ? (
+              <Popover>
+                <PopoverTrigger
+                  className="hover:text-foreground decoration-muted-foreground/50 data-popup-open:text-foreground focus-visible:ring-ring/50 max-w-full truncate rounded-sm text-left align-top underline decoration-dotted underline-offset-4 transition-colors duration-150 outline-none focus-visible:ring-3"
+                  openOnHover
+                >
+                  {label}
+                </PopoverTrigger>
+                <PopoverContent align="start" className="max-w-64 text-xs">
+                  {note}
+                </PopoverContent>
+              </Popover>
+            ) : (
+              label
+            )}
+          </h2>
           <div className="text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">
             {value}
           </div>

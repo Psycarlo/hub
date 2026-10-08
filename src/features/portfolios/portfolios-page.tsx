@@ -15,10 +15,9 @@ import {
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import { Section } from "@/features/projects/project-page";
 import type { Portfolio } from "@/lib/portfolio";
-import { countedPortfolios, totalSats } from "@/lib/portfolio";
+import { countedPortfolios, describeTotal, totalSats } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { canEdit, projectPath } from "@/lib/project";
-import { plural } from "@/lib/utils";
 
 /** A project's portfolios: what they hold together, then each one. */
 export function PortfoliosPage({
@@ -37,7 +36,7 @@ export function PortfoliosPage({
   const projectTransactions = useQuery(api.portfolios.transactions, {
     projectId: project._id,
   });
-  const counted = countedPortfolios(portfolios).length;
+  const total = describeTotal(portfolios);
   // Only what the total counts, so the chart ends where the total does.
   const transactions = useMemo(() => {
     const ids = new Set(
@@ -51,11 +50,8 @@ export function PortfoliosPage({
   let body = (
     <>
       <HoldingsCard
-        label={
-          counted === portfolios.length
-            ? "All portfolios"
-            : `${counted} of ${plural(portfolios.length, "portfolio")}`
-        }
+        label={total.label}
+        note={total.note}
         sats={totalSats(portfolios)}
         transactions={transactions}
       />
