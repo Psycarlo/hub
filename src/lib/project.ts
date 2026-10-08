@@ -19,6 +19,18 @@ export function projectPath(project: Pick<Project, "slug">): string {
   return `/p/${project.slug}`;
 }
 
+/** The project a link points at, also by a link it had before. Links are unique across the hub. */
+export function findProject(
+  projects: Project[],
+  slug: string
+): Project | undefined {
+  const wanted = slug.toLowerCase();
+  return (
+    projects.find((project) => project.slug === wanted) ??
+    projects.find((project) => project.formerSlugs?.includes(wanted))
+  );
+}
+
 /** Whether this is the person's own personal project. */
 export function isOwnPersonal(
   project: Pick<Project, "personalFor">,

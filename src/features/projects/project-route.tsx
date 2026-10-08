@@ -1,10 +1,11 @@
 import { useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, Redirect, useLocation, useSearch } from "wouter";
 
 import { TopBar } from "@/components/top-bar";
 import { buttonVariants } from "@/components/ui/button";
 import { Empty, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BOARDS_SEGMENT } from "@/features/board/board-context";
 import { TablePage } from "@/features/crm/table-page";
 import {
   DOCS_SEGMENT,
@@ -30,7 +31,7 @@ import { EMPTY_DOCS } from "@/lib/docs";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
-import { projectPath } from "@/lib/project";
+import { findProject, projectPath } from "@/lib/project";
 
 function NotFound({
   title,
@@ -261,10 +262,22 @@ export function ProjectRoute({
   portfolios,
   ...props
 }: ProjectRouteProps) {
-  const project = projects.find((item) => item.slug === slug.toLowerCase());
+  const search = useSearch();
+  const project = findProject(projects, slug);
   const projectPortfolios = project
     ? portfolios.filter((item) => item.projectId === project._id)
     : [];
+  if (project && project.slug !== slug) {
+    // Reached by a link the project had before, or typed in capitals.
+    const path = [projectPath(project), props.tableSlug, props.recordId]
+      .filter(Boolean)
+      .join("/");
+    return <Redirect replace to={search ? `${path}?${search}` : path} />;
+  }
+  if (project && props.tableSlug?.toLowerCase() === BOARDS_SEGMENT) {
+    // Boards are listed on the project page.
+    return <Redirect replace to={projectPath(project)} />;
+  }
   if (project && props.tableSlug?.toLowerCase() === PORTFOLIOS_SEGMENT) {
     return (
       <PortfoliosView

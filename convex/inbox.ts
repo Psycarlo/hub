@@ -15,6 +15,8 @@ export interface InboxItem {
   read: boolean;
   card: { _id: Id<"cards">; number: number; title: string };
   board: { _id: Id<"boards">; code: string; title: string };
+  /** Where the board sits, which its links go through. */
+  project: { slug: string };
 }
 
 /** The signed-in person's notifications that aren't archived, newest first. */
@@ -45,6 +47,7 @@ export const list = query({
           board: { _id: board._id, code: board.code, title: board.title },
           card: { _id: card._id, number: card.number, title: card.title },
           content: notification.content,
+          project: { slug: project.slug },
           read: notification.read,
         };
       })

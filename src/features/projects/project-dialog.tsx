@@ -320,10 +320,11 @@ function ProjectForm({ project, projects, onDone }: ProjectFormProps) {
 
   // Admins see every link in use; others learn of a clash when saving.
   const every = useQuery(api.projects.slugs) ?? [];
+  // Old links too, so they keep leading to the project that had them.
   const takenSlugs = new Set(
-    [...projects, ...every]
-      .filter((item) => item._id !== project?._id)
-      .map((item) => item.slug)
+    [...projects, ...every].flatMap((item) =>
+      item._id === project?._id ? [] : [item.slug, ...(item.formerSlugs ?? [])]
+    )
   );
   const finalSlug = slugify(slug);
   const taken = takenSlugs.has(finalSlug);

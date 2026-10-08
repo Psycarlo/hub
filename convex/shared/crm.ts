@@ -64,6 +64,7 @@ export type ActivityType = (typeof ACTIVITY_TYPES)[number]["id"];
 
 /** Table links that project pages use for themselves, like `/p/:project/docs`. */
 export const RESERVED_TABLE_SLUGS: readonly string[] = [
+  "boards",
   "docs",
   "portfolios",
   "settings",

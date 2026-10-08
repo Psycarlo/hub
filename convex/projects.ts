@@ -32,6 +32,8 @@ export interface ProjectView {
   _creationTime: number;
   title: string;
   slug: string;
+  /** Links the project went by before, which still lead to it. */
+  formerSlugs?: string[];
   description: string;
   color: Doc<"projects">["color"];
   createdBy: Id<"users">;
@@ -89,18 +91,15 @@ async function personalSlug(
     user.name?.split(" ")[0] ?? user.email?.split("@")[0] ?? ""
   );
   const base = first ? `${first}-personal` : "personal";
-  const taken = new Set<string>();
-  for (;;) {
-    const slug = uniqueSlug(base, taken);
-    const clash = await ctx.db
-      .query("projects")
-      .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .first();
-    if (!clash) {
-      return slug;
-    }
-    taken.add(slug);
-  }
+  // Old links too, so they keep leading to the project that had them.
+  const projects = await ctx.db.query("projects").collect();
+  return uniqueSlug(
+    base,
+    projects.flatMap((project) => [
+      project.slug,
+      ...(project.formerSlugs ?? []),
+    ])
+  );
 }
 
 /**
@@ -171,6 +170,7 @@ export const list = query({
         color: project.color,
         createdBy: project.createdBy,
         description: project.description,
+        formerSlugs: project.formerSlugs,
         members: await membersOf(ctx, project._id),
         personalFor: project.personalFor,
         role,
@@ -195,6 +195,7 @@ export const slugs = query({
     const projects = await ctx.db.query("projects").collect();
     return projects.map((project) => ({
       _id: project._id,
+      formerSlugs: project.formerSlugs ?? [],
       slug: project.slug,
     }));
   },
@@ -238,6 +239,15 @@ async function freeSlug(
     .first();
   if (taken && taken._id !== except) {
     throw new ConvexError("Another project uses this link.");
+  }
+  // Few projects, so a scan beats keeping an index of old links.
+  const projects = await ctx.db.query("projects").collect();
+  if (
+    projects.some(
+      (project) => project._id !== except && project.formerSlugs?.includes(slug)
+    )
+  ) {
+    throw new ConvexError("Another project’s old links use this link.");
   }
   return slug;
 }
@@ -328,10 +338,16 @@ export const update = mutation({
     }
     if (
       changes.slug !== undefined &&
-      changes.slug !== project.slug &&
+      slugify(changes.slug) !== project.slug &&
       !personal
     ) {
-      patch.slug = await freeSlug(ctx, changes.slug, projectId);
+      const slug = await freeSlug(ctx, changes.slug, projectId);
+      patch.slug = slug;
+      // Links shared under the old one keep finding the project.
+      patch.formerSlugs = [
+        ...(project.formerSlugs ?? []).filter((former) => former !== slug),
+        project.slug,
+      ];
     }
     if (changes.description !== undefined) {
       patch.description = changes.description.trim().slice(0, MAX_DESCRIPTION);

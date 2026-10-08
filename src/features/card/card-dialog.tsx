@@ -159,7 +159,7 @@ function CardText({ card }: { card: Card }) {
 }
 
 function CardDetails({ card, onClose }: { card: Card; onClose: () => void }) {
-  const { board, canEdit } = useBoard();
+  const { board, canEdit, project } = useBoard();
   return (
     <>
       <div className="-mt-1 -mr-2 flex items-center gap-0.5">
@@ -169,7 +169,10 @@ function CardDetails({ card, onClose }: { card: Card; onClose: () => void }) {
         <FluidTooltip.Group>
           <CopyButton
             label="Copy link"
-            value={new URL(cardPath(board, card), window.location.origin).href}
+            value={
+              new URL(cardPath(project, board, card), window.location.origin)
+                .href
+            }
           />
           {canEdit && <DeleteCard card={card} onDeleted={onClose} />}
           <IconButton label="Close" onClick={onClose}>

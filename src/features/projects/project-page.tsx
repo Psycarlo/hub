@@ -240,7 +240,7 @@ function ProjectBoards({
         {boards.map((board) => (
           <BoardCard
             board={board}
-            href={boardPath(board)}
+            href={boardPath(project, board)}
             key={board._id}
             members={members}
             progress={progress?.find((item) => item.boardId === board._id)}

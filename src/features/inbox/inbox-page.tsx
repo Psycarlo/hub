@@ -22,7 +22,7 @@ import type { Inbox, InboxItem } from "@/hooks/use-inbox";
 import { useUser } from "@/hooks/use-users";
 import { cardKey } from "@/lib/model";
 
-/** Shares the top-level path with board codes, so INBOX is a reserved code. */
+/** Shares the top-level path with short board links, so INBOX is a reserved code. */
 export const INBOX_PATH = "/inbox";
 
 /** "now", "5m", "3h", "2d", then the date. */
@@ -43,7 +43,7 @@ function shortAgo(at: number): string {
 }
 
 function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
-  const { board, card, read } = item;
+  const { board, card, project, read } = item;
   const { name } = useUser(item.actorId);
   const date = new Date(item._creationTime);
   return (
@@ -53,7 +53,7 @@ function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
           "hover:bg-foreground/5 focus-visible:ring-ring/50 flex items-center gap-3 rounded-xl py-2.5 pr-3 pl-2 transition-colors duration-150 outline-none focus-visible:ring-3",
           read && "text-muted-foreground"
         )}
-        href={cardPath(board, card)}
+        href={cardPath(project, board, card)}
         onClick={() => inbox.setRead([item], true)}
         state={OPENED_FROM_BOARD}
       >

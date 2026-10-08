@@ -9,7 +9,7 @@ import {
   SquareKanbanIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useRoute } from "wouter";
 
 import { Logo, LogoMark } from "@/components/logo";
 import { NavLink } from "@/components/nav-link";
@@ -40,7 +40,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { ADMIN_PATH, SETTINGS_PATH, UserMenu } from "@/components/user-menu";
-import { boardPath } from "@/features/board/board-context";
+import { BOARD_ROUTE, boardPath } from "@/features/board/board-context";
 import { findBoard, parseSlug } from "@/features/board/board-route";
 import { tablePath } from "@/features/crm/crm-context";
 import { TableIcon } from "@/features/crm/table-icon";
@@ -79,10 +79,8 @@ const MAX_BADGE = 99;
 
 /** The board the current page shows, if any. */
 function useOpenBoard(boards: Board[]): Board | undefined {
-  const [location] = useLocation();
-  // Board pages sit one level deep: `/HUB` or `/HUB-12`.
-  const [, segment = "", ...rest] = location.split("/");
-  const slug = rest.length === 0 ? parseSlug(segment) : undefined;
+  const [, params] = useRoute(BOARD_ROUTE);
+  const slug = params ? parseSlug(params.slug) : undefined;
   return slug ? findBoard(boards, slug.code) : undefined;
 }
 
@@ -164,7 +162,7 @@ function ProjectItem({
             <SidebarMenuSubItem key={board._id}>
               <SidebarMenuSubButton
                 isActive={board._id === openBoard?._id}
-                render={<NavLink href={boardPath(board)} />}
+                render={<NavLink href={boardPath(project, board)} />}
               >
                 <SquareKanbanIcon />
                 <span>{board.title}</span>
@@ -228,7 +226,7 @@ export function AppSidebar({
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const { personal, shared } = splitPersonal(projects, me._id);
 
-  const isOpen = (project: Project, projectBoards: Board[]): boolean => {
+  const isOpen = (project: Project): boolean => {
     const choice = folded[project._id];
     if (choice !== undefined) {
       return choice;
@@ -236,33 +234,27 @@ export function AppSidebar({
     return (
       project === personal ||
       shared.length <= OPEN_BY_DEFAULT ||
-      location.startsWith(projectPath(project)) ||
-      projectBoards.some((board) => board._id === openBoard?._id)
+      location.startsWith(projectPath(project))
     );
   };
 
-  const item = (project: Project) => {
-    const projectBoards = boards.filter(
-      (board) => board.projectId === project._id
-    );
-    return (
-      <ProjectItem
-        boards={projectBoards}
-        docs={docs.get(project._id) ?? EMPTY_DOCS}
-        key={project._id}
-        location={location}
-        onOpenChange={(open) => setFolded({ ...folded, [project._id]: open })}
-        open={isOpen(project, projectBoards)}
-        openBoard={openBoard}
-        portfolios={portfolios.filter(
-          (portfolio) => portfolio.projectId === project._id
-        )}
-        project={project}
-        rail={state === "collapsed"}
-        tables={tables.filter((table) => table.projectId === project._id)}
-      />
-    );
-  };
+  const item = (project: Project) => (
+    <ProjectItem
+      boards={boards.filter((board) => board.projectId === project._id)}
+      docs={docs.get(project._id) ?? EMPTY_DOCS}
+      key={project._id}
+      location={location}
+      onOpenChange={(open) => setFolded({ ...folded, [project._id]: open })}
+      open={isOpen(project)}
+      openBoard={openBoard}
+      portfolios={portfolios.filter(
+        (portfolio) => portfolio.projectId === project._id
+      )}
+      project={project}
+      rail={state === "collapsed"}
+      tables={tables.filter((table) => table.projectId === project._id)}
+    />
+  );
 
   return (
     <Sidebar collapsible="icon">

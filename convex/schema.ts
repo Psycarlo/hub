@@ -62,6 +62,8 @@ export default defineSchema({
     color: vProjectColor,
     createdBy: v.id("users"),
     description: v.string(),
+    /** Links the project went by before, so old links still find it. Kept from other projects. */
+    formerSlugs: v.optional(v.array(v.string())),
     /** Set on someone's personal project: theirs alone unless they share it. */
     personalFor: v.optional(v.id("users")),
     slug: v.string(),

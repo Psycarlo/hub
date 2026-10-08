@@ -6,18 +6,15 @@ import {
   Unauthenticated,
   useQuery,
 } from "convex/react";
-import { SquareKanbanIcon } from "lucide-react";
 import { MotionConfig } from "motion/react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { DefaultParams } from "wouter";
-import { Redirect, Route, Switch, useRoute, useSearch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PageGlow } from "@/components/page-glow";
-import { ProjectAvatar } from "@/components/project-avatar";
 import { AccessRemoved, LoadingScreen } from "@/components/status-screens";
-import type { Crumb } from "@/components/top-bar";
 import { TopBar } from "@/components/top-bar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,12 +22,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ADMIN_PATH, SETTINGS_PATH } from "@/components/user-menu";
 import { AdminPage } from "@/features/admin/admin-page";
-import {
-  BoardRoute,
-  findBoard,
-  parseSlug,
-  renamedPath,
-} from "@/features/board/board-route";
+import { BOARD_ROUTE } from "@/features/board/board-context";
+import { BoardRoute } from "@/features/board/board-route";
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
 import { LoginPage } from "@/features/login/login-page";
@@ -48,7 +41,6 @@ import { docsByProject } from "@/lib/docs";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
-import { projectPath } from "@/lib/project";
 
 // regexparam's types misread several optional segments in a row.
 interface ProjectParams extends DefaultParams {
@@ -62,25 +54,6 @@ const NO_BOARDS: Board[] = [];
 const NO_TABLES: NavTable[] = [];
 const NO_PAGES: DocPage[] = [];
 const NO_PORTFOLIOS: Portfolio[] = [];
-
-function boardCrumbs(code: string, board?: Board, project?: Project): Crumb[] {
-  const crumb: Crumb = {
-    icon: (
-      <SquareKanbanIcon className="text-muted-foreground size-4 shrink-0" />
-    ),
-    label: board?.title ?? code,
-  };
-  return project
-    ? [
-        {
-          href: projectPath(project),
-          icon: <ProjectAvatar project={project} />,
-          label: project.title,
-        },
-        crumb,
-      ]
-    : [crumb];
-}
 
 // Projects carry the CRM and its table library, which board-only visits never need.
 const ProjectRoute = lazy(async () => {
@@ -132,14 +105,8 @@ function Workspace() {
   const docs = docsByProject(pages ?? NO_PAGES);
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const [creatingProject, setCreatingProject] = useState(false);
-  const [, params] = useRoute<{ slug: string }>("/:slug");
-  const search = useSearch();
-  const slug = params ? parseSlug(params.slug) : undefined;
-  const board = slug ? findBoard(boards, slug.code) : undefined;
-  const boardProject = board
-    ? projects.find((project) => project._id === board.projectId)
-    : undefined;
   const projectsLoaded = projectList !== undefined;
+  const boardsLoaded = boardList !== undefined;
   const newProject = () => setCreatingProject(true);
 
   return (
@@ -161,18 +128,28 @@ function Workspace() {
             <Route path="/">
               <HomePage
                 boards={boards}
-                loaded={projectsLoaded && boardList !== undefined}
+                loaded={projectsLoaded && boardsLoaded}
                 onNewProject={newProject}
                 projects={projects}
                 tables={tables}
               />
+            </Route>
+            <Route path={BOARD_ROUTE}>
+              {(route) => (
+                <BoardRoute
+                  boards={boards}
+                  loaded={projectsLoaded && boardsLoaded}
+                  projects={projects}
+                  slug={route.slug}
+                />
+              )}
             </Route>
             <Route<ProjectParams> path="/p/:project/:table?/:record?">
               {(route) => (
                 <Suspense fallback={<RouteFallback />}>
                   <ProjectRoute
                     boards={boards}
-                    boardsLoaded={boardList !== undefined}
+                    boardsLoaded={boardsLoaded}
                     docs={docs}
                     docsLoaded={pages !== undefined}
                     loaded={projectsLoaded}
@@ -196,27 +173,17 @@ function Workspace() {
             <Route path={ADMIN_PATH}>
               <AdminPage />
             </Route>
-            {board && slug && board.code !== slug.code && (
-              // Reached by a code the board had before.
-              <Route path="/:slug">
-                <Redirect
-                  replace
-                  to={renamedPath(board, slug.number, search)}
-                />
-              </Route>
-            )}
-            {slug && (
-              <Route path="/:slug">
-                <TopBar crumbs={boardCrumbs(slug.code, board, boardProject)} />
+            {/* Short links like `/HUB-12`, after the app's own pages so those always win. */}
+            <Route path="/:slug">
+              {(route) => (
                 <BoardRoute
-                  board={board}
-                  cardNumber={slug.number}
-                  loaded={projectsLoaded && boardList !== undefined}
-                  project={boardProject}
+                  boards={boards}
+                  loaded={projectsLoaded && boardsLoaded}
                   projects={projects}
+                  slug={route.slug}
                 />
-              </Route>
-            )}
+              )}
+            </Route>
             <Route>
               <Redirect replace to="/" />
             </Route>

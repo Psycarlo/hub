@@ -36,6 +36,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { boardPath } from "@/features/board/board-context";
 import {
   codeError,
   KeyField,
@@ -226,8 +227,9 @@ function BoardForm({
       return;
     }
     onDone();
-    if (saved.code !== board?.code) {
-      navigate(`/${saved.code}`, { replace: board !== undefined });
+    const target = choices.find((item) => item._id === projectId);
+    if (target && saved.code !== board?.code) {
+      navigate(boardPath(target, saved), { replace: board !== undefined });
     }
   };
 

@@ -9,7 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssigneeFilter } from "@/features/board/assignee-filter";
 import { BacklogView } from "@/features/board/backlog-view";
 import type { BoardScope } from "@/features/board/board-context";
-import { BoardContext, cardPath } from "@/features/board/board-context";
+import {
+  BoardContext,
+  boardPath,
+  cardPath,
+} from "@/features/board/board-context";
 import { DoneView } from "@/features/board/done-view";
 import { Kanban } from "@/features/board/kanban";
 import { SprintView } from "@/features/board/sprint-view";
@@ -133,8 +137,7 @@ export function BoardPage({
   const tab = parseTab(params.get("tab"));
   // A board without sprints has one view, so its links keep no tab.
   const query = board.usesSprints ? tabQuery(tab) : new URLSearchParams();
-  const search = query.toString();
-  const boardHref = `/${board.code}${search ? `?${search}` : ""}`;
+  const boardHref = boardPath(project, board, query);
   const { selected, shown: shownCard } = useSelectedCard(
     content?.cards,
     cardNumber
@@ -155,7 +158,7 @@ export function BoardPage({
     ? {
         board,
         canEdit: canEdit(project),
-        cardHref: (card) => cardPath(board, card, query),
+        cardHref: (card) => cardPath(project, board, card, query),
         cards: assignee
           ? content.cards.filter((card) =>
               card.assignees.some((person) => person === assignee)

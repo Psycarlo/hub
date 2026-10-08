@@ -4,6 +4,7 @@ import { createContext, use } from "react";
 import type { Board, BoardContent, Card, CardFields } from "@/lib/model";
 import { cardKey } from "@/lib/model";
 import type { Project } from "@/lib/project";
+import { projectPath } from "@/lib/project";
 
 /** History state that lets the card dialog close with a plain back navigation. */
 export const OPENED_FROM_BOARD = { fromBoard: true };
@@ -37,16 +38,35 @@ export function useBoard(): BoardScope {
   return scope;
 }
 
-export function boardPath(board: Pick<Board, "code">): string {
-  return `/${board.code}`;
+export const BOARDS_SEGMENT = "boards";
+
+/** A board, or one of its cards: `/p/acme/boards/HUB` or `/p/acme/boards/HUB-12`. */
+export const BOARD_ROUTE = `/p/:project/${BOARDS_SEGMENT}/:slug` as const;
+
+function boardsBase(project: Pick<Project, "slug">): string {
+  return `${projectPath(project)}/${BOARDS_SEGMENT}`;
+}
+
+function withQuery(path: string, query?: URLSearchParams): string {
+  const search = query?.toString();
+  return search ? `${path}?${search}` : path;
+}
+
+/** A board's path in its project, with any query to keep, like the open tab. */
+export function boardPath(
+  project: Pick<Project, "slug">,
+  board: Pick<Board, "code">,
+  query?: URLSearchParams
+): string {
+  return withQuery(`${boardsBase(project)}/${board.code}`, query);
 }
 
 /** A card's path by its number, with any query to keep, like the open tab. */
 export function cardPath(
+  project: Pick<Project, "slug">,
   board: Pick<Board, "code">,
   card: Pick<Card, "number">,
   query?: URLSearchParams
 ): string {
-  const search = query?.toString();
-  return `/${cardKey(board, card)}${search ? `?${search}` : ""}`;
+  return withQuery(`${boardsBase(project)}/${cardKey(board, card)}`, query);
 }

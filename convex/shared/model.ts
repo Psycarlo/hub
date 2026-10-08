@@ -89,7 +89,7 @@ export type ProjectRole = (typeof PROJECT_ROLES)[number];
 /** Longest board code. Boards made before the cap may keep codes of up to 10. */
 export const MAX_CODE = 7;
 export const CODE = /^[A-Z][A-Z0-9]{0,6}$/u;
-/** Codes taken by app pages, which share the top-level path with boards. */
+/** Codes taken by app pages, which share the top-level path with short board links. */
 export const RESERVED_CODES: ReadonlySet<string> = new Set([
   "ADMIN",
   "INBOX",
