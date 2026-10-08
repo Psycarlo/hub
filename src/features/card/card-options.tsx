@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { PRIORITY_STYLES, STATUS_STYLES } from "@/features/card/card-fields";
 import { Muted } from "@/features/card/card-parts";
+import { PriorityNoneIcon } from "@/features/card/priority-icons";
 import type { Priority, Sprint, Status } from "@/lib/model";
 import { PRIORITIES, STATUSES } from "@/lib/model";
 
@@ -59,7 +60,15 @@ export function useOptionShortcuts<T>(
 }
 
 export const PRIORITY_OPTIONS: Option<Priority | null>[] = [
-  { label: <Muted>No priority</Muted>, value: null },
+  {
+    label: (
+      <>
+        <PriorityNoneIcon className="text-muted-foreground" />
+        <Muted>No priority</Muted>
+      </>
+    ),
+    value: null,
+  },
   ...PRIORITIES.map(({ id, label }) => {
     const { icon: Icon, className } = PRIORITY_STYLES[id];
     return {

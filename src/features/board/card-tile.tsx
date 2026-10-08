@@ -8,33 +8,15 @@ import { Link } from "wouter";
 import { OPENED_FROM_BOARD, useBoard } from "@/features/board/board-context";
 import { CARD_SURFACE } from "@/features/board/card-surface";
 import {
-  cardLabels,
-  PRIORITY_STYLES,
-  STATUS_STYLES,
-} from "@/features/card/card-fields";
-import { AvatarStack, LabelChip, LabelDot } from "@/features/card/card-parts";
-import type { BoardLabel, Card, Priority, Status } from "@/lib/model";
-import { cardKey, isClosed, priorityLabel, statusLabel } from "@/lib/model";
-
-function PriorityIcon({ priority }: { priority: Priority }) {
-  const { icon: Icon, className } = PRIORITY_STYLES[priority];
-  return (
-    <>
-      <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
-      <span className="sr-only">{priorityLabel(priority)} priority</span>
-    </>
-  );
-}
-
-function StatusIcon({ status }: { status: Status }) {
-  const { icon: Icon, className } = STATUS_STYLES[status];
-  return (
-    <>
-      <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
-      <span className="sr-only">{statusLabel(status)}</span>
-    </>
-  );
-}
+  CardAssignees,
+  CardPriority,
+  CardStatus,
+  isControlClick,
+} from "@/features/board/inline-pickers";
+import { cardLabels } from "@/features/card/card-fields";
+import { LabelChip, LabelDot } from "@/features/card/card-parts";
+import type { BoardLabel, Card } from "@/lib/model";
+import { cardKey, isClosed } from "@/lib/model";
 
 function DueDate({ due, closed }: { due: string; closed: boolean }) {
   const date = parseISO(due);
@@ -111,11 +93,9 @@ function RowLabels({ labels }: { labels: BoardLabel[] }) {
 function CardMeta({ card }: { card: Card }) {
   return (
     <>
-      {card.priority && <PriorityIcon priority={card.priority} />}
+      <CardPriority card={card} />
       {card.due && <DueDate closed={isClosed(card.status)} due={card.due} />}
-      {card.assignees.length > 0 && (
-        <AvatarStack className="ml-auto" people={card.assignees} />
-      )}
+      <CardAssignees card={card} className="ml-auto" />
     </>
   );
 }
@@ -169,6 +149,11 @@ function CardLink({
       className={cn(CARD_SURFACE, "select-none", className)}
       draggable={false}
       href={cardHref(card)}
+      onClick={(event) => {
+        if (isControlClick(event)) {
+          event.preventDefault();
+        }
+      }}
       ref={ref}
       // dnd-kit turns draggables without a role into buttons; these navigate.
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
@@ -196,6 +181,7 @@ export function CardTile(props: SortableCardProps) {
         <span className="text-muted-foreground text-xs tabular-nums">
           {cardKey(board, card)}
         </span>
+        <CardStatus card={card} />
         <CardMeta card={card} />
       </span>
     </CardLink>
@@ -220,7 +206,7 @@ export function CardRow({
       <span className="text-muted-foreground min-w-14 shrink-0 text-xs tabular-nums">
         {cardKey(board, card)}
       </span>
-      <StatusIcon status={card.status} />
+      <CardStatus card={card} />
       <CardTitle className="min-w-0 flex-1 truncate" title={card.title} />
       <span className="flex shrink-0 items-center gap-2">
         {labels.length > 0 && <RowLabels labels={labels} />}

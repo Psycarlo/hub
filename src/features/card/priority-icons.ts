@@ -40,3 +40,21 @@ export const PriorityUrgentIcon = createLucideIcon({
 export const PriorityHighIcon = bars("priority-high", 3);
 export const PriorityMediumIcon = bars("priority-medium", 2);
 export const PriorityLowIcon = bars("priority-low", 1);
+
+/** Three dashes where the bars would stand: no priority set. */
+export const PriorityNoneIcon = createLucideIcon({
+  name: "priority-none",
+  node: [0, 1, 2].map((index): LucideIconNode => [
+    "rect",
+    {
+      fill: "currentColor",
+      height: 2,
+      key: `dash-${index}`,
+      rx: 1,
+      stroke: "none",
+      width: 4.5,
+      x: 2.25 + index * 7.5,
+      y: 11,
+    },
+  ]),
+});
