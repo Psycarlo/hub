@@ -1,4 +1,5 @@
 import { Settings2Icon } from "lucide-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { Redirect, useLocation, useSearchParams } from "wouter";
 
@@ -10,6 +11,7 @@ import { BacklogView } from "@/features/board/backlog-view";
 import type { BoardScope } from "@/features/board/board-context";
 import { BoardContext, cardPath } from "@/features/board/board-context";
 import { DoneView } from "@/features/board/done-view";
+import { Kanban } from "@/features/board/kanban";
 import { SprintView } from "@/features/board/sprint-view";
 import { BoardDialog } from "@/features/boards/board-dialog";
 import { CardDialog } from "@/features/card/card-dialog";
@@ -65,6 +67,44 @@ export function BoardSkeleton({ list = false }: { list?: boolean }) {
   );
 }
 
+interface SprintTabsProps {
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
+  /** Whether the board's cards have loaded. */
+  ready: boolean;
+  /** Shown beside the tabs. */
+  actions: ReactNode;
+}
+
+/** Backlog, sprint and done, for a board that plans in sprints. */
+function SprintTabs({ tab, onTabChange, ready, actions }: SprintTabsProps) {
+  return (
+    <Tabs className="grow gap-4" onValueChange={onTabChange} value={tab}>
+      <div className="flex flex-wrap items-center gap-3">
+        <TabsList>
+          <TabsTrigger value="backlog">Backlog</TabsTrigger>
+          <TabsTrigger value="sprint">Sprint</TabsTrigger>
+          <TabsTrigger value="done">Done</TabsTrigger>
+        </TabsList>
+        {actions}
+      </div>
+      <TabsContent className="flex flex-col" value="backlog">
+        {ready ? (
+          <BacklogView onSprintStarted={() => onTabChange("sprint")} />
+        ) : (
+          <BoardSkeleton list />
+        )}
+      </TabsContent>
+      <TabsContent className="flex flex-col" value="sprint">
+        {ready ? <SprintView /> : <BoardSkeleton />}
+      </TabsContent>
+      <TabsContent className="flex flex-col" value="done">
+        {ready ? <DoneView /> : <BoardSkeleton list />}
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 interface BoardPageProps {
   board: Board;
   project: Project;
@@ -91,7 +131,8 @@ export function BoardPage({
   }>();
 
   const tab = parseTab(params.get("tab"));
-  const query = tabQuery(tab);
+  // A board without sprints has one view, so its links keep no tab.
+  const query = board.usesSprints ? tabQuery(tab) : new URLSearchParams();
   const search = query.toString();
   const boardHref = `/${board.code}${search ? `?${search}` : ""}`;
   const { selected, shown: shownCard } = useSelectedCard(
@@ -136,46 +177,37 @@ export function BoardPage({
     : null;
   const canChangeBoard = canManage(project) || board.createdBy === me._id;
 
+  const actions = (
+    <div className="ml-auto flex items-center gap-2">
+      <AssigneeFilter
+        members={people}
+        onChange={setAssignee}
+        value={assignee}
+      />
+      {canEdit(project) && canChangeBoard && (
+        <IconButton label="Board settings" onClick={() => setEditing(true)}>
+          <Settings2Icon />
+        </IconButton>
+      )}
+    </div>
+  );
+
   return (
     <BoardContext value={scope}>
       <main className="flex grow flex-col px-4 pb-8 sm:px-6">
-        <Tabs className="grow gap-4" onValueChange={showTab} value={tab}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <TabsList>
-              <TabsTrigger value="backlog">Backlog</TabsTrigger>
-              <TabsTrigger value="sprint">Sprint</TabsTrigger>
-              <TabsTrigger value="done">Done</TabsTrigger>
-            </TabsList>
-            <div className="flex items-center gap-2">
-              <AssigneeFilter
-                members={people}
-                onChange={setAssignee}
-                value={assignee}
-              />
-              {canEdit(project) && canChangeBoard && (
-                <IconButton
-                  label="Board settings"
-                  onClick={() => setEditing(true)}
-                >
-                  <Settings2Icon />
-                </IconButton>
-              )}
-            </div>
+        {board.usesSprints ? (
+          <SprintTabs
+            actions={actions}
+            onTabChange={showTab}
+            ready={scope !== null}
+            tab={tab}
+          />
+        ) : (
+          <div className="flex grow flex-col gap-4">
+            {actions}
+            {scope ? <Kanban /> : <BoardSkeleton />}
           </div>
-          <TabsContent className="flex flex-col" value="backlog">
-            {scope ? (
-              <BacklogView onSprintStarted={() => showTab("sprint")} />
-            ) : (
-              <BoardSkeleton list />
-            )}
-          </TabsContent>
-          <TabsContent className="flex flex-col" value="sprint">
-            {scope ? <SprintView /> : <BoardSkeleton />}
-          </TabsContent>
-          <TabsContent className="flex flex-col" value="done">
-            {scope ? <DoneView /> : <BoardSkeleton list />}
-          </TabsContent>
-        </Tabs>
+        )}
       </main>
       {scope && shownCard && (
         <CardDialog

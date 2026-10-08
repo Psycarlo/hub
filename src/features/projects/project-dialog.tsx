@@ -219,7 +219,7 @@ function StarterBoardField({ board }: { board: StarterBoard }) {
             Start with a board
           </span>
           <span className="text-muted-foreground text-xs" id={`${id}-hint`}>
-            Plan cards and sprints from day one.
+            Plan work as cards from day one.
           </span>
         </span>
         <Switch

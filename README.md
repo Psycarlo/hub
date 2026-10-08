@@ -9,7 +9,7 @@ Hub is the team workspace that grew out of [Freehub](../freehub): the same scree
 
 - **Projects.** Everything lives in a project: its boards, CRM tables and docs. Only the people assigned to a project see it.
 - **Personal.** Everyone also gets a project of their own, called Personal, above the shared ones in the sidebar and on the home page. It has boards, CRM tables and docs like any project, and only its owner sees it, admins included, until they share it from its settings with people who can edit or only view.
-- **Boards.** Sprint board, backlog and done list, with drag and drop, assignees, priorities, due dates, labels and sprints. Cards are numbered per board (`WEB-12`) and have comments with `@mentions`. A board always belongs to a project.
+- **Boards.** Cards in To do, In progress and Done columns, with drag and drop, assignees, priorities, due dates and labels. A board can also plan in sprints, turned on in its settings, which adds a backlog and a done list. Cards are numbered per board (`WEB-12`) and have comments with `@mentions`. A board always belongs to a project.
 - **CRM.** Tables with your own fields (text, numbers, money, dates, selects, members, links to other tables and more), a pipeline view for tables with stages, insights, CSV import and export, bulk changes, and an activity log on each record.
 - **Docs.** Pages inside pages, edited in place like Notion: `/` for blocks, drag handles, tables and images. Two people editing the same page at once get each other's edits merged line by line.
 - **Inbox.** Mentions in card comments, with read and archived state kept on the server.

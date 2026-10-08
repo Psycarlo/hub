@@ -28,6 +28,7 @@ export type BoardView = Pick<
   | "title"
   | "description"
   | "createdBy"
+  | "usesSprints"
 >;
 
 function toView(board: Doc<"boards">): BoardView {
@@ -40,6 +41,7 @@ function toView(board: Doc<"boards">): BoardView {
     formerCodes: board.formerCodes,
     projectId: board.projectId,
     title: board.title,
+    usesSprints: board.usesSprints,
   };
 }
 
@@ -114,8 +116,26 @@ export interface BoardProgress {
   boardId: Id<"boards">;
   /** Cards not done yet, backlog included. */
   open: number;
-  /** The sprint under way, with how its cards stand. */
+  /** The sprint under way, with how its cards stand. Only on boards that use sprints. */
   sprint?: Pick<Doc<"sprints">, "title" | "end"> & Record<Status, number>;
+}
+
+/** The sprint under way on a board that uses sprints: the latest, should more than one be. */
+async function sprintUnderWay(
+  ctx: QueryCtx,
+  board: Doc<"boards">
+): Promise<Doc<"sprints"> | undefined> {
+  if (!board.usesSprints) {
+    return undefined;
+  }
+  const sprints = await ctx.db
+    .query("sprints")
+    .withIndex("by_board", (q) => q.eq("boardId", board._id))
+    .collect();
+  return sprints
+    .filter((sprint) => sprint.status === "active")
+    .toSorted((a, b) => a.number - b.number)
+    .at(-1);
 }
 
 /** How each board of a project stands: cards still open, and the sprint under way. */
@@ -131,21 +151,13 @@ export const progress = query({
       .collect();
     return await Promise.all(
       boards.map(async (board) => {
-        const [cards, sprints] = await Promise.all([
+        const [cards, active] = await Promise.all([
           ctx.db
             .query("cards")
             .withIndex("by_board", (q) => q.eq("boardId", board._id))
             .collect(),
-          ctx.db
-            .query("sprints")
-            .withIndex("by_board", (q) => q.eq("boardId", board._id))
-            .collect(),
+          sprintUnderWay(ctx, board),
         ]);
-        // The latest, should more than one be under way.
-        const active = sprints
-          .filter((sprint) => sprint.status === "active")
-          .toSorted((a, b) => a.number - b.number)
-          .at(-1);
         const counts: Record<Status, number> = {
           done: 0,
           progress: 0,
@@ -217,7 +229,7 @@ export async function insertBoard(
   ctx: MutationCtx,
   board: Pick<
     Doc<"boards">,
-    "code" | "createdBy" | "description" | "projectId" | "title"
+    "code" | "createdBy" | "description" | "projectId" | "title" | "usesSprints"
   >
 ): Promise<{ _id: Id<"boards">; code: string }> {
   const code = await freeCode(ctx, board.code);
@@ -229,6 +241,7 @@ export async function insertBoard(
     nextSprintNumber: 1,
     projectId: board.projectId,
     title: cleanTitle(board.title),
+    usesSprints: board.usesSprints,
   });
   return { _id: boardId, code };
 }
@@ -239,6 +252,7 @@ export const create = mutation({
     description: v.string(),
     projectId: v.id("projects"),
     title: v.string(),
+    usesSprints: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { user } = await requireProject(ctx, args.projectId, "edit");
@@ -253,6 +267,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
     title: v.optional(v.string()),
+    usesSprints: v.optional(v.boolean()),
   },
   handler: async (ctx, { boardId, ...changes }) => {
     const access = await requireBoard(ctx, boardId, "edit");
@@ -277,6 +292,10 @@ export const update = mutation({
     }
     if (changes.description !== undefined) {
       patch.description = changes.description.trim().slice(0, MAX_DESCRIPTION);
+    }
+    // Turning sprints off keeps them, so turning them back on picks up where they were.
+    if (changes.usesSprints !== undefined) {
+      patch.usesSprints = changes.usesSprints;
     }
     if (
       changes.projectId !== undefined &&

@@ -92,6 +92,8 @@ export default defineSchema({
     nextSprintNumber: v.number(),
     projectId: v.id("projects"),
     title: v.string(),
+    /** Whether work is planned in sprints, from a backlog. Off when missing. */
+    usesSprints: v.optional(v.boolean()),
   })
     .index("by_project", ["projectId"])
     .index("by_code", ["code"]),

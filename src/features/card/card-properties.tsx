@@ -203,7 +203,7 @@ function Property({ label, children }: { label: string; children: ReactNode }) {
 
 /** The properties as text, for viewers of the board. */
 function PropertyList({ card, className }: { card: Card; className?: string }) {
-  const { content } = useBoard();
+  const { board, content } = useBoard();
   const sprints = sprintOptions(sprintChoices(content.sprints, card.sprintId));
   return (
     <dl className={cn(GRID, className)}>
@@ -214,9 +214,11 @@ function PropertyList({ card, className }: { card: Card; className?: string }) {
       <Property label="Priority">
         {labelOf(PRIORITY_OPTIONS, card.priority ?? null)}
       </Property>
-      <Property label="Sprint">
-        {labelOf(sprints, card.sprintId ?? null) ?? labelOf(sprints, null)}
-      </Property>
+      {board.usesSprints && (
+        <Property label="Sprint">
+          {labelOf(sprints, card.sprintId ?? null) ?? labelOf(sprints, null)}
+        </Property>
+      )}
       <Property label="Due date">
         {card.due ? (
           <span className={cn(isOverdue(card) && "text-destructive")}>
@@ -252,7 +254,7 @@ export function CardProperties({
   className?: string;
 }) {
   const id = useId();
-  const { canEdit, content, people } = useBoard();
+  const { board, canEdit, content, people } = useBoard();
   const save = (changes: Partial<CardFields>) => updateCard(card, changes);
   const sprints = sprintChoices(content.sprints, card.sprintId);
 
@@ -286,17 +288,21 @@ export function CardProperties({
         options={PRIORITY_OPTIONS}
         value={card.priority ?? null}
       />
-      <PropertySelect
-        id={`${id}-sprint`}
-        label="Sprint"
-        onChange={(sprint) =>
-          save({ sprintId: sprints.find((item) => item._id === sprint)?._id })
-        }
-        options={sprintOptions(sprints)}
-        value={
-          sprints.find((sprint) => sprint._id === card.sprintId)?._id ?? null
-        }
-      />
+      {board.usesSprints && (
+        <PropertySelect
+          id={`${id}-sprint`}
+          label="Sprint"
+          onChange={(sprint) =>
+            save({
+              sprintId: sprints.find((item) => item._id === sprint)?._id,
+            })
+          }
+          options={sprintOptions(sprints)}
+          value={
+            sprints.find((sprint) => sprint._id === card.sprintId)?._id ?? null
+          }
+        />
+      )}
       <DueDate card={card} id={`${id}-due`} onChange={(due) => save({ due })} />
       <span className={cn("text-sm select-none", NAME)} id={`${id}-labels`}>
         Labels

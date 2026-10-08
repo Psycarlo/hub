@@ -23,6 +23,7 @@ export interface BoardDraft {
   code: string;
   title: string;
   description: string;
+  usesSprints: boolean;
 }
 
 export interface ProjectDraft {

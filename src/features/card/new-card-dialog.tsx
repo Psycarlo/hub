@@ -377,20 +377,22 @@ function NewCardForm({
           people={assignable(people, properties.assignees)}
           value={properties.assignees}
         />
-        <PillSelect
-          icon={IterationCwIcon}
-          label="Sprint"
-          onChange={(sprint) =>
-            set({
-              sprintId: sprints.find((item) => item._id === sprint)?._id,
-            })
-          }
-          options={sprintOptions(sprints)}
-          value={
-            sprints.find((sprint) => sprint._id === properties.sprintId)?._id ??
-            null
-          }
-        />
+        {board.usesSprints && (
+          <PillSelect
+            icon={IterationCwIcon}
+            label="Sprint"
+            onChange={(sprint) =>
+              set({
+                sprintId: sprints.find((item) => item._id === sprint)?._id,
+              })
+            }
+            options={sprintOptions(sprints)}
+            value={
+              sprints.find((sprint) => sprint._id === properties.sprintId)
+                ?._id ?? null
+            }
+          />
+        )}
         <DuePill onChange={(due) => set({ due })} value={properties.due} />
         <LabelsPill
           onChange={(labels) => set({ labels })}

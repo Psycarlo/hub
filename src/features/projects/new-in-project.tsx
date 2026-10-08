@@ -20,7 +20,7 @@ const ITEMS: {
   icon: LucideIcon;
 }[] = [
   {
-    description: "Plan work as cards, with a backlog and sprints.",
+    description: "Plan work as cards, with sprints if you want them.",
     icon: SquareKanbanIcon,
     kind: "board",
     label: "Board",

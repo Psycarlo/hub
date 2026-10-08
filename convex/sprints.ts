@@ -48,10 +48,18 @@ async function boardSprints(ctx: MutationCtx, boardId: Id<"boards">) {
   return sprints.toSorted((a, b) => a.number - b.number);
 }
 
+/** Sprints are only planned and started on boards that use them. */
+function requireSprints(board: Doc<"boards">): void {
+  if (!board.usesSprints) {
+    throw new ConvexError("This board doesn’t use sprints.");
+  }
+}
+
 export const create = mutation({
   args: { boardId: v.id("boards") },
   handler: async (ctx, { boardId }) => {
     const { board } = await requireBoard(ctx, boardId, "edit");
+    requireSprints(board);
     return await newSprint(ctx, board);
   },
 });
@@ -84,6 +92,7 @@ export const start = mutation({
   args: { boardId: v.id("boards"), sprintId: v.optional(v.id("sprints")) },
   handler: async (ctx, { boardId, sprintId }) => {
     const { board } = await requireBoard(ctx, boardId, "edit");
+    requireSprints(board);
     const sprints = await boardSprints(ctx, boardId);
     if (sprints.some((sprint) => sprint.status === "active")) {
       throw new ConvexError("End the active sprint first.");

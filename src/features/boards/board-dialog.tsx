@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   codeError,
@@ -156,6 +157,7 @@ function initialDraft(
     description: "",
     projectId: project?._id ?? choices[0]?._id,
     title: "",
+    usesSprints: false,
   };
 }
 
@@ -178,6 +180,7 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
   const [typedCode, setTypedCode] = useState(board?.code);
   const [description, setDescription] = useState(initial.description);
   const [projectId, setProjectId] = useState(initial.projectId);
+  const [usesSprints, setUsesSprints] = useState(initial.usesSprints ?? false);
   const [saving, setSaving] = useState(false);
   const taken = useTakenCodes(board?._id);
   const code = typedCode ?? suggestCode(title, taken);
@@ -196,6 +199,7 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
       description: description.trim(),
       projectId,
       title: title.trim(),
+      usesSprints,
     };
     setSaving(true);
     const saved = await saveBoard(board, draft);
@@ -250,6 +254,30 @@ function BoardForm({ board, projects, project, onDone }: BoardFormProps) {
         Everyone on the project sees the board; whoever can edit the project can
         work on its cards.
       </p>
+
+      <label
+        className="flex cursor-pointer items-center gap-3 select-none"
+        htmlFor={`${id}-sprints`}
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-sm font-medium" id={`${id}-sprints-label`}>
+            Sprints
+          </span>
+          <span
+            className="text-muted-foreground text-xs"
+            id={`${id}-sprints-hint`}
+          >
+            Plan work in sprints, from a backlog.
+          </span>
+        </span>
+        <Switch
+          aria-describedby={`${id}-sprints-hint`}
+          aria-labelledby={`${id}-sprints-label`}
+          checked={usesSprints}
+          id={`${id}-sprints`}
+          onCheckedChange={setUsesSprints}
+        />
+      </label>
 
       <DialogFooter className="mt-1">
         {board && <DeleteBoard board={board} onDeleted={onDone} />}
