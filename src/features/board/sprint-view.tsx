@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyTitle } from "@/components/ui/empty";
+import { StatusCards } from "@/features/board/board-cards";
 import { useBoard } from "@/features/board/board-context";
-import { Kanban } from "@/features/board/kanban";
 import { SprintDialog } from "@/features/board/sprint-dialog";
 import { endSprint, startSprint } from "@/lib/actions";
 import type { BoardContent, Sprint } from "@/lib/model";
@@ -128,7 +128,7 @@ export function SprintView() {
   return (
     <div className="flex min-h-0 grow flex-col gap-4">
       <SprintHeader sprint={sprint} />
-      <Kanban
+      <StatusCards
         cards={cards.filter((card) => card.sprintId === sprint._id)}
         sprint={sprint}
       />

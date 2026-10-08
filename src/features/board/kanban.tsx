@@ -4,11 +4,6 @@ import { cn } from "cn";
 
 import { useBoard } from "@/features/board/board-context";
 import { CardTile } from "@/features/board/card-tile";
-import {
-  HiddenCards,
-  outsideWindow,
-  useDoneWindow,
-} from "@/features/board/display-options";
 import { AddButton } from "@/features/board/quick-add";
 import { useCardDrag } from "@/features/board/use-card-drag";
 import { STATUS_STYLES } from "@/features/card/card-fields";
@@ -60,9 +55,11 @@ interface KanbanProps {
   sprint?: Sprint;
 }
 
-/** Cards in a column per status. */
-export function Kanban({ cards, sprint }: KanbanProps) {
-  const { canEdit, newCard } = useBoard();
+/**
+ * The cards in a group per status, kept in drag order while one moves; a card
+ * dropped in another group takes its status.
+ */
+export function useStatusDrag(cards: Card[]) {
   const columns = Object.fromEntries(
     STATUSES.map(({ id }): [Status, Card[]] => [id, []])
   ) as Record<Status, Card[]>;
@@ -74,6 +71,13 @@ export function Kanban({ cards, sprint }: KanbanProps) {
       moves.map(({ card, group, rank }) => ({ card, rank, status: group }))
     )
   );
+  return { ...drag, columns };
+}
+
+/** Cards in a column per status. */
+export function Kanban({ cards, sprint }: KanbanProps) {
+  const { canEdit, newCard } = useBoard();
+  const drag = useStatusDrag(cards);
 
   return (
     <DragDropProvider {...drag.props}>
@@ -93,22 +97,5 @@ export function Kanban({ cards, sprint }: KanbanProps) {
         ))}
       </div>
     </DragDropProvider>
-  );
-}
-
-/** Every card on a board without sprints, but those closed before the display options reach. */
-export function BoardKanban() {
-  const { board, cards } = useBoard();
-  const [doneWindow, setDoneWindow] = useDoneWindow(board);
-  const shown = cards.filter((card) => !outsideWindow(card, doneWindow));
-  return (
-    <>
-      <Kanban cards={shown} />
-      <HiddenCards
-        hidden={cards.length - shown.length}
-        onChange={setDoneWindow}
-        value={doneWindow}
-      />
-    </>
   );
 }

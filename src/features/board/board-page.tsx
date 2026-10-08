@@ -15,10 +15,12 @@ import { IconButton } from "@/components/icon-button";
 import { ProjectAvatar } from "@/components/project-avatar";
 import type { Crumb } from "@/components/top-bar";
 import { TopBar } from "@/components/top-bar";
+import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssigneeFilter } from "@/features/board/assignee-filter";
 import { BacklogView } from "@/features/board/backlog-view";
+import { BoardCards } from "@/features/board/board-cards";
 import type { BoardScope } from "@/features/board/board-context";
 import {
   BoardContext,
@@ -26,7 +28,8 @@ import {
   cardPath,
 } from "@/features/board/board-context";
 import { DoneView } from "@/features/board/done-view";
-import { BoardKanban } from "@/features/board/kanban";
+import type { BoardLayout } from "@/features/board/layout-switch";
+import { LayoutSwitch, useBoardLayout } from "@/features/board/layout-switch";
 import { SprintView } from "@/features/board/sprint-view";
 import { BoardDialog } from "@/features/boards/board-dialog";
 import { CardPage, CardPageSkeleton } from "@/features/card/card-page";
@@ -121,12 +124,19 @@ interface SprintTabsProps {
   onTabChange: (tab: Tab) => void;
   /** Whether the board's cards have loaded. */
   ready: boolean;
+  layout: BoardLayout;
   /** Shown beside the tabs. */
   actions: ReactNode;
 }
 
 /** Backlog, sprint and done, for a board that plans in sprints. */
-function SprintTabs({ tab, onTabChange, ready, actions }: SprintTabsProps) {
+function SprintTabs({
+  tab,
+  onTabChange,
+  ready,
+  layout,
+  actions,
+}: SprintTabsProps) {
   return (
     <Tabs
       className="min-h-0 grow gap-4"
@@ -149,7 +159,7 @@ function SprintTabs({ tab, onTabChange, ready, actions }: SprintTabsProps) {
         )}
       </TabsContent>
       <TabsContent className="flex min-h-0 flex-col" value="sprint">
-        {ready ? <SprintView /> : <BoardSkeleton />}
+        {ready ? <SprintView /> : <BoardSkeleton list={layout === "list"} />}
       </TabsContent>
       <TabsContent className="flex flex-col" value="done">
         {ready ? <DoneView /> : <BoardSkeleton list />}
@@ -209,6 +219,7 @@ export function BoardPage({
   const [, navigate] = useLocation();
   const [assignee, setAssignee] = useState<string>();
   const [editing, setEditing] = useState(false);
+  const [layout, setLayout] = useBoardLayout(board);
   // Kept after closing so the dialog keeps its content while it animates out.
   const [adding, setAdding] = useState<{
     open: boolean;
@@ -249,6 +260,7 @@ export function BoardPage({
             )
           : content.cards,
         content,
+        layout,
         me: me._id,
         newCard: (placement) =>
           setAdding({
@@ -263,9 +275,12 @@ export function BoardPage({
       }
     : null;
   const canChangeBoard = canManage(project) || board.createdBy === me._id;
+  // Where the cards show by status, in the board's layout; the backlog and
+  // done tabs are lists of their own.
+  const byStatus = !board.usesSprints || tab === "sprint";
   // The kanban fills the screen under the 3.5rem top bar, so its columns
   // scroll on their own and the page stays put. Lists scroll the page.
-  const fitsScreen = !board.usesSprints || tab === "sprint";
+  const fitsScreen = byStatus && layout === "kanban";
 
   const actions = (
     <div className="ml-auto flex items-center gap-2">
@@ -274,11 +289,14 @@ export function BoardPage({
         onChange={setAssignee}
         value={assignee}
       />
-      {canEdit(project) && canChangeBoard && (
-        <IconButton label="Board settings" onClick={() => setEditing(true)}>
-          <Settings2Icon />
-        </IconButton>
-      )}
+      <FluidTooltip.Group>
+        {byStatus && <LayoutSwitch onChange={setLayout} value={layout} />}
+        {canEdit(project) && canChangeBoard && (
+          <IconButton label="Board settings" onClick={() => setEditing(true)}>
+            <Settings2Icon />
+          </IconButton>
+        )}
+      </FluidTooltip.Group>
     </div>
   );
 
@@ -296,6 +314,7 @@ export function BoardPage({
           {board.usesSprints ? (
             <SprintTabs
               actions={actions}
+              layout={layout}
               onTabChange={showTab}
               ready={scope !== null}
               tab={tab}
@@ -303,7 +322,11 @@ export function BoardPage({
           ) : (
             <div className="flex min-h-0 grow flex-col gap-4">
               {actions}
-              {scope ? <BoardKanban /> : <BoardSkeleton />}
+              {scope ? (
+                <BoardCards />
+              ) : (
+                <BoardSkeleton list={layout === "list"} />
+              )}
             </div>
           )}
         </main>

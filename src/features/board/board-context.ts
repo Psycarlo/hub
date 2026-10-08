@@ -1,6 +1,7 @@
 import type { Id } from "@convex/_generated/dataModel";
 import { createContext, use } from "react";
 
+import type { BoardLayout } from "@/features/board/layout-switch";
 import type { Board, BoardContent, Card, CardFields } from "@/lib/model";
 import { cardKey } from "@/lib/model";
 import type { Project } from "@/lib/project";
@@ -18,6 +19,8 @@ export interface BoardScope {
   project: Project;
   content: BoardContent;
   cards: Card[];
+  /** Whether the cards show as a column per status or a list. */
+  layout: BoardLayout;
   me: Id<"users">;
   /** Whether the person may change cards and sprints, not just read them. */
   canEdit: boolean;
