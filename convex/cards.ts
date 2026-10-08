@@ -4,7 +4,14 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { deleteCard } from "./cleanup";
-import { canSee, ifVisible, requireBoard, requireCard } from "./lib/access";
+import {
+  canSee,
+  ifVisible,
+  requireBoard,
+  requireCard,
+  requireUser,
+  visibleProjects,
+} from "./lib/access";
 import { patchCard } from "./lib/history";
 import { vPriority, vStatus } from "./lib/validators";
 import { isClosed, LEGACY_LABELS } from "./shared/model";
@@ -218,6 +225,60 @@ export const history = query({
       at,
       change,
     }));
+  },
+});
+
+/** A card assigned to someone, with what its key and link need. */
+export type AssignedCard = Pick<
+  Doc<"cards">,
+  "_id" | "due" | "number" | "priority" | "status" | "title" | "updatedAt"
+> & {
+  /** Its board's code. */
+  code: string;
+  /** Its project's slug. */
+  slug: string;
+};
+
+/** Cards assigned to the signed-in person and not yet closed, on every board they can see. */
+export const assigned = query({
+  args: {},
+  handler: async (ctx): Promise<AssignedCard[]> => {
+    const user = await requireUser(ctx);
+    const projects = await visibleProjects(ctx, user);
+    const perProject = await Promise.all(
+      projects.map(async ({ project }) => {
+        const boards = await ctx.db
+          .query("boards")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .collect();
+        const perBoard = await Promise.all(
+          boards.map(async (board) => {
+            const cards = await ctx.db
+              .query("cards")
+              .withIndex("by_board", (q) => q.eq("boardId", board._id))
+              .collect();
+            return cards
+              .filter(
+                (card) =>
+                  card.assignees.includes(user._id) && !isClosed(card.status)
+              )
+              .map((card): AssignedCard => ({
+                _id: card._id,
+                code: board.code,
+                due: card.due,
+                number: card.number,
+                priority: card.priority,
+                slug: project.slug,
+                status: card.status,
+                title: card.title,
+                updatedAt: card.updatedAt,
+              }));
+          })
+        );
+        return perBoard.flat();
+      })
+    );
+    return perProject.flat();
   },
 });
 

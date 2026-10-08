@@ -28,6 +28,7 @@ export {
   RESERVED_CODES,
   sortLabels,
   STATUSES,
+  statusKind,
   statusLabel,
   suggestCode,
 } from "@convex/shared/model";

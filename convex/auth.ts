@@ -6,6 +6,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { normalizeEmail } from "./lib/email";
 import { ensurePersonalProject } from "./projects";
+import { addStarterWidgets } from "./widgets";
 
 const MIN_PASSWORD = 8;
 
@@ -49,6 +50,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       if (user) {
         await ensurePersonalProject(ctx, user);
       }
+      await addStarterWidgets(ctx, userId);
       return userId;
     },
   },

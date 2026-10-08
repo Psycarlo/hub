@@ -1,12 +1,24 @@
 import { ConvexError, v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/access";
 import { vWidgetSettings } from "./lib/validators";
 import { rankBetween } from "./shared/model";
-import { MAX_WIDGETS } from "./shared/widgets";
+import { MAX_WIDGETS, MY_TASKS_DEFAULTS } from "./shared/widgets";
+
+/** Puts what every new home starts with on a person's, who has none yet. */
+export async function addStarterWidgets(
+  ctx: MutationCtx,
+  userId: Id<"users">
+): Promise<void> {
+  await ctx.db.insert("widgets", {
+    rank: rankBetween(),
+    settings: MY_TASKS_DEFAULTS,
+    userId,
+  });
+}
 
 function widgetsOf(
   ctx: QueryCtx,

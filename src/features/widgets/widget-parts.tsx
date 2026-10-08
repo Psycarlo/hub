@@ -27,7 +27,10 @@ export function WidgetIcon({
   );
 }
 
-/** Runs out to the card's sides and bottom edge, like a chart along its foot. */
+/**
+ * Runs out to the card's sides and bottom edge, like a chart along its foot.
+ * It stays on the edge when a taller widget beside it stretches the card.
+ */
 export function WidgetBleed({
   className,
   children,
@@ -37,7 +40,12 @@ export function WidgetBleed({
 }) {
   // Undoes the card's padding; the corners follow its rounding.
   return (
-    <div className={cn("-mx-5 -mb-5 overflow-hidden rounded-b-2xl", className)}>
+    <div
+      className={cn(
+        "-mx-5 mt-auto -mb-5 overflow-hidden rounded-b-2xl",
+        className
+      )}
+    >
       {children}
     </div>
   );

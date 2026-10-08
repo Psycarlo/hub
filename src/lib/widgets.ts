@@ -2,8 +2,14 @@ import type { Doc } from "@convex/_generated/dataModel";
 import type { WidgetSettings } from "@convex/lib/validators";
 
 export type { WidgetSettings } from "@convex/lib/validators";
-export { MAX_WIDGETS, TIMEFRAMES } from "@convex/shared/widgets";
-export type { Timeframe } from "@convex/shared/widgets";
+export {
+  MAX_WIDGETS,
+  MY_TASKS_DEFAULTS,
+  TASK_SCOPES,
+  TASK_SORTS,
+  TIMEFRAMES,
+} from "@convex/shared/widgets";
+export type { TaskScope, TaskSort, Timeframe } from "@convex/shared/widgets";
 
 export type Widget = Doc<"widgets">;
 

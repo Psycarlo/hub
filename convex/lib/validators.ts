@@ -18,7 +18,7 @@ import {
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
 import { FIATS, TRANSACTION_KINDS } from "../shared/portfolio";
-import { TIMEFRAMES } from "../shared/widgets";
+import { TASK_SCOPES, TASK_SORTS, TIMEFRAMES } from "../shared/widgets";
 
 type OneOf<T extends string> = VUnion<T, VLiteral<T, "required">[], "required">;
 
@@ -49,6 +49,8 @@ export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
 export const vFiat = oneOf(FIATS);
 export const vTransactionKind = oneOf(TRANSACTION_KINDS);
 export const vTimeframe = oneOf(TIMEFRAMES);
+export const vTaskScope = oneOf(TASK_SCOPES);
+export const vTaskSort = oneOf(TASK_SORTS);
 
 export const vBoardLabel = v.object({
   color: vColor,
@@ -155,6 +157,11 @@ export const vWidgetSettings = v.union(
     currency: v.optional(vFiat),
     timeframe: vTimeframe,
     type: v.literal("bitcoinPrice"),
+  }),
+  v.object({
+    scope: vTaskScope,
+    sort: vTaskSort,
+    type: v.literal("myTasks"),
   })
 );
 
