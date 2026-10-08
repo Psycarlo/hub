@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { Settings2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -83,7 +84,11 @@ interface SprintTabsProps {
 /** Backlog, sprint and done, for a board that plans in sprints. */
 function SprintTabs({ tab, onTabChange, ready, actions }: SprintTabsProps) {
   return (
-    <Tabs className="grow gap-4" onValueChange={onTabChange} value={tab}>
+    <Tabs
+      className="min-h-0 grow gap-4"
+      onValueChange={onTabChange}
+      value={tab}
+    >
       <div className="flex flex-wrap items-center gap-3">
         <TabsList>
           <TabsTrigger value="backlog">Backlog</TabsTrigger>
@@ -99,7 +104,7 @@ function SprintTabs({ tab, onTabChange, ready, actions }: SprintTabsProps) {
           <BoardSkeleton list />
         )}
       </TabsContent>
-      <TabsContent className="flex flex-col" value="sprint">
+      <TabsContent className="flex min-h-0 flex-col" value="sprint">
         {ready ? <SprintView /> : <BoardSkeleton />}
       </TabsContent>
       <TabsContent className="flex flex-col" value="done">
@@ -179,6 +184,9 @@ export function BoardPage({
       }
     : null;
   const canChangeBoard = canManage(project) || board.createdBy === me._id;
+  // The kanban fills the screen under the 3.5rem top bar, so its columns
+  // scroll on their own and the page stays put. Lists scroll the page.
+  const fitsScreen = !board.usesSprints || tab === "sprint";
 
   const actions = (
     <div className="ml-auto flex items-center gap-2">
@@ -197,7 +205,12 @@ export function BoardPage({
 
   return (
     <BoardContext value={scope}>
-      <main className="flex grow flex-col px-4 pb-8 sm:px-6">
+      <main
+        className={cn(
+          "flex grow flex-col px-4 sm:px-6",
+          fitsScreen ? "h-[calc(100dvh-3.5rem)] min-h-96 pb-4" : "pb-8"
+        )}
+      >
         {board.usesSprints ? (
           <SprintTabs
             actions={actions}
@@ -206,7 +219,7 @@ export function BoardPage({
             tab={tab}
           />
         ) : (
-          <div className="flex grow flex-col gap-4">
+          <div className="flex min-h-0 grow flex-col gap-4">
             {actions}
             {scope ? <BoardKanban /> : <BoardSkeleton />}
           </div>

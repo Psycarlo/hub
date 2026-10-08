@@ -126,7 +126,7 @@ export function SprintView() {
     return <NoActiveSprint />;
   }
   return (
-    <div className="flex grow flex-col gap-4">
+    <div className="flex min-h-0 grow flex-col gap-4">
       <SprintHeader sprint={sprint} />
       <Kanban
         cards={cards.filter((card) => card.sprintId === sprint._id)}

@@ -33,20 +33,23 @@ function Column({ status, label, cards, onAdd }: ColumnProps) {
   const { icon: Icon, className } = STATUS_STYLES[status];
   return (
     <section
-      className="bg-muted/60 flex flex-col gap-2 rounded-2xl p-2"
+      className="bg-muted/60 flex min-h-0 flex-col rounded-2xl"
       ref={ref}
     >
-      <h3 className="flex h-8 items-center gap-2 px-1.5 text-sm font-medium">
+      <h3 className="flex h-10 shrink-0 items-center gap-2 px-3.5 pt-2 text-sm font-medium">
         <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
         {label}
         <span className="text-muted-foreground tabular-nums">
           {cards.length}
         </span>
       </h3>
-      {cards.map((card, index) => (
-        <CardTile card={card} group={status} index={index} key={card._id} />
-      ))}
-      {onAdd && <AddButton label="Add card" onClick={onAdd} />}
+      {/* Scrolls on its own under the header, so the page stays put. */}
+      <div className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain p-2">
+        {cards.map((card, index) => (
+          <CardTile card={card} group={status} index={index} key={card._id} />
+        ))}
+        {onAdd && <AddButton label="Add card" onClick={onAdd} />}
+      </div>
     </section>
   );
 }
@@ -74,7 +77,7 @@ export function Kanban({ cards, sprint }: KanbanProps) {
 
   return (
     <DragDropProvider {...drag.props}>
-      <div className="-mx-4 grid grow auto-cols-[minmax(17rem,1fr)] grid-flow-col gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+      <div className="-mx-4 grid min-h-0 grow auto-cols-[minmax(17rem,1fr)] grid-flow-col grid-rows-1 gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
         {STATUSES.map(({ id, label }) => (
           <Column
             cards={drag.groups[id]}
