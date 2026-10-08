@@ -24,6 +24,7 @@ import { ADMIN_PATH, SETTINGS_PATH } from "@/components/user-menu";
 import { AdminPage } from "@/features/admin/admin-page";
 import { BOARD_ROUTE } from "@/features/board/board-context";
 import { BoardRoute } from "@/features/board/board-route";
+import { FocusMode } from "@/features/focus/focus-mode";
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
 import { LoginPage } from "@/features/login/login-page";
@@ -197,6 +198,7 @@ function Workspace() {
         open={creatingProject}
         projects={projects}
       />
+      <FocusMode widgets={widgets} />
     </SidebarProvider>
   );
 }

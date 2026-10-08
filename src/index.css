@@ -120,6 +120,23 @@
   );
 }
 
+/*
+ * Focus mode: white on the blue curtain. Set beside `.dark`, so dark variants
+ * apply inside, with its greys turned to white and the blue to white too, so
+ * lines and dots stand off the curtain.
+ */
+.focus-theme {
+  --foreground: #ffffff;
+  --card: transparent;
+  --primary: #ffffff;
+  --primary-foreground: #0b2585;
+  --muted: rgb(255 255 255 / 0.1);
+  --muted-foreground: rgb(255 255 255 / 0.7);
+  --accent: rgb(255 255 255 / 0.12);
+  --border: rgb(255 255 255 / 0.14);
+  --ring: #ffffff;
+}
+
 @utility shadow-surface {
   box-shadow: var(--shadow-surface);
 }

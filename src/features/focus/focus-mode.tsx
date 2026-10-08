@@ -1,0 +1,351 @@
+import { cn } from "cn";
+import { FocusIcon, XIcon } from "lucide-react";
+import type { MotionValue, Variants } from "motion/react";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  usePresence,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
+import { lazy, Suspense, useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { kindOf } from "@/features/widgets/kinds";
+import type { Widget } from "@/lib/widgets";
+
+const EASE = [0.23, 1, 0.32, 1] as const;
+/** Quick off the mark, then a long soft settle, like a drawer. */
+const DRAWER = [0.32, 0.72, 0, 1] as const;
+/** How far down the curtain is when the widgets start rising in under it. */
+const CONTENT_AT = 0.6;
+/** Past this, the curtain is behind the button, which turns white to sit on it. */
+const BUTTON_AT = 0.9;
+/** How long the shader gets to start drawing before a CSS curtain falls instead. */
+const SHADER_GRACE = 600;
+
+function loadCurtain() {
+  return import("@/features/focus/focus-curtain");
+}
+
+// Shares its engine with the other shaders, so it is usually cached already.
+const FocusCurtain = lazy(async () => {
+  const module = await loadCurtain();
+  return { default: module.FocusCurtain };
+});
+
+/** Fetches the shader ahead of a click, so the curtain falls right away. */
+async function preloadCurtain() {
+  try {
+    await loadCurtain();
+  } catch {
+    // Opening tries again.
+  }
+}
+
+/** Rises out of a blur. */
+const RISE: Variants = {
+  hidden: { filter: "blur(4px)", opacity: 0, y: 12 },
+  show: {
+    filter: "blur(0px)",
+    opacity: 1,
+    transition: { duration: 0.5, ease: EASE },
+    y: 0,
+  },
+};
+
+const GRID: Variants = {
+  show: { transition: { staggerChildren: 0.06 } },
+};
+
+const LEAVE = {
+  filter: "blur(4px)",
+  opacity: 0,
+  transition: { duration: 0.15, ease: EASE },
+};
+
+/** Which curtain falls: the shader once it draws, or CSS where it can't. */
+type Curtain = "pending" | "shader" | "css";
+
+/** The shader, kept in step with the curtain; only this redraws as it moves. */
+function ShaderCurtain({
+  drawn,
+  still,
+  onReady,
+  onUnavailable,
+}: {
+  drawn: MotionValue<number>;
+  still: boolean;
+  onReady: () => void;
+  onUnavailable: () => void;
+}) {
+  const [value, setValue] = useState(drawn.get());
+  useMotionValueEvent(drawn, "change", setValue);
+  return (
+    <Suspense>
+      <FocusCurtain
+        // Without motion it's down all along, and the whole overlay fades.
+        drawn={still ? 1 : value}
+        onReady={onReady}
+        onUnavailable={onUnavailable}
+      />
+    </Suspense>
+  );
+}
+
+/** The same blues where the GPU can't draw, falling with a hard hem. */
+function CssCurtain({
+  drawn,
+  still,
+}: {
+  drawn: MotionValue<number>;
+  still: boolean;
+}) {
+  const clipPath = useTransform(
+    drawn,
+    (value) => `inset(0 0 ${(1 - value) * 100}% 0)`
+  );
+  return (
+    <motion.div
+      className="absolute inset-0 bg-linear-to-b from-[#040b29] via-[#0b2585] to-[#1d4ed8]"
+      style={still ? undefined : { clipPath }}
+    />
+  );
+}
+
+/** A widget as focus mode shows it: white on the curtain, to look at, not arrange. */
+function FocusWidget({ widget }: { widget: Widget }) {
+  const titleId = useId();
+  const { Body, icon: Icon, name } = kindOf(widget.settings);
+  return (
+    <motion.section
+      aria-labelledby={titleId}
+      className="flex flex-col gap-3 rounded-2xl bg-white/8 p-5 ring-1 ring-white/12"
+      variants={RISE}
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/16 ring-inset">
+          <Icon aria-hidden className="size-4" />
+        </span>
+        <h3 className="min-w-0 truncate text-sm font-medium" id={titleId}>
+          {name}
+        </h3>
+      </div>
+      <Body settings={widget.settings} />
+    </motion.section>
+  );
+}
+
+interface FocusOverlayProps {
+  /** How far down the curtain is, shared with the button so it turns as the curtain reaches it. */
+  drawn: MotionValue<number>;
+  /** Not there until they're in. */
+  widgets?: Widget[];
+}
+
+/**
+ * The curtain and what's on it. It falls once it can draw, and the widgets
+ * rise in under it; leaving, they go first and the curtain lifts after them.
+ */
+function FocusOverlay({ drawn, widgets }: FocusOverlayProps) {
+  const [present, safeToRemove] = usePresence();
+  const still = useReducedMotion() ?? false;
+  const [curtain, setCurtain] = useState<Curtain>("pending");
+  const [risen, setRisen] = useState(false);
+  const ready = curtain !== "pending";
+
+  useMotionValueEvent(drawn, "change", (value) => {
+    if (value >= CONTENT_AT) {
+      setRisen(true);
+    }
+  });
+
+  useEffect(() => {
+    if (ready) {
+      return;
+    }
+    const timer = setTimeout(() => setCurtain("css"), SHADER_GRACE);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) {
+      // Left before it fell: nothing to lift.
+      if (!present) {
+        safeToRemove?.();
+      }
+      return;
+    }
+    let duration = present ? 0.8 : 0.6;
+    if (still) {
+      duration = 0.2;
+    }
+    const controls = animate(drawn, present ? 1 : 0, {
+      // Leaving, the widgets get a head start.
+      delay: present ? 0 : 0.1,
+      duration,
+      ease: DRAWER,
+      onComplete: () => {
+        if (!present) {
+          safeToRemove?.();
+        }
+      },
+    });
+    return () => controls.stop();
+  }, [drawn, present, ready, safeToRemove, still]);
+
+  return (
+    <motion.section
+      aria-label="Focus mode"
+      // Dark, so widgets take their dark colors, then turned to white on blue.
+      className={cn(
+        "dark focus-theme text-foreground fixed inset-0 z-40 scheme-dark",
+        !present && "pointer-events-none"
+      )}
+      style={still ? { opacity: drawn } : undefined}
+    >
+      <div aria-hidden className="absolute inset-0">
+        {curtain === "css" ? (
+          <CssCurtain drawn={drawn} still={still} />
+        ) : (
+          <ShaderCurtain
+            drawn={drawn}
+            onReady={() =>
+              setCurtain((now) => (now === "css" ? now : "shader"))
+            }
+            onUnavailable={() => setCurtain("css")}
+            still={still}
+          />
+        )}
+      </div>
+      <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+        <div className="mx-auto w-full max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-10">
+          <AnimatePresence>
+            {present && risen && widgets && widgets.length > 0 && (
+              <motion.div
+                animate="show"
+                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                exit={LEAVE}
+                initial="hidden"
+                key="widgets"
+                variants={GRID}
+              >
+                {widgets.map((widget) => (
+                  <FocusWidget key={widget._id} widget={widget} />
+                ))}
+              </motion.div>
+            )}
+            {present && risen && widgets?.length === 0 && (
+              <motion.div
+                animate="show"
+                className="flex flex-col items-center gap-1 py-16 text-center"
+                exit={LEAVE}
+                initial="hidden"
+                key="empty"
+                variants={RISE}
+              >
+                <p className="font-medium">No widgets yet</p>
+                <p className="text-muted-foreground text-sm">
+                  Add them on Home and they show up here.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+/**
+ * A quiet floating button, bottom right, that draws a blue curtain over the
+ * whole app and shows only what's worth keeping an eye on. Everything under
+ * the curtain is out of reach until it lifts, with the button or Escape.
+ */
+export function FocusMode({ widgets }: { widgets?: Widget[] }) {
+  const [open, setOpen] = useState(false);
+  const drawn = useMotionValue(0);
+  const [onCurtain, setOnCurtain] = useState(false);
+  useMotionValueEvent(drawn, "change", (value) =>
+    setOnCurtain(value >= BUTTON_AT)
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const root = document.querySelector<HTMLElement>("#root");
+    if (root) {
+      root.inert = true;
+    }
+    const leave = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", leave);
+    return () => {
+      if (root) {
+        root.inert = false;
+      }
+      document.removeEventListener("keydown", leave);
+    };
+  }, [open]);
+
+  // Outside the app's root, so it stays in reach while the app is inert.
+  return createPortal(
+    <>
+      <AnimatePresence>
+        {open && <FocusOverlay drawn={drawn} key="focus" widgets={widgets} />}
+      </AnimatePresence>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              aria-label="Focus mode"
+              aria-pressed={open}
+              className={cn(
+                "fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex size-10 items-center justify-center rounded-full ring-1 backdrop-blur-md transition-[background-color,color,box-shadow,scale] duration-300 ease-out outline-none focus-visible:ring-3 active:scale-[0.94]",
+                onCurtain
+                  ? "bg-white/12 text-white ring-white/20 hover:bg-white/20 focus-visible:ring-white/50"
+                  : "bg-primary/10 text-primary ring-primary/20 shadow-primary/15 hover:bg-primary/15 focus-visible:ring-ring/50 shadow-lg"
+              )}
+              onClick={() => setOpen((now) => !now)}
+              onFocus={preloadCurtain}
+              onPointerEnter={preloadCurtain}
+              type="button"
+            />
+          }
+        >
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.span
+              animate={{ filter: "blur(0px)", opacity: 1, scale: 1 }}
+              exit={{ filter: "blur(4px)", opacity: 0, scale: 0.25 }}
+              initial={{ filter: "blur(4px)", opacity: 0, scale: 0.25 }}
+              key={open ? "leave" : "enter"}
+              transition={{ bounce: 0, duration: 0.3, type: "spring" }}
+            >
+              {open ? (
+                <XIcon aria-hidden className="size-4.5" />
+              ) : (
+                <FocusIcon aria-hidden className="size-4.5" />
+              )}
+            </motion.span>
+          </AnimatePresence>
+        </TooltipTrigger>
+        <TooltipContent side="left">
+          {open ? "Leave focus mode" : "Focus mode"}
+        </TooltipContent>
+      </Tooltip>
+    </>,
+    document.body
+  );
+}
