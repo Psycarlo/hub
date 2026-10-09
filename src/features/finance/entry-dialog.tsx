@@ -48,21 +48,32 @@ import {
   SwitchRow,
 } from "@/features/finance/entry-fields";
 import {
+  DestinationField,
+  ReceivedField,
+  changesCurrency,
+  useTransferTarget,
+} from "@/features/finance/transfer-fields";
+import {
   UNIT_KEY,
   UnitToggle,
   storedUnit,
 } from "@/features/portfolios/transaction-dialog";
 import { useToday } from "@/hooks/use-today";
 import { useBtcPrices } from "@/lib/bitcoin-price";
-import type { Account, Category, Entry, EntryKind } from "@/lib/finance";
+import type { Account, Category, Entry, EntryType } from "@/lib/finance";
 import {
   MAX_ENTRY_NAME,
+  entryKind,
   formatMoney,
   moneyText,
   parseMoney,
   statusLabel,
 } from "@/lib/finance";
-import type { BuyChange, EntryDraft } from "@/lib/finance-actions";
+import type {
+  BuyChange,
+  EntryDraft,
+  TransferDraft,
+} from "@/lib/finance-actions";
 import { addEntry, deleteEntry, updateEntry } from "@/lib/finance-actions";
 import type { Portfolio, Transaction, Unit } from "@/lib/portfolio";
 import {
@@ -76,6 +87,12 @@ import {
 import { writeStorage } from "@/lib/utils";
 
 type BitcoinMode = "none" | "new" | "existing";
+
+const PLACEHOLDERS: Record<EntryType, string> = {
+  credit: "Salary",
+  debit: "Groceries",
+  transfer: "Savings",
+};
 
 /** The bitcoin a debit paid for, as typed. */
 interface BitcoinFields {
@@ -91,7 +108,7 @@ interface BitcoinFields {
 
 /** The form as typed, before it's checked. */
 interface Fields {
-  kind: EntryKind;
+  kind: EntryType;
   name: string;
   amount: string;
   date: string;
@@ -99,6 +116,10 @@ interface Fields {
   note: string;
   paid: boolean;
   bitcoin: BitcoinFields;
+  /** The account a transfer goes to. */
+  to?: Id<"financeAccounts">;
+  /** What arrives there in another currency, once typed; what arrived before shows till then. */
+  typedReceived?: string;
 }
 
 /** A new entry starts settled, unless its day is still to come. */
@@ -126,15 +147,17 @@ function initialFields(
       paid: defaultDate <= today,
     };
   }
+  const transfers = entry.kind === "debit" && entry.transfer !== undefined;
   return {
     amount: moneyText(entry.cents),
     bitcoin,
     category: entry.category,
     date: entry.date,
-    kind: entry.kind,
+    kind: transfers ? "transfer" : entry.kind,
     name: entry.name,
     note: entry.note,
     paid: entry.paid,
+    to: transfers ? entry.transfer?.accountId : undefined,
   };
 }
 
@@ -183,6 +206,82 @@ function buyChange(
   };
 }
 
+function deleteDescription(entry: Entry): string {
+  if (entry.transfer) {
+    return "It comes off both accounts it moved between, for everyone.";
+  }
+  return entry.buyId
+    ? "It comes off the account for everyone. The bitcoin buy it paid for stays in its portfolio."
+    : "It comes off the account for everyone.";
+}
+
+/** Where a credit from another account came from, which changes along with it. */
+function TransferSource({
+  account,
+  entry,
+}: {
+  account: Account;
+  entry: Entry;
+}) {
+  const accounts = useQuery(api.finance.accounts);
+  const from = accounts?.find((item) => item._id === entry.transfer?.accountId);
+  const follows =
+    from && from.currency !== account.currency
+      ? "The day and paid"
+      : "The day, amount and paid";
+  return (
+    <p className="bg-muted/60 text-muted-foreground rounded-xl px-4 py-3 text-sm">
+      Transferred from{" "}
+      <span className="text-foreground font-medium">
+        {from?.title ?? "another account"}
+      </span>
+      . {follows} change there too.
+    </p>
+  );
+}
+
+/**
+ * Where the form's transfer goes, and what arrives there: typed, or what
+ * arrived before while it still goes to the same account.
+ */
+function useTransfer(
+  account: Account,
+  entry: Entry | undefined,
+  fields: Fields
+) {
+  const counterpart = useQuery(
+    api.finance.counterpart,
+    entry?.transfer ? { entryId: entry._id } : "skip"
+  );
+  const receivedText =
+    fields.typedReceived ??
+    (counterpart && counterpart.accountId === fields.to
+      ? moneyText(counterpart.cents)
+      : "");
+  const target = useTransferTarget(account, fields.to, receivedText);
+  return {
+    ...target,
+    receivedText,
+    // A credit from another account follows its debit, so stays a credit.
+    source: entry?.kind === "credit" && entry.transfer ? entry : undefined,
+    valid: fields.kind !== "transfer" || target.valid,
+  };
+}
+
+/** How the entry's transfer changes on saving: to an account, let go, or not at all. */
+function transferChange(
+  fields: Fields,
+  entry: Entry | undefined,
+  received: number | undefined
+): TransferDraft | undefined {
+  if (fields.kind === "transfer" && fields.to) {
+    return { receivedCents: received, toAccountId: fields.to };
+  }
+  return entry?.kind === "debit" && entry.transfer
+    ? { toAccountId: null }
+    : undefined;
+}
+
 function DeleteEntry({
   entry,
   onDeleted,
@@ -201,11 +300,11 @@ function DeleteEntry({
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this {entry.kind}?</AlertDialogTitle>
+          <AlertDialogTitle>
+            Delete this {entry.transfer ? "transfer" : entry.kind}?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            {entry.buyId
-              ? "It comes off the account for everyone. The bitcoin buy it paid for stays in its portfolio."
-              : "It comes off the account for everyone."}
+            {deleteDescription(entry)}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -581,8 +680,13 @@ function EntryForm({
       ? "Enter an amount, like 42.50."
       : undefined;
   const buy = buyChange(fields, entry, today);
+  const transferring = fields.kind === "transfer";
+  const transfer = useTransfer(account, entry, fields);
   const valid =
-    fields.name.trim() !== "" && cents !== undefined && buy !== "invalid";
+    fields.name.trim() !== "" &&
+    cents !== undefined &&
+    buy !== "invalid" &&
+    transfer.valid;
   // Only a debit buys bitcoin; one already linked keeps the part so it can let go.
   const showBitcoin =
     fields.kind === "debit" && (portfolios.length > 0 || entry?.buyId);
@@ -604,22 +708,23 @@ function EntryForm({
       category: fields.category,
       cents,
       date: fields.date,
-      kind: fields.kind,
+      kind: entryKind(fields.kind),
       name: fields.name.trim(),
       note: fields.note.trim(),
       paid: fields.paid,
     };
+    const moved = transferChange(fields, entry, transfer.received);
     setSaving(true);
     const saved = entry
-      ? await updateEntry(entry, draft, buy)
-      : await addEntry(account, draft, buy);
+      ? await updateEntry(entry, draft, buy, moved)
+      : await addEntry(account, draft, buy, moved);
     setSaving(false);
     if (saved !== undefined) {
       onDone();
     }
   };
 
-  const paidLabel = statusLabel(fields.kind, true);
+  const paidLabel = statusLabel(entryKind(fields.kind), true);
 
   return (
     <form className="flex flex-col gap-5" onSubmit={submit}>
@@ -629,7 +734,24 @@ function EntryForm({
         </DialogTitle>
       </DialogHeader>
 
-      <KindTabs onChange={(kind) => change({ kind })} value={fields.kind} />
+      <KindTabs
+        locked={transfer.source !== undefined}
+        onChange={(kind) => change({ kind })}
+        value={fields.kind}
+      />
+
+      {transfer.source && (
+        <TransferSource account={account} entry={transfer.source} />
+      )}
+      {transferring && (
+        <DestinationField
+          account={account}
+          destinations={transfer.destinations}
+          id={`${id}-to`}
+          onChange={(to) => change({ to })}
+          value={fields.to}
+        />
+      )}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-name`}>Name</Label>
@@ -639,7 +761,7 @@ function EntryForm({
           id={`${id}-name`}
           maxLength={MAX_ENTRY_NAME}
           onChange={(event) => change({ name: event.target.value })}
-          placeholder={fields.kind === "debit" ? "Groceries" : "Salary"}
+          placeholder={PLACEHOLDERS[fields.kind]}
           value={fields.name}
         />
       </div>
@@ -658,6 +780,18 @@ function EntryForm({
           value={fields.date}
         />
       </div>
+
+      {transferring && changesCurrency(account, transfer.destination) && (
+        <ReceivedField
+          account={account}
+          cents={cents}
+          destination={transfer.destination}
+          id={`${id}-received`}
+          onChange={(typedReceived) => change({ typedReceived })}
+          received={transfer.received}
+          value={transfer.receivedText}
+        />
+      )}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-category`}>Category</Label>

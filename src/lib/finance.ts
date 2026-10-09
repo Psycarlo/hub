@@ -13,6 +13,7 @@ export {
   MAX_CATEGORY_NAME,
   MAX_ENTRY_NAME,
   dayIn,
+  isInternalTransfer,
   isMonth,
   monthOf,
   nextMonth,
@@ -25,6 +26,14 @@ export type Account = Doc<"financeAccounts">;
 export type Entry = Doc<"financeEntries">;
 export type Recurring = Doc<"financeRecurring">;
 export type FinanceMonth = Doc<"financeMonths">;
+
+/** What an entry form makes: a debit, a credit, or a debit moving money to another account. */
+export type EntryType = EntryKind | "transfer";
+
+/** The kind an entry of the type is stored as: a transfer goes out, as a debit. */
+export function entryKind(type: EntryType): EntryKind {
+  return type === "transfer" ? "debit" : type;
+}
 
 /** Whether an entry is settled yet, the way filters ask it. */
 export type EntryStatus = "paid" | "unpaid";

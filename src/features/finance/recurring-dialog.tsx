@@ -1,7 +1,10 @@
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "cn";
+import { useQuery } from "convex/react";
 import { PlusIcon } from "lucide-react";
 import type { FormEvent } from "react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import {
   AlertDialog,
@@ -39,10 +42,17 @@ import { LabelChip } from "@/features/card/card-parts";
 import { CategoryPicker } from "@/features/finance/category-picker";
 import { KindTabs, MoneyField } from "@/features/finance/entry-fields";
 import { CREDIT_TEXT } from "@/features/finance/finance-parts";
-import type { Account, Category, EntryKind, Recurring } from "@/lib/finance";
+import {
+  DestinationField,
+  ReceivedField,
+  changesCurrency,
+  useTransferTarget,
+} from "@/features/finance/transfer-fields";
+import type { Account, Category, EntryType, Recurring } from "@/lib/finance";
 import {
   MAX_ENTRY_NAME,
   categoryOf,
+  entryKind,
   formatMoney,
   moneyText,
   ordinal,
@@ -63,26 +73,46 @@ const DAYS = Array.from({ length: 31 }, (_, index) => ({
 /** Days some months lack, which then take their last. */
 const SHORT_FROM = 29;
 
+const PLACEHOLDERS: Record<EntryType, string> = {
+  credit: "Salary",
+  debit: "Gym membership",
+  transfer: "Savings",
+};
+
 interface Fields {
-  kind: EntryKind;
+  kind: EntryType;
   name: string;
   amount: string;
   day: number;
   category?: string;
   note: string;
+  /** The account a transfer goes to. */
+  to?: Id<"financeAccounts">;
+  /** What arrives there, when its currency differs. */
+  received: string;
 }
 
 function initialFields(item?: Recurring): Fields {
   if (!item) {
-    return { amount: "", day: 1, kind: "debit", name: "", note: "" };
+    return {
+      amount: "",
+      day: 1,
+      kind: "debit",
+      name: "",
+      note: "",
+      received: "",
+    };
   }
+  const { transfer } = item;
   return {
     amount: moneyText(item.cents),
     category: item.category,
     day: item.day,
-    kind: item.kind,
+    kind: transfer && item.kind === "debit" ? "transfer" : item.kind,
     name: item.name,
     note: item.note,
+    received: transfer?.cents ? moneyText(transfer.cents) : "",
+    to: transfer?.accountId,
   };
 }
 
@@ -143,7 +173,16 @@ function RecurringForm({
   const [fields, setFields] = useState(() => initialFields(item));
   const [saving, setSaving] = useState(false);
   const cents = parseMoney(fields.amount);
-  const valid = fields.name.trim() !== "" && cents !== undefined;
+  const transferring = fields.kind === "transfer";
+  const { destination, destinations, received, ...target } = useTransferTarget(
+    account,
+    fields.to,
+    fields.received
+  );
+  const valid =
+    fields.name.trim() !== "" &&
+    cents !== undefined &&
+    (!transferring || target.valid);
   const change = (patch: Partial<Fields>) =>
     setFields((current) => ({ ...current, ...patch }));
 
@@ -156,9 +195,13 @@ function RecurringForm({
       category: fields.category,
       cents,
       day: fields.day,
-      kind: fields.kind,
+      kind: entryKind(fields.kind),
       name: fields.name.trim(),
       note: fields.note.trim(),
+      transfer:
+        transferring && fields.to
+          ? { accountId: fields.to, cents: received }
+          : undefined,
     };
     setSaving(true);
     const saved = item
@@ -185,6 +228,16 @@ function RecurringForm({
 
       <KindTabs onChange={(kind) => change({ kind })} value={fields.kind} />
 
+      {transferring && (
+        <DestinationField
+          account={account}
+          destinations={destinations}
+          id={`${id}-to`}
+          onChange={(to) => change({ to })}
+          value={fields.to}
+        />
+      )}
+
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-name`}>Name</Label>
         <Input
@@ -193,7 +246,7 @@ function RecurringForm({
           id={`${id}-name`}
           maxLength={MAX_ENTRY_NAME}
           onChange={(event) => change({ name: event.target.value })}
-          placeholder={fields.kind === "debit" ? "Gym membership" : "Salary"}
+          placeholder={PLACEHOLDERS[fields.kind]}
           value={fields.name}
         />
       </div>
@@ -240,6 +293,18 @@ function RecurringForm({
         </div>
       </div>
 
+      {transferring && changesCurrency(account, destination) && (
+        <ReceivedField
+          account={account}
+          cents={cents}
+          destination={destination}
+          id={`${id}-received`}
+          onChange={(next) => change({ received: next })}
+          received={received}
+          value={fields.received}
+        />
+      )}
+
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-category`}>Category</Label>
         <CategoryPicker
@@ -279,14 +344,20 @@ function RecurringRow({
   item,
   account,
   categories,
+  accountTitles,
   onOpen,
 }: {
   item: Recurring;
   account: Account;
   categories: Category[];
+  /** Every account the person can see, to name where transfers go. */
+  accountTitles: ReadonlyMap<string, string>;
   onOpen?: () => void;
 }) {
   const category = categoryOf(categories, item.category);
+  const to =
+    item.transfer &&
+    (accountTitles.get(item.transfer.accountId) ?? "another account");
   return (
     <li>
       <button
@@ -302,7 +373,14 @@ function RecurringRow({
           </span>
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate font-medium">{item.name}</span>
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className="truncate font-medium">{item.name}</span>
+            {to && (
+              <span className="text-muted-foreground truncate text-sm">
+                to {to}
+              </span>
+            )}
+          </span>
           {category ? (
             <span className="flex">
               <LabelChip label={category} />
@@ -345,6 +423,11 @@ export function RecurringDialog({
 }: RecurringDialogProps) {
   const [editing, setEditing] = useState<Recurring | "new">();
   const item = editing === "new" ? undefined : editing;
+  const accounts = useQuery(api.finance.accounts);
+  const accountTitles = useMemo(
+    () => new Map(accounts?.map((other) => [other._id, other.title])),
+    [accounts]
+  );
   const credits = items
     .filter((other) => other.kind === "credit")
     .reduce((sum, other) => sum + other.cents, 0);
@@ -386,6 +469,7 @@ export function RecurringDialog({
                   {items.map((other) => (
                     <RecurringRow
                       account={account}
+                      accountTitles={accountTitles}
                       categories={categories}
                       item={other}
                       key={other._id}

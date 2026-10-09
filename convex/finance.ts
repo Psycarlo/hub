@@ -29,11 +29,15 @@ import {
   STARTER_CATEGORIES,
   dayIn,
   isDate,
+  isInternalTransfer,
   isMonth,
   nextMonth,
 } from "./shared/finance";
 import { LABEL_ID, canManageRole, labelKey, sortLabels } from "./shared/model";
+import type { Fiat } from "./shared/portfolio";
 import { SATS_PER_BTC } from "./shared/portfolio";
+
+type Entry = Doc<"financeEntries">;
 
 const MAX_DESCRIPTION = 500;
 /** Unpaid entries the home widget reads per account, oldest first. */
@@ -247,6 +251,12 @@ export const overview = query({
       followed = all.flat().filter((account) => !account.excludedFromTotal);
     }
     const end = nextMonth(month);
+    // Across every account, money moved between two of them in one currency only moved.
+    const counted = new Map<string, Fiat>(
+      accountId
+        ? []
+        : followed.map((account) => [account._id, account.currency])
+    );
     const totals = new Map<
       Doc<"financeAccounts">["currency"],
       { credits: number; debits: number }
@@ -261,6 +271,9 @@ export const overview = query({
         .collect();
       const sum = totals.get(account.currency) ?? { credits: 0, debits: 0 };
       for (const entry of entries) {
+        if (isInternalTransfer(entry, account.currency, counted)) {
+          continue;
+        }
         if (entry.paid && entry.kind === "credit") {
           sum.credits += entry.cents;
         } else if (entry.paid) {
@@ -275,6 +288,13 @@ export const overview = query({
         )
         .take(MAX_UNPAID);
       for (const entry of waiting) {
+        // Its debit still says the transfer is to make; the credit would only repeat it.
+        if (
+          entry.kind === "credit" &&
+          isInternalTransfer(entry, account.currency, counted)
+        ) {
+          continue;
+        }
         unpaid.push({
           _id: entry._id,
           accountId: account._id,
@@ -418,6 +438,236 @@ async function buyFor(
     sats: buy.sats,
     userId: access.user._id,
   });
+}
+
+/** The account a transfer goes to: another one the person can edit. */
+async function requireDestination(
+  ctx: QueryCtx,
+  from: Doc<"financeAccounts">,
+  toAccountId: Id<"financeAccounts">
+): Promise<Doc<"financeAccounts">> {
+  if (toAccountId === from._id) {
+    throw new ConvexError("Pick another account to transfer to.");
+  }
+  const { account } = await requireAccount(ctx, toAccountId, "edit");
+  return account;
+}
+
+/**
+ * What a transfer lands as in `to`, in its own cents, when its currency
+ * differs from `from`'s; undefined in the same one, as the amount carries over.
+ */
+function receivedIn(
+  from: Doc<"financeAccounts">,
+  to: Doc<"financeAccounts">,
+  received: number | undefined
+): number | undefined {
+  if (from.currency === to.currency) {
+    return undefined;
+  }
+  if (received === undefined) {
+    throw new ConvexError(
+      `Enter what arrives in ${to.title}, in ${to.currency}.`
+    );
+  }
+  return cleanCents(received);
+}
+
+/** Records a debit arriving in `to` as a credit, and links the two. */
+async function linkCredit(
+  ctx: MutationCtx,
+  debit: Entry,
+  to: Doc<"financeAccounts">,
+  { cents, userId }: { cents: number; userId: Id<"users"> }
+): Promise<void> {
+  const creditId = await ctx.db.insert("financeEntries", {
+    accountId: to._id,
+    // Categories are the project's, so only an account in the same one shares them.
+    category: to.projectId === debit.projectId ? debit.category : undefined,
+    cents,
+    createdBy: userId,
+    date: debit.date,
+    kind: "credit",
+    name: debit.name,
+    note: debit.note,
+    paid: debit.paid,
+    projectId: to.projectId,
+    transfer: { accountId: debit.accountId, entryId: debit._id },
+    updatedAt: Date.now(),
+  });
+  await ctx.db.patch(debit._id, {
+    transfer: { accountId: to._id, entryId: creditId },
+  });
+}
+
+/**
+ * Takes away the other side of a transfer. One the person can't edit is
+ * only unlinked, left as money out or in for whoever can.
+ */
+async function dropTransfer(ctx: MutationCtx, entry: Entry): Promise<void> {
+  if (!entry.transfer) {
+    return;
+  }
+  const other = await ctx.db.get(entry.transfer.entryId);
+  if (!other) {
+    return;
+  }
+  const editable = await ifVisible(
+    requireAccount(ctx, other.accountId, "edit")
+  );
+  await (editable
+    ? ctx.db.delete(other._id)
+    : ctx.db.patch(other._id, { transfer: undefined }));
+}
+
+/**
+ * What the other side of a transfer comes to: the same amount in the same
+ * currency; in another, `received`, or what it was.
+ */
+function mirroredCents(
+  entry: Entry,
+  other: Entry,
+  sameCurrency: boolean,
+  received: number | undefined
+): number {
+  if (sameCurrency) {
+    return entry.cents;
+  }
+  return received === undefined ? other.cents : cleanCents(received);
+}
+
+/**
+ * Keeps the other side of a transfer on the same day and paid, and on the
+ * same amount in the same currency; `received` changes it in another one.
+ * One the person can't edit anymore is unlinked instead.
+ */
+async function mirrorTransfer(
+  ctx: MutationCtx,
+  entry: Entry,
+  received?: number
+): Promise<void> {
+  if (!entry.transfer) {
+    return;
+  }
+  const other = await ctx.db.get(entry.transfer.entryId);
+  const theirs = other && (await ctx.db.get(other.accountId));
+  if (!(other && theirs)) {
+    await ctx.db.patch(entry._id, { transfer: undefined });
+    return;
+  }
+  const mine = await ctx.db.get(entry.accountId);
+  const cents = mirroredCents(
+    entry,
+    other,
+    mine?.currency === theirs.currency,
+    received
+  );
+  const { date, paid } = entry;
+  if (other.cents === cents && other.date === date && other.paid === paid) {
+    return;
+  }
+  // One the person can't edit anymore goes its own way, as a delete leaves it.
+  if (!(await ifVisible(requireAccount(ctx, other.accountId, "edit")))) {
+    await ctx.db.patch(entry._id, { transfer: undefined });
+    await ctx.db.patch(other._id, { transfer: undefined });
+    return;
+  }
+  await ctx.db.patch(other._id, { cents, date, paid, updatedAt: Date.now() });
+}
+
+interface TransferSync {
+  /** The entry as it is now, changes and all. */
+  entry: Entry;
+  account: Doc<"financeAccounts">;
+  /** Where a debit now transfers: an account, null for none, or undefined to keep where it went. */
+  to: Id<"financeAccounts"> | null | undefined;
+  /** What arrives there in another currency, in its cents. */
+  received: number | undefined;
+  userId: Id<"users">;
+}
+
+/**
+ * Brings a changed debit's other side in line: its credit moves with it,
+ * follows it to another account, or goes once it no longer transfers.
+ */
+async function syncDebit(
+  ctx: MutationCtx,
+  { entry, account, to, received, userId }: TransferSync
+): Promise<void> {
+  const linked = entry.transfer?.accountId;
+  let wanted: Id<"financeAccounts"> | undefined;
+  if (entry.kind === "debit") {
+    wanted = to === undefined ? linked : (to ?? undefined);
+  }
+  if (wanted && entry.buyId) {
+    throw new ConvexError("A transfer can’t pay for bitcoin.");
+  }
+  if (linked && linked === wanted) {
+    await mirrorTransfer(ctx, entry, received);
+    return;
+  }
+  if (linked) {
+    await dropTransfer(ctx, entry);
+    await ctx.db.patch(entry._id, { transfer: undefined });
+  }
+  if (wanted) {
+    const destination = await requireDestination(ctx, account, wanted);
+    await linkCredit(ctx, entry, destination, {
+      cents: receivedIn(account, destination, received) ?? entry.cents,
+      userId,
+    });
+  }
+}
+
+/**
+ * Brings a changed entry's transfer in line. A credit from another account
+ * follows its debit, so stays a credit, and moves it along.
+ */
+async function syncTransfer(
+  ctx: MutationCtx,
+  before: Entry,
+  sync: TransferSync
+): Promise<void> {
+  if (!(before.transfer && before.kind === "credit")) {
+    await syncDebit(ctx, sync);
+    return;
+  }
+  if (sync.entry.kind !== "credit") {
+    throw new ConvexError(
+      "This came from another account. Change it on the transfer there."
+    );
+  }
+  await mirrorTransfer(ctx, sync.entry);
+}
+
+const vRecurringTransfer = v.object({
+  accountId: v.id("financeAccounts"),
+  /** What arrives there in its own cents, when its currency differs. */
+  cents: v.optional(v.number()),
+});
+
+/** Where a monthly debit transfers to, checked: another account the person can edit. */
+async function cleanRecurringTransfer(
+  ctx: QueryCtx,
+  account: Doc<"financeAccounts">,
+  kind: EntryKind,
+  transfer: { accountId: Id<"financeAccounts">; cents?: number } | null
+): Promise<Doc<"financeRecurring">["transfer"]> {
+  if (!transfer) {
+    return undefined;
+  }
+  if (kind !== "debit") {
+    throw new ConvexError("Only a debit moves money to another account.");
+  }
+  const destination = await requireDestination(
+    ctx,
+    account,
+    transfer.accountId
+  );
+  return {
+    accountId: destination._id,
+    cents: receivedIn(account, destination, transfer.cents),
+  };
 }
 
 /** Whoever made the account and the project's owners can rename or delete it. */
@@ -594,6 +844,42 @@ export const updateCategories = mutation({
   },
 });
 
+/**
+ * Lands a monthly transfer's credit in the account it goes to. One gone, or
+ * no longer the person's to edit, leaves the debit on its own.
+ */
+async function transferMonthly(
+  ctx: MutationCtx,
+  {
+    account,
+    item,
+    entryId,
+    userId,
+  }: {
+    account: Doc<"financeAccounts">;
+    item: Doc<"financeRecurring">;
+    entryId: Id<"financeEntries">;
+    userId: Id<"users">;
+  }
+): Promise<void> {
+  if (!item.transfer || item.kind !== "debit") {
+    return;
+  }
+  const access = await ifVisible(
+    requireAccount(ctx, item.transfer.accountId, "edit")
+  );
+  const debit = await ctx.db.get(entryId);
+  if (!(access && debit) || access.account._id === account._id) {
+    return;
+  }
+  // A currency changed since keeps the amount, to be fixed on the entry.
+  const cents =
+    access.account.currency === account.currency
+      ? item.cents
+      : (item.transfer.cents ?? item.cents);
+  await linkCredit(ctx, debit, access.account, { cents, userId });
+}
+
 /** Each monthly entry as it lands in `month`, not paid yet. */
 async function addRecurring(
   ctx: MutationCtx,
@@ -605,7 +891,7 @@ async function addRecurring(
   const known = new Set(owned.map(({ id }) => id));
   const now = Date.now();
   for (const item of items) {
-    await ctx.db.insert("financeEntries", {
+    const entryId = await ctx.db.insert("financeEntries", {
       accountId: item.accountId,
       category:
         item.category && known.has(item.category) ? item.category : undefined,
@@ -620,6 +906,7 @@ async function addRecurring(
       recurringId: item._id,
       updatedAt: now,
     });
+    await transferMonthly(ctx, { account, entryId, item, userId: user._id });
   }
 }
 
@@ -702,6 +989,10 @@ export const addEntry = mutation({
     name: v.string(),
     note: v.string(),
     paid: v.boolean(),
+    /** What arrives in the account it transfers to, in its cents, when its currency differs. */
+    receivedCents: v.optional(v.number()),
+    /** Where a debit transfers to: another account, which gets it as a credit. */
+    toAccountId: v.optional(v.id("financeAccounts")),
   },
   handler: async (ctx, args) => {
     const access = await requireAccount(ctx, args.accountId, "edit");
@@ -714,12 +1005,18 @@ export const addEntry = mutation({
     if ((args.buyId || args.buy) && args.kind !== "debit") {
       throw new ConvexError("Only a debit can pay for bitcoin.");
     }
+    if (args.toAccountId && args.kind !== "debit") {
+      throw new ConvexError("Only a debit moves money to another account.");
+    }
+    if (args.toAccountId && (args.buyId || args.buy)) {
+      throw new ConvexError("A transfer can’t pay for bitcoin.");
+    }
     if (args.buyId) {
       buyId = await cleanBuy(ctx, account.projectId, args.buyId);
     } else if (args.buy) {
       buyId = await buyFor(ctx, access, entry, args.buy);
     }
-    return await ctx.db.insert("financeEntries", {
+    const entryId = await ctx.db.insert("financeEntries", {
       accountId: account._id,
       buyId,
       category: await cleanCategory(ctx, account.projectId, args.category),
@@ -732,6 +1029,20 @@ export const addEntry = mutation({
       updatedAt: Date.now(),
       ...entry,
     });
+    const debit = args.toAccountId && (await ctx.db.get(entryId));
+    if (args.toAccountId && debit) {
+      const destination = await requireDestination(
+        ctx,
+        account,
+        args.toAccountId
+      );
+      await linkCredit(ctx, debit, destination, {
+        cents:
+          receivedIn(account, destination, args.receivedCents) ?? entry.cents,
+        userId: user._id,
+      });
+    }
+    return entryId;
   },
 });
 
@@ -749,10 +1060,14 @@ export const updateEntry = mutation({
     name: v.optional(v.string()),
     note: v.optional(v.string()),
     paid: v.optional(v.boolean()),
+    /** What arrives where it transfers to, in its cents, when its currency differs. */
+    receivedCents: v.optional(v.number()),
+    /** Where a debit transfers to: another account, null for none, or left out to keep it. */
+    toAccountId: v.optional(v.union(v.id("financeAccounts"), v.null())),
   },
-  handler: async (ctx, { entryId, ...changes }) => {
+  handler: async (ctx, { entryId, receivedCents, toAccountId, ...changes }) => {
     const access = await requireEntry(ctx, entryId, "edit");
-    const { account, entry } = access;
+    const { account, entry, user } = access;
     const patch: Partial<Doc<"financeEntries">> = { updatedAt: Date.now() };
     if (changes.name !== undefined) {
       patch.name = cleanName(changes.name);
@@ -805,15 +1120,40 @@ export const updateEntry = mutation({
       throw new ConvexError("Only a debit can pay for bitcoin.");
     }
     await ctx.db.patch(entryId, patch);
+    await syncTransfer(ctx, entry, {
+      account,
+      entry: { ...entry, ...patch },
+      received: receivedCents,
+      to: toAccountId,
+      userId: user._id,
+    });
   },
 });
 
-/** Deletes the entry; a bitcoin buy it paid for stays in its portfolio. */
+/**
+ * Deletes the entry, and a transfer from both accounts it moved between; a
+ * bitcoin buy it paid for stays in its portfolio.
+ */
 export const removeEntry = mutation({
   args: { entryId: v.id("financeEntries") },
   handler: async (ctx, { entryId }) => {
-    await requireEntry(ctx, entryId, "edit");
+    const { entry } = await requireEntry(ctx, entryId, "edit");
     await ctx.db.delete(entryId);
+    await dropTransfer(ctx, entry);
+  },
+});
+
+/** The other side of a transfer, while the person can see it; null otherwise. */
+export const counterpart = query({
+  args: { entryId: v.id("financeEntries") },
+  handler: async (ctx, { entryId }): Promise<Entry | null> => {
+    const access = await ifVisible(requireEntry(ctx, entryId, "view"));
+    const transfer = access?.entry.transfer;
+    if (!transfer) {
+      return null;
+    }
+    const other = await ifVisible(requireEntry(ctx, transfer.entryId, "view"));
+    return other?.entry ?? null;
   },
 });
 
@@ -826,6 +1166,8 @@ export const createRecurring = mutation({
     kind: vEntryKind,
     name: v.string(),
     note: v.string(),
+    /** On a debit, the account it moves to every month. */
+    transfer: v.optional(vRecurringTransfer),
   },
   handler: async (ctx, args) => {
     const { account, user } = await requireAccount(ctx, args.accountId, "edit");
@@ -839,6 +1181,12 @@ export const createRecurring = mutation({
       name: cleanName(args.name),
       note: cleanNote(args.note),
       projectId: account.projectId,
+      transfer: await cleanRecurringTransfer(
+        ctx,
+        account,
+        args.kind,
+        args.transfer ?? null
+      ),
     });
   },
 });
@@ -853,10 +1201,28 @@ export const updateRecurring = mutation({
     name: v.optional(v.string()),
     note: v.optional(v.string()),
     recurringId: v.id("financeRecurring"),
+    /** Where a debit moves every month: another account, null for none, or left out to keep it. */
+    transfer: v.optional(v.union(vRecurringTransfer, v.null())),
   },
   handler: async (ctx, { recurringId, ...changes }) => {
-    const { account } = await requireRecurring(ctx, recurringId, "edit");
+    const { account, recurring: item } = await requireRecurring(
+      ctx,
+      recurringId,
+      "edit"
+    );
     const patch: Partial<Doc<"financeRecurring">> = {};
+    const kind = changes.kind ?? item.kind;
+    if (changes.transfer !== undefined) {
+      patch.transfer = await cleanRecurringTransfer(
+        ctx,
+        account,
+        kind,
+        changes.transfer
+      );
+    } else if (kind !== "debit" && item.transfer) {
+      // A credit has nothing to move.
+      patch.transfer = undefined;
+    }
     if (changes.name !== undefined) {
       patch.name = cleanName(changes.name);
     }

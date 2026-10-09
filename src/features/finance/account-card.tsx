@@ -13,7 +13,13 @@ import { accountPath, financePath } from "@/features/finance/finance-context";
 import { CREDIT_TEXT } from "@/features/finance/finance-parts";
 import { useToday } from "@/hooks/use-today";
 import type { Account, Entry, MonthTotals } from "@/lib/finance";
-import { formatMoney, monthName, monthOf, monthTotals } from "@/lib/finance";
+import {
+  formatMoney,
+  isInternalTransfer,
+  monthName,
+  monthOf,
+  monthTotals,
+} from "@/lib/finance";
 import type { Fiat } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { plural } from "@/lib/utils";
@@ -106,7 +112,10 @@ function Figures({
   );
 }
 
-/** Nets of the counted accounts, one per currency they're in. */
+/**
+ * Nets of the counted accounts, one per currency they're in. Transfers
+ * between two of them in one currency only moved money, so stay out.
+ */
 function TotalFigures({
   accounts,
   entries,
@@ -120,6 +129,9 @@ function TotalFigures({
     return <Figures currency="USD" />;
   }
   const currencies = [...new Set(accounts.map(({ currency }) => currency))];
+  const counted = new Map<string, Fiat>(
+    accounts.map((account) => [account._id, account.currency])
+  );
   const nets = currencies.map((currency) => {
     const ids = new Set(
       accounts
@@ -129,7 +141,11 @@ function TotalFigures({
     return {
       currency,
       totals: monthTotals(
-        entries.filter((entry) => ids.has(entry.accountId)),
+        entries.filter(
+          (entry) =>
+            ids.has(entry.accountId) &&
+            !isInternalTransfer(entry, currency, counted)
+        ),
         today
       ),
     };

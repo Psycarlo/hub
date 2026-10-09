@@ -500,11 +500,19 @@ export default defineSchema({
     name: v.string(),
     note: v.string(),
     projectId: v.id("projects"),
+    /** On a debit, the account it moves to every month, which gets it as a credit. */
+    transfer: v.optional(
+      v.object({
+        accountId: v.id("financeAccounts"),
+        /** What arrives there in its own cents, when its currency differs. */
+        cents: v.optional(v.number()),
+      })
+    ),
   })
     .index("by_account", ["accountId"])
     .index("by_project", ["projectId"]),
 
-  /** Money out of an account or into it. */
+  /** Money out of an account or into it, or moved from one account to another. */
   financeEntries: defineTable({
     accountId: v.id("financeAccounts"),
     /** The bitcoin buy it paid for, on a debit. */
@@ -527,6 +535,17 @@ export default defineSchema({
     projectId: v.id("projects"),
     /** The monthly entry it was added from, when its month started. */
     recurringId: v.optional(v.id("financeRecurring")),
+    /**
+     * The other side of a transfer between accounts: a debit's credit, or a
+     * credit's debit. Both keep the same day and paid, and the same amount
+     * unless the accounts' currencies differ.
+     */
+    transfer: v.optional(
+      v.object({
+        accountId: v.id("financeAccounts"),
+        entryId: v.id("financeEntries"),
+      })
+    ),
     updatedAt: v.number(),
   })
     .index("by_account_and_date", ["accountId", "date"])

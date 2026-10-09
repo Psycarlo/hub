@@ -299,6 +299,13 @@ export const financeAccount = internalMutation({
       .take(BATCH);
     for (const entry of entries) {
       await ctx.db.delete(entry._id);
+      // The other side of a transfer stays, now money out or in on its own.
+      if (entry.transfer) {
+        const other = await ctx.db.get(entry.transfer.entryId);
+        if (other) {
+          await ctx.db.patch(other._id, { transfer: undefined });
+        }
+      }
     }
     const recurring = await ctx.db
       .query("financeRecurring")

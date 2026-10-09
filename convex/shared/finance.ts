@@ -1,6 +1,7 @@
 /** Finance accounts: what both the server and the app know about them. */
 
 import type { BoardLabel } from "./model";
+import type { Fiat } from "./portfolio";
 
 /** Money going out of an account, or coming in. */
 export const ENTRY_KINDS = ["debit", "credit"] as const;
@@ -78,4 +79,20 @@ export function dayIn(month: string, day: number): string {
 /** What an entry adds to the month: positive for credits, negative for debits. */
 export function signedCents(entry: { kind: EntryKind; cents: number }): number {
   return entry.kind === "credit" ? entry.cents : -entry.cents;
+}
+
+/**
+ * Whether an entry in `currency` is one side of a transfer to or from
+ * another account in `counted`, by id, in the same currency. A total across
+ * them leaves it out: the money only moved between them.
+ */
+export function isInternalTransfer(
+  entry: { transfer?: { accountId: string } },
+  currency: Fiat,
+  counted: ReadonlyMap<string, Fiat>
+): boolean {
+  return (
+    entry.transfer !== undefined &&
+    counted.get(entry.transfer.accountId) === currency
+  );
 }

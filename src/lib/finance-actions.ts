@@ -48,6 +48,14 @@ export type BuyChange =
   | { buy: NewBuy }
   | { buyId: null };
 
+/** Where a debit transfers to, and what arrives there in another currency. */
+export interface TransferDraft {
+  /** Another account, or null for none. */
+  toAccountId: Id<"financeAccounts"> | null;
+  /** In the destination's cents, when its currency differs. */
+  receivedCents?: number;
+}
+
 export interface RecurringDraft {
   kind: EntryKind;
   name: string;
@@ -55,6 +63,8 @@ export interface RecurringDraft {
   day: number;
   category?: string;
   note: string;
+  /** On a debit, the account it moves to every month. */
+  transfer?: Recurring["transfer"];
 }
 
 function byDate(a: Entry, b: Entry): number {
@@ -194,7 +204,12 @@ export function addToMonth(
   );
 }
 
-export function addEntry(account: Account, draft: EntryDraft, buy?: BuyChange) {
+export function addEntry(
+  account: Account,
+  draft: EntryDraft,
+  buy?: BuyChange,
+  transfer?: TransferDraft
+) {
   playSound("success");
   return run(
     convex.mutation(api.finance.addEntry, {
@@ -202,17 +217,28 @@ export function addEntry(account: Account, draft: EntryDraft, buy?: BuyChange) {
       ...draft,
       ...(buy && "buy" in buy ? { buy: buy.buy } : {}),
       ...(buy && "buyId" in buy && buy.buyId ? { buyId: buy.buyId } : {}),
+      ...(transfer?.toAccountId
+        ? {
+            receivedCents: transfer.receivedCents,
+            toAccountId: transfer.toAccountId,
+          }
+        : {}),
     })
   );
 }
 
-/** Changes an entry, shown at once: ticking it paid shouldn't wait on the server. */
+/**
+ * Changes an entry, shown at once: ticking it paid shouldn't wait on the
+ * server. A transfer's other side follows where it's loaded alongside.
+ */
 export function updateEntry(
   entry: Entry,
   changes: Partial<EntryDraft>,
-  buy?: BuyChange
+  buy?: BuyChange,
+  transfer?: TransferDraft
 ) {
   const { category, ...rest } = changes;
+  const other = entry.transfer?.entryId;
   return run(
     convex.mutation(
       api.finance.updateEntry,
@@ -221,6 +247,7 @@ export function updateEntry(
         ...rest,
         ...("category" in changes ? { category: category ?? null } : {}),
         ...buy,
+        ...transfer,
       },
       {
         optimisticUpdate: (store) => {
@@ -241,14 +268,23 @@ export function updateEntry(
               next,
             ]);
           }
+          if (other && changes.paid !== undefined) {
+            patchMonth(store, entry.projectId, from, (entries) =>
+              entries.map((item) =>
+                item._id === other ? { ...item, paid: next.paid } : item
+              )
+            );
+          }
         },
       }
     )
   );
 }
 
+/** Deletes an entry, and a transfer's other side with it. */
 export function deleteEntry(entry: Entry) {
   playSound("whoosh");
+  const other = entry.transfer?.entryId;
   return run(
     convex.mutation(
       api.finance.removeEntry,
@@ -256,7 +292,9 @@ export function deleteEntry(entry: Entry) {
       {
         optimisticUpdate: (store) =>
           patchMonth(store, entry.projectId, monthOf(entry.date), (entries) =>
-            entries.filter((item) => item._id !== entry._id)
+            entries.filter(
+              (item) => item._id !== entry._id && item._id !== other
+            )
           ),
       }
     )
@@ -276,7 +314,7 @@ export function updateRecurring(
   item: Recurring,
   changes: Partial<RecurringDraft>
 ) {
-  const { category, ...rest } = changes;
+  const { category, transfer, ...rest } = changes;
   return run(
     convex.mutation(
       api.finance.updateRecurring,
@@ -284,6 +322,7 @@ export function updateRecurring(
         recurringId: item._id,
         ...rest,
         ...("category" in changes ? { category: category ?? null } : {}),
+        ...("transfer" in changes ? { transfer: transfer ?? null } : {}),
       },
       {
         optimisticUpdate: (store) =>

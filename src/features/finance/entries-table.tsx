@@ -24,6 +24,8 @@ interface EntriesTableProps {
   editable: boolean;
   /** What each linked debit bought, by entry id. */
   buys: ReadonlyMap<string, string>;
+  /** Every account the person can see, to name where transfers go and come from. */
+  accountTitles: ReadonlyMap<string, string>;
   /** Opens an entry to change it; rows stay still without it. */
   onOpen?: (entry: Entry) => void;
 }
@@ -36,6 +38,7 @@ export function EntriesTable({
   today,
   editable,
   buys,
+  accountTitles,
   onOpen,
 }: EntriesTableProps) {
   const open = (event: MouseEvent<HTMLTableRowElement>, entry: Entry) => {
@@ -66,6 +69,9 @@ export function EntriesTable({
           const category = categoryOf(categories, entry.category);
           const overdue = isOverdue(entry, today);
           const bought = buys.get(entry._id);
+          const other =
+            entry.transfer &&
+            (accountTitles.get(entry.transfer.accountId) ?? "another account");
           const date = (
             <time dateTime={entry.date}>
               {format(parseISO(entry.date), "MMM d")}
@@ -115,6 +121,11 @@ export function EntriesTable({
                   >
                     {entry.name}
                   </span>
+                  {other && (
+                    <span className="text-muted-foreground truncate">
+                      {entry.kind === "debit" ? "to" : "from"} {other}
+                    </span>
+                  )}
                   {bought && <BuyBadge>{bought}</BuyBadge>}
                 </span>
               </TableCell>

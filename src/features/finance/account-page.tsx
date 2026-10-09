@@ -311,6 +311,7 @@ interface MonthEntriesProps {
   entries: Entry[];
   categories: Category[];
   buys: ReadonlyMap<string, string>;
+  accountTitles: ReadonlyMap<string, string>;
   filters: EntryFilters;
   onFiltersChange: (filters: EntryFilters) => void;
   onOpen: (entry?: Entry, date?: string) => void;
@@ -327,6 +328,7 @@ function EntryList({
   shown,
   categories,
   buys,
+  accountTitles,
   onFiltersChange,
   onOpen,
 }: MonthEntriesProps & { shown: Entry[] }) {
@@ -373,6 +375,7 @@ function EntryList({
   return (
     <EntriesTable
       account={account}
+      accountTitles={accountTitles}
       buys={buys}
       categories={categories}
       editable={editable}
@@ -549,6 +552,11 @@ export function AccountPage({
     portfolios,
     month
   );
+  const accounts = useQuery(api.finance.accounts);
+  const accountTitles = useMemo(
+    () => new Map(accounts?.map((item) => [item._id, item.title])),
+    [accounts]
+  );
 
   const openEntry = (entry?: Entry, date?: string) => {
     setEditing(entry);
@@ -589,6 +597,7 @@ export function AccountPage({
         )}
         <MonthEntries
           account={account}
+          accountTitles={accountTitles}
           buys={buys}
           categories={categories}
           editable={editable}

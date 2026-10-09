@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { EntryKind } from "@/lib/finance";
+import type { EntryType } from "@/lib/finance";
 import type { Fiat } from "@/lib/portfolio";
 import { fiatSymbol } from "@/lib/portfolio";
 
@@ -26,23 +26,38 @@ const LAST_MONTH = addYears(new Date(), 5);
 export const HINT = "flex flex-wrap items-center gap-x-2 text-xs tabular-nums";
 export const HINT_ACTION = "text-primary font-medium hover:underline";
 
-/** Debit or credit, as a pair of tabs across the form. */
+const TYPE_NAMES: Record<EntryType, string> = {
+  credit: "Credit",
+  debit: "Debit",
+  transfer: "Transfer",
+};
+
+/**
+ * Debit, credit or transfer, as tabs across the form; `locked` keeps it on
+ * the one it's on.
+ */
 export function KindTabs({
   value,
   onChange,
+  locked = false,
 }: {
-  value: EntryKind;
-  onChange: (kind: EntryKind) => void;
+  value: EntryType;
+  onChange: (type: EntryType) => void;
+  locked?: boolean;
 }) {
   return (
-    <Tabs onValueChange={(kind: EntryKind) => onChange(kind)} value={value}>
+    <Tabs onValueChange={(type: EntryType) => onChange(type)} value={value}>
       <TabsList aria-label="Type" className="w-full">
-        <TabsTrigger className="flex-1 justify-center" value="debit">
-          Debit
-        </TabsTrigger>
-        <TabsTrigger className="flex-1 justify-center" value="credit">
-          Credit
-        </TabsTrigger>
+        {(["debit", "credit", "transfer"] as const).map((type) => (
+          <TabsTrigger
+            className="flex-1 justify-center"
+            disabled={locked && type !== value}
+            key={type}
+            value={type}
+          >
+            {TYPE_NAMES[type]}
+          </TabsTrigger>
+        ))}
       </TabsList>
     </Tabs>
   );
