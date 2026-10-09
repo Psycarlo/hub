@@ -1,9 +1,11 @@
 import { api } from "@convex/_generated/api";
 import type { InboxItem } from "@convex/inbox";
 import { useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
 
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
+import { playSound } from "@/lib/sounds";
 
 export type { InboxItem } from "@convex/inbox";
 
@@ -84,4 +86,19 @@ export function useInbox(): Inbox {
     setRead,
     unread: list.filter((item) => !item.read).length,
   };
+}
+
+/** Pings when a mention arrives while the app is open; not for ones already there. */
+export function useArrivalPing({ items, loaded }: Inbox): void {
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!loaded) {
+      return;
+    }
+    const before = seen.current;
+    if (before && items.some((item) => !(item.read || before.has(item._id)))) {
+      playSound("ping");
+    }
+    seen.current = new Set(ids(items));
+  }, [items, loaded]);
 }

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/popover";
 import type { HabitCounts } from "@/hooks/use-habits";
 import { monthOf, monthStart, shiftMonth } from "@/lib/finance";
+import { playCount } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import { isDone, isDue } from "@/lib/habits";
 import { CHIP_COLORS, SWATCH_COLORS } from "@/lib/palette";
@@ -227,7 +228,13 @@ export function HabitCalendar({
               date={day}
               habit={habit}
               key={day}
-              onCount={onCount && ((count) => onCount(day, count))}
+              onCount={
+                onCount &&
+                ((next) => {
+                  playCount(habit, counts.get(habit._id, day), next);
+                  onCount(day, next);
+                })
+              }
               today={today}
             />
           ) : (

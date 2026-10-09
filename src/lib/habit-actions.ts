@@ -5,7 +5,9 @@ import type { OptimisticLocalStore } from "convex/browser";
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import type { Habit, HabitIcon } from "@/lib/habits";
+import { isDone } from "@/lib/habits";
 import type { Color } from "@/lib/palette";
+import { playSound } from "@/lib/sounds";
 
 export interface HabitDraft {
   title: string;
@@ -69,6 +71,17 @@ export function deleteHabit(habit: Habit) {
       }
     )
   );
+}
+
+/** Plays the cue for a day's count going from `from` to `to`: done, taken back, or one more. */
+export function playCount(habit: Habit, from: number, to: number): void {
+  if (to < from) {
+    playSound("off");
+  } else if (isDone(to, habit.goal) && !isDone(from, habit.goal)) {
+    playSound("complete");
+  } else {
+    playSound("tap");
+  }
 }
 
 /** Sets how many times the habit was done on a day, shown at once wherever that day is loaded. */

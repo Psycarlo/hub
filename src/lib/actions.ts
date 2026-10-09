@@ -13,8 +13,9 @@ import type {
   Sprint,
   Status,
 } from "@/lib/model";
-import { sortLabels } from "@/lib/model";
+import { sortLabels, statusKind } from "@/lib/model";
 import type { Project } from "@/lib/project";
+import { playSound } from "@/lib/sounds";
 import type { Upload } from "@/lib/upload";
 import { uploadAttachment } from "@/lib/upload";
 import { errorMessage } from "@/lib/utils";
@@ -24,6 +25,7 @@ export async function run<T>(change: Promise<T>): Promise<T | undefined> {
   try {
     return await change;
   } catch (error) {
+    playSound("error");
     toast.error(errorMessage(error));
     return undefined;
   }
@@ -106,6 +108,7 @@ function applyChanges(card: Card, changes: CardChanges): Card {
 }
 
 export function createProject(draft: NewProjectDraft) {
+  playSound("sparkle");
   return run(convex.mutation(api.projects.create, draft));
 }
 
@@ -122,10 +125,12 @@ export function updateProject(
 }
 
 export function deleteProject(project: Project) {
+  playSound("whoosh");
   return run(convex.mutation(api.projects.remove, { projectId: project._id }));
 }
 
 export function createBoard(draft: BoardDraft) {
+  playSound("sparkle");
   return run(convex.mutation(api.boards.create, draft));
 }
 
@@ -164,10 +169,12 @@ export function createLabel(board: Board, label: BoardLabel) {
 }
 
 export function deleteBoard(board: Board) {
+  playSound("whoosh");
   return run(convex.mutation(api.boards.remove, { boardId: board._id }));
 }
 
 export function createCard(board: Board, card: NewCard) {
+  playSound("pop");
   return run(
     convex.mutation(api.cards.create, {
       assignees: card.assignees ?? [],
@@ -184,7 +191,19 @@ export function createCard(board: Board, card: NewCard) {
   );
 }
 
+/** Whether a card going to `status` from `from` is it being finished. */
+function finishes(from: Card["status"], status?: Card["status"]): boolean {
+  return (
+    status !== undefined &&
+    statusKind(status) === "completed" &&
+    statusKind(from) !== "completed"
+  );
+}
+
 export function updateCard(card: Card, changes: Partial<CardFields>) {
+  if (finishes(card.status, changes.status)) {
+    playSound("complete");
+  }
   const args = { cardId: card._id, ...toChanges(changes) };
   return run(
     convex.mutation(api.cards.update, args, {
@@ -215,6 +234,11 @@ export function moveCards(moves: CardMove[]) {
     return Promise.resolve();
   }
   const byId = new Map(moves.map((move) => [move.card._id, move]));
+  playSound(
+    moves.some(({ card, status }) => finishes(card.status, status))
+      ? "complete"
+      : "drop"
+  );
   return run(
     convex.mutation(
       api.cards.move,
@@ -249,6 +273,7 @@ export function moveCards(moves: CardMove[]) {
 }
 
 export function deleteCard(card: Card) {
+  playSound("whoosh");
   return run(
     convex.mutation(
       api.cards.remove,
@@ -277,6 +302,7 @@ export function updateSprint(
 }
 
 export function startSprint(board: Board, sprint?: Sprint) {
+  playSound("rise");
   return run(
     convex.mutation(api.sprints.start, {
       boardId: board._id,
@@ -286,6 +312,7 @@ export function startSprint(board: Board, sprint?: Sprint) {
 }
 
 export function endSprint(sprint: Sprint) {
+  playSound("complete");
   return run(convex.mutation(api.sprints.end, { sprintId: sprint._id }));
 }
 
@@ -301,6 +328,7 @@ export interface CommentDraft {
 }
 
 export function addComment(card: Card, comment: CommentDraft) {
+  playSound("swoosh");
   return run(
     convex.mutation(api.comments.add, { cardId: card._id, ...comment })
   );

@@ -6,6 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { playCount } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import { isDone, nextCount } from "@/lib/habits";
 import type { Color } from "@/lib/palette";
@@ -132,7 +133,11 @@ export function CheckButton({
         className
       )}
       disabled={!onCount}
-      onClick={() => onCount?.(nextCount(count, habit.goal))}
+      onClick={() => {
+        const next = nextCount(count, habit.goal);
+        playCount(habit, count, next);
+        onCount?.(next);
+      }}
       type="button"
     >
       {counted && !done && (

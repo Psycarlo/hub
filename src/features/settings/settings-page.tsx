@@ -25,6 +25,7 @@ import { convex } from "@/lib/convex";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import type { Fiat } from "@/lib/portfolio";
 import { fiatSymbol } from "@/lib/portfolio";
+import { setSounds, useSounds } from "@/lib/sounds";
 import type { Theme } from "@/lib/theme";
 import { setTheme, useTheme } from "@/lib/theme";
 import { isImage, uploadFile } from "@/lib/upload";
@@ -352,6 +353,34 @@ function DiscreetField() {
   );
 }
 
+function SoundsField() {
+  const id = useId();
+  const sounds = useSounds();
+  return (
+    <label
+      className="flex cursor-pointer items-center gap-3 select-none"
+      htmlFor={id}
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-sm font-medium" id={`${id}-label`}>
+          Interface sounds
+        </span>
+        <span className="text-muted-foreground text-xs" id={`${id}-hint`}>
+          Soft cues as you add, finish, move and delete things, and when someone
+          mentions you.
+        </span>
+      </span>
+      <Switch
+        aria-describedby={`${id}-hint`}
+        aria-labelledby={`${id}-label`}
+        checked={sounds}
+        id={id}
+        onCheckedChange={(checked) => setSounds(checked)}
+      />
+    </label>
+  );
+}
+
 export function SettingsPage() {
   return (
     <>
@@ -383,6 +412,9 @@ export function SettingsPage() {
         </Section>
         <Section description="Saved on this device." title="Privacy">
           <DiscreetField />
+        </Section>
+        <Section description="Saved on this device." title="Sounds">
+          <SoundsField />
         </Section>
       </main>
     </>

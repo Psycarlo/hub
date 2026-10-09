@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import { fileKind, MAX_DRIVE_FILE_BYTES, TOO_BIG, typeOf } from "@/lib/drive";
+import { playSound } from "@/lib/sounds";
 import { measure } from "@/lib/thumbnails";
 import { errorMessage, plural } from "@/lib/utils";
 
@@ -272,12 +273,16 @@ async function start(id: string): Promise<void> {
   patch(id, { error: undefined, loaded: 0, speed: 0, status: "uploading" });
   try {
     await send(item, job);
+    if (!items.some(isActive)) {
+      playSound("ready");
+    }
   } catch (error) {
     forget(job);
     if (job.canceled || error instanceof CanceledError) {
       patch(id, { status: "canceled" });
     } else {
       patch(id, { error: errorMessage(error), status: "failed" });
+      playSound("error");
     }
   } finally {
     job.xhr = undefined;

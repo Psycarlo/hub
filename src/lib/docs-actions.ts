@@ -7,6 +7,7 @@ import { convex } from "@/lib/convex";
 import type { DocPage, DocsContent } from "@/lib/docs";
 import { descendants } from "@/lib/docs";
 import { rankBetween } from "@/lib/model";
+import { playSound } from "@/lib/sounds";
 
 function patchTree(
   store: OptimisticLocalStore,
@@ -28,6 +29,7 @@ export function createPage(
     content?: string;
   } = {}
 ) {
+  playSound("pop");
   return run(convex.mutation(api.docs.create, { projectId, ...page }));
 }
 
@@ -104,6 +106,7 @@ export function deletePage(docs: DocsContent, page: DocPage) {
   const gone = new Set(
     [page, ...descendants(docs, page)].map((item) => item._id)
   );
+  playSound("whoosh");
   return run(
     convex.mutation(
       api.docs.remove,

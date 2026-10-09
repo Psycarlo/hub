@@ -3,6 +3,7 @@ import type { OptimisticLocalStore } from "convex/browser";
 
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
+import { playSound } from "@/lib/sounds";
 import type { Widget, WidgetSettings } from "@/lib/widgets";
 
 export interface WidgetMove {
@@ -29,6 +30,7 @@ function patchWidgets(
 
 /** Puts a widget at the end of the person's home; resolves with its id. */
 export function addWidget(settings: WidgetSettings) {
+  playSound("pop");
   return run(convex.mutation(api.widgets.add, { settings }));
 }
 
@@ -50,6 +52,7 @@ export function updateWidget(widget: Widget, settings: WidgetSettings) {
 }
 
 export function removeWidget(widget: Widget) {
+  playSound("whoosh");
   return run(
     convex.mutation(
       api.widgets.remove,
@@ -69,6 +72,7 @@ export function moveWidgets(moves: WidgetMove[]) {
   if (moves.length === 0) {
     return Promise.resolve();
   }
+  playSound("drop");
   const ranks = new Map(moves.map(({ widget, rank }) => [widget._id, rank]));
   return run(
     convex.mutation(

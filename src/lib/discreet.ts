@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { playSound } from "@/lib/sounds";
 import { eventPoint, readStorage, writeStorage } from "@/lib/utils";
 
 const DISCREET_KEY = "discreet";
@@ -28,6 +29,7 @@ export function setDiscreet(on: boolean, event?: Event): void {
   current = on;
   origin = event ? eventPoint(event) : undefined;
   notify();
+  playSound(on ? "off" : "on");
 }
 
 /** Where the last change was made from, so it can spread out from there. */

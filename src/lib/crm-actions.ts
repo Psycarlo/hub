@@ -13,6 +13,7 @@ import type {
 } from "@/lib/crm";
 import { stageField } from "@/lib/crm";
 import type { NewTable } from "@/lib/crm-templates";
+import { playSound } from "@/lib/sounds";
 
 export interface NewRecord {
   title: string;
@@ -97,6 +98,7 @@ export function deleteTable(table: CrmTable) {
 }
 
 export function createRecord(table: CrmTable, record: NewRecord) {
+  playSound("pop");
   return run(
     convex.mutation(api.crm.createRecord, {
       rank: record.rank ?? 0,
@@ -174,6 +176,7 @@ export function moveRecords(moves: RecordMove[], me?: Id<"users">) {
   if (!first) {
     return Promise.resolve();
   }
+  playSound("drop");
   const byId = new Map(moves.map((move) => [move.record._id, move]));
   return run(
     convex.mutation(
@@ -218,6 +221,7 @@ export function deleteRecords(records: CrmRecord[]) {
   if (!first) {
     return Promise.resolve();
   }
+  playSound("whoosh");
   const ids = new Set(records.map((record) => record._id));
   return run(
     convex.mutation(

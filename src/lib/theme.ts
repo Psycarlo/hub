@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { playSound } from "@/lib/sounds";
 import { eventPoint, readStorage, writeStorage } from "@/lib/utils";
 
 export type Theme = "light" | "dark" | "system";
@@ -62,6 +63,7 @@ async function reveal(
 
 /** Spreads the new theme out from where it was picked. */
 export function setTheme(theme: Theme, event: Event): void {
+  playSound("switch");
   writeStorage(THEME_KEY, theme === "system" ? null : theme);
   current = theme;
   for (const listener of listeners) {

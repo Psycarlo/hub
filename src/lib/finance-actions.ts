@@ -15,6 +15,7 @@ import type {
 import { monthOf } from "@/lib/finance";
 import { sortLabels } from "@/lib/model";
 import type { Fiat } from "@/lib/portfolio";
+import { playSound } from "@/lib/sounds";
 
 export interface AccountDraft {
   title: string;
@@ -194,6 +195,7 @@ export function addToMonth(
 }
 
 export function addEntry(account: Account, draft: EntryDraft, buy?: BuyChange) {
+  playSound("success");
   return run(
     convex.mutation(api.finance.addEntry, {
       accountId: account._id,
@@ -246,6 +248,7 @@ export function updateEntry(
 }
 
 export function deleteEntry(entry: Entry) {
+  playSound("whoosh");
   return run(
     convex.mutation(
       api.finance.removeEntry,

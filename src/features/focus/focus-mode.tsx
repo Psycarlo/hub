@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { kindOf } from "@/features/widgets/kinds";
+import { playSound } from "@/lib/sounds";
 import type { Widget } from "@/lib/widgets";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
@@ -98,6 +99,7 @@ export function useFocusState(): FocusControls {
     toggle: () => {
       setWarm(true);
       setOpen(!open);
+      playSound(open ? "whoosh" : "swoosh");
     },
     warm,
     warmUp: () => setWarm(true),
@@ -271,6 +273,7 @@ function useCurtainDown(open: boolean, setOpen: (open: boolean) => void) {
     const leave = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
+        playSound("whoosh");
       }
     };
     document.addEventListener("keydown", leave);

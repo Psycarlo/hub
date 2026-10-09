@@ -35,7 +35,7 @@ import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
 import { LoginPage } from "@/features/login/login-page";
 import { ProjectDialog } from "@/features/projects/project-dialog";
 import { SettingsPage } from "@/features/settings/settings-page";
-import { useInbox } from "@/hooks/use-inbox";
+import { useArrivalPing, useInbox } from "@/hooks/use-inbox";
 import type { User } from "@/hooks/use-users";
 import { MeContext, useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
@@ -117,6 +117,7 @@ function Workspace() {
   const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
+  useArrivalPing(inbox);
   const projects = projectList ?? NO_PROJECTS;
   const boards = boardList ?? NO_BOARDS;
   const docs = docsByProject(pages ?? NO_PAGES);

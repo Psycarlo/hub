@@ -10,6 +10,7 @@ import type {
   Transaction,
   TransactionKind,
 } from "@/lib/portfolio";
+import { playSound } from "@/lib/sounds";
 
 export interface PortfolioDraft {
   title: string;
@@ -109,6 +110,7 @@ export function deletePortfolio(portfolio: Portfolio) {
 }
 
 export function addTransaction(portfolio: Portfolio, draft: TransactionDraft) {
+  playSound("success");
   return run(
     convex.mutation(api.portfolios.addTransaction, {
       portfolioId: portfolio._id,
@@ -130,6 +132,7 @@ export function updateTransaction(
 }
 
 export function deleteTransaction(transaction: Transaction) {
+  playSound("whoosh");
   return run(
     convex.mutation(
       api.portfolios.removeTransaction,

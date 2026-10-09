@@ -7,6 +7,7 @@ import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import type { DriveFile, DriveFolder } from "@/lib/drive";
 import type { Color } from "@/lib/palette";
+import { playSound } from "@/lib/sounds";
 import { plural } from "@/lib/utils";
 
 type ProjectId = Id<"projects">;
@@ -75,6 +76,7 @@ export function createFolder(
   parentId?: FolderId,
   name?: string
 ) {
+  playSound("pop");
   return run(
     convex.mutation(api.drive.createFolder, { name, parentId, projectId })
   );
@@ -138,6 +140,7 @@ export function moveItems(
 ) {
   const files = new Set<string>(items.fileIds);
   const folders = new Set<string>(items.folderIds);
+  playSound("drop");
   return run(
     convex.mutation(
       api.drive.move,
@@ -171,6 +174,7 @@ export function moveItems(
 }
 
 export function restoreItems(projectId: ProjectId, items: Items) {
+  playSound("rise");
   const gone = new Set<string>([...items.fileIds, ...items.folderIds]);
   return run(
     convex.mutation(
@@ -199,6 +203,7 @@ export function restoreItems(projectId: ProjectId, items: Items) {
 
 /** Puts files and folders in the trash, with a toast to take it back. */
 export async function trashItems(projectId: ProjectId, items: Items) {
+  playSound("whoosh");
   const files = new Set<string>(items.fileIds);
   const done = await run(
     convex.mutation(
@@ -262,6 +267,7 @@ export function purgeItems(projectId: ProjectId, items: Items) {
 }
 
 export function emptyTrash(projectId: ProjectId) {
+  playSound("whoosh");
   return run(
     convex.mutation(
       api.drive.emptyTrash,
