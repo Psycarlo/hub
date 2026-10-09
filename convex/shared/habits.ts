@@ -26,6 +26,14 @@ export const HABIT_ICONS = [
   "bitcoin",
   "phoneOff",
   "smokeOff",
+  "teeth",
+  "shower",
+  "swim",
+  "hike",
+  "pet",
+  "cook",
+  "clean",
+  "alcoholOff",
 ] as const;
 
 export type HabitIcon = (typeof HABIT_ICONS)[number];
