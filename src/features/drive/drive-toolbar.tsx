@@ -277,9 +277,10 @@ function SelectionBar({
   onClear: () => void;
 }) {
   return (
+    // Laid over the toolbar, which keeps its place, so nothing below moves.
     <motion.div
       animate={{ opacity: 1, y: 0 }}
-      className="flex min-w-0 flex-1 items-center gap-1"
+      className="absolute inset-0 flex min-w-0 items-center gap-1 px-2"
       exit={{ opacity: 0, y: -4 }}
       initial={{ opacity: 0, y: 4 }}
       transition={{ duration: 0.15, ease: EASE_OUT }}
@@ -320,58 +321,56 @@ export interface ToolbarProps {
 /** The views of the Drive, its search, order and layout, held under the top bar as the page scrolls. */
 export function Toolbar(props: ToolbarProps) {
   const { picked, view, searching } = props;
+  const selecting = picked.length > 0;
   return (
-    <div className="bg-background/85 sticky top-14 z-20 -mx-2 flex min-h-11 flex-wrap items-center gap-2 rounded-2xl px-2 py-1.5 backdrop-blur-md">
-      <AnimatePresence initial={false} mode="popLayout">
-        {picked.length > 0 ? (
+    <div className="bg-background/85 sticky top-14 z-20 -mx-2 min-h-11 rounded-2xl backdrop-blur-md">
+      {/* Always laid out, hidden while picking, so the bar keeps one height. */}
+      <motion.div
+        animate={{ opacity: selecting ? 0 : 1, y: selecting ? 4 : 0 }}
+        className="flex min-w-0 flex-wrap items-center gap-2 px-2 py-1.5"
+        inert={selecting}
+        initial={false}
+        transition={{ duration: 0.15, ease: EASE_OUT }}
+      >
+        <Tabs
+          className="max-w-full overflow-x-auto"
+          onValueChange={(next) => props.onViewChange(parseView(String(next)))}
+          value={searching ? "" : (view ?? "files")}
+        >
+          <TabsList>
+            <TabsTrigger value="files">
+              <HardDriveIcon className="size-3.5" />
+              Files
+            </TabsTrigger>
+            <TabsTrigger value="recent">Recent</TabsTrigger>
+            <TabsTrigger value="starred">Starred</TabsTrigger>
+            <TabsTrigger value="trash">Trash</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="ml-auto flex items-center gap-1 max-sm:w-full">
+          <SearchField
+            field={props.searchField}
+            onChange={props.onTextChange}
+            value={props.text}
+          />
+          <FluidTooltip.Group>
+            {view !== "recent" && (
+              <SortMenu onChange={props.onSortChange} sort={props.sort} />
+            )}
+            <LayoutSwitch
+              onChange={props.onLayoutChange}
+              value={props.layout}
+            />
+          </FluidTooltip.Group>
+        </div>
+      </motion.div>
+      <AnimatePresence initial={false}>
+        {selecting && (
           <SelectionBar
             entries={picked}
             key="selection"
             onClear={props.onClearPicked}
           />
-        ) : (
-          <motion.div
-            animate={{ opacity: 1, y: 0 }}
-            className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
-            exit={{ opacity: 0, y: 4 }}
-            initial={{ opacity: 0, y: -4 }}
-            key="toolbar"
-            transition={{ duration: 0.15, ease: EASE_OUT }}
-          >
-            <Tabs
-              className="max-w-full overflow-x-auto"
-              onValueChange={(next) =>
-                props.onViewChange(parseView(String(next)))
-              }
-              value={searching ? "" : (view ?? "files")}
-            >
-              <TabsList>
-                <TabsTrigger value="files">
-                  <HardDriveIcon className="size-3.5" />
-                  Files
-                </TabsTrigger>
-                <TabsTrigger value="recent">Recent</TabsTrigger>
-                <TabsTrigger value="starred">Starred</TabsTrigger>
-                <TabsTrigger value="trash">Trash</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="ml-auto flex items-center gap-1 max-sm:w-full">
-              <SearchField
-                field={props.searchField}
-                onChange={props.onTextChange}
-                value={props.text}
-              />
-              <FluidTooltip.Group>
-                {view !== "recent" && (
-                  <SortMenu onChange={props.onSortChange} sort={props.sort} />
-                )}
-                <LayoutSwitch
-                  onChange={props.onLayoutChange}
-                  value={props.layout}
-                />
-              </FluidTooltip.Group>
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -328,7 +328,8 @@ export function UploadTray() {
           <motion.section
             animate={{ filter: "blur(0px)", opacity: 1, scale: 1, y: 0 }}
             aria-label="Uploads"
-            className="bg-popover text-popover-foreground shadow-raised fixed right-4 bottom-4 z-40 flex w-[23rem] max-w-[calc(100vw-2rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl max-sm:right-2 max-sm:bottom-2 max-sm:max-w-[calc(100vw-1rem)]"
+            // On phones, just above the floating focus mode button, which keeps the corner itself.
+            className="bg-popover text-popover-foreground shadow-raised fixed right-4 bottom-4 z-40 flex w-92 max-w-[calc(100vw-2rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl max-md:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.25rem)] max-sm:right-2 max-sm:max-w-[calc(100vw-1rem)]"
             exit={{
               filter: "blur(4px)",
               opacity: 0,

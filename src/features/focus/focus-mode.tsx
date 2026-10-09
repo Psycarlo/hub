@@ -10,10 +10,21 @@ import {
   useReducedMotion,
   useTransform,
 } from "motion/react";
-import type { ReactNode } from "react";
-import { lazy, Suspense, useEffect, useId, useState } from "react";
+import type { ReactNode, RefObject } from "react";
+import {
+  createContext,
+  lazy,
+  Suspense,
+  use,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
+import { IconButton } from "@/components/icon-button";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
   Tooltip,
   TooltipContent,
@@ -34,6 +45,7 @@ const BUTTON_AT = 0.9;
  * instead. Compiling it the first time can take a good second on its own.
  */
 const SHADER_GRACE = 2000;
+const SHORTCUT = "⇧F";
 
 function loadCurtain() {
   return import("@/features/focus/focus-curtain");
@@ -62,6 +74,76 @@ const STAGGER: Variants = {
 
 /** Fades, without a blur: it covers the whole screen. */
 const LEAVE = { opacity: 0, transition: { duration: 0.15, ease: EASE } };
+
+/** Focus mode's state, shared by the sidebar's button and the curtain. */
+export interface FocusControls {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  toggle: () => void;
+  /** Whether the curtain is set up: from the first time the button is pointed at. */
+  warm: boolean;
+  warmUp: () => void;
+  /** The sidebar's button, whose place the curtain's own takes while it's down. */
+  anchor: RefObject<HTMLButtonElement | null>;
+}
+
+export function useFocusState(): FocusControls {
+  const [open, setOpen] = useState(false);
+  const [warm, setWarm] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  return {
+    anchor,
+    open,
+    setOpen,
+    toggle: () => {
+      setWarm(true);
+      setOpen(!open);
+    },
+    warm,
+    warmUp: () => setWarm(true),
+  };
+}
+
+export const FocusContext = createContext<FocusControls | null>(null);
+
+function useFocusControls(): FocusControls {
+  const focus = use(FocusContext);
+  if (!focus) {
+    throw new Error("Focus mode needs a FocusContext provider.");
+  }
+  return focus;
+}
+
+function Hint({ label, keys }: { label: string; keys: string }) {
+  return (
+    <span className="flex items-center gap-2">
+      {label}
+      <span className="text-background/60">{keys}</span>
+    </span>
+  );
+}
+
+/** Focus mode's button in the sidebar, beside the logo: quiet until pointed at. */
+export function FocusButton({ className }: { className?: string }) {
+  const { anchor, open, toggle, warmUp } = useFocusControls();
+  return (
+    <IconButton
+      aria-pressed={open}
+      className={cn(
+        "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground size-7 rounded-lg [&_svg:not([class*='size-'])]:size-4",
+        className
+      )}
+      label="Focus mode"
+      onClick={() => toggle()}
+      onFocus={() => warmUp()}
+      onPointerEnter={() => warmUp()}
+      ref={anchor}
+      tooltip={<Hint keys={SHORTCUT} label="Focus mode" />}
+    >
+      <FocusIcon />
+    </IconButton>
+  );
+}
 
 /** Which curtain falls: the shader once it draws, or CSS where it can't. */
 type Curtain = "pending" | "shader" | "css";
@@ -201,28 +283,175 @@ function useCurtainDown(open: boolean, setOpen: (open: boolean) => void) {
   }, [open, setOpen]);
 }
 
+function isTyping(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.closest("input, textarea, select") !== null)
+  );
+}
+
+/** ⇧F draws the curtain, or lifts it, from anywhere but a field. */
+function useShortcut(toggle: () => void) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key === "F" &&
+        event.shiftKey &&
+        !(event.metaKey || event.ctrlKey || event.altKey) &&
+        !event.defaultPrevented &&
+        !isTyping(event.target)
+      ) {
+        event.preventDefault();
+        toggle();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [toggle]);
+}
+
+/** Where the sidebar's button sits while the curtain is down, kept as the window resizes. */
+function useAnchorRect(
+  anchor: RefObject<HTMLButtonElement | null>,
+  active: boolean
+): DOMRect | undefined {
+  const [rect, setRect] = useState<DOMRect>();
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const measure = () => {
+      const box = anchor.current?.getBoundingClientRect();
+      setRect(box && box.width > 0 ? box : undefined);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [anchor, active]);
+  return rect;
+}
+
+/** The icon, turning from the focus mark into a cross as the curtain falls. */
+function ToggleIcon({ open }: { open: boolean }) {
+  return (
+    <AnimatePresence initial={false} mode="popLayout">
+      <motion.span
+        animate={{ filter: "blur(0px)", opacity: 1, scale: 1 }}
+        exit={{ filter: "blur(4px)", opacity: 0, scale: 0.25 }}
+        initial={{ filter: "blur(4px)", opacity: 0, scale: 0.25 }}
+        key={open ? "leave" : "enter"}
+        transition={{ bounce: 0, duration: 0.3, type: "spring" }}
+      >
+        {open ? (
+          <XIcon aria-hidden className="size-4" />
+        ) : (
+          <FocusIcon aria-hidden className="size-4" />
+        )}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+/** How the curtain's button looks: white on the curtain, else like where it sits. */
+function toggleLook(onCurtain: boolean, anchored: boolean): string {
+  if (onCurtain) {
+    return "bg-white/12 text-white ring-white/20 hover:bg-white/20 focus-visible:ring-white/50";
+  }
+  return anchored
+    ? "bg-sidebar text-muted-foreground hover:text-foreground focus-visible:ring-ring/50"
+    : "bg-primary/10 text-primary ring-primary/20 shadow-primary/15 hover:bg-primary/15 focus-visible:ring-ring/50 shadow-lg";
+}
+
 /**
- * A quiet floating button, bottom right, that draws a blue curtain over the
- * whole app and shows only what's worth keeping an eye on. Everything under
- * the curtain is out of reach until it lifts, with the button or Escape.
+ * The button that lifts the curtain: over the sidebar's own on wide screens,
+ * where it sits on `anchor`, or floating bottom right.
  */
-export function FocusMode({ widgets }: { widgets?: Widget[] }) {
-  const [open, setOpen] = useState(false);
-  // The curtain is set up when the button is first pointed at, so it has
-  // compiled by the click, and kept from then on, so it never compiles twice.
-  const [warm, setWarm] = useState(false);
+function CurtainButton({
+  anchor,
+  open,
+  onCurtain,
+  onToggle,
+  onWarmUp,
+}: {
+  anchor?: DOMRect;
+  open: boolean;
+  onCurtain: boolean;
+  onToggle: () => void;
+  onWarmUp: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            aria-label={open ? "Leave focus mode" : "Focus mode"}
+            aria-pressed={open}
+            className={cn(
+              "fixed z-40 flex items-center justify-center transition-[background-color,color,box-shadow,scale] duration-300 ease-out outline-none focus-visible:ring-3 active:scale-[0.94]",
+              anchor
+                ? "rounded-lg"
+                : "right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] size-10 rounded-full ring-1 backdrop-blur-md",
+              toggleLook(onCurtain, anchor !== undefined)
+            )}
+            onClick={onToggle}
+            onFocus={onWarmUp}
+            onPointerEnter={onWarmUp}
+            style={
+              anchor && {
+                height: anchor.height,
+                left: anchor.left,
+                top: anchor.top,
+                width: anchor.width,
+              }
+            }
+            type="button"
+          />
+        }
+      >
+        <ToggleIcon open={open} />
+      </TooltipTrigger>
+      <TooltipContent side={anchor ? "right" : "left"}>
+        {open ? (
+          <Hint keys="Esc" label="Leave focus mode" />
+        ) : (
+          <Hint keys={SHORTCUT} label="Focus mode" />
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * A blue curtain over the whole app that shows only what's worth keeping an
+ * eye on. Everything under it is out of reach until it lifts, with its button,
+ * ⇧F or Escape. On wide screens the sidebar's button draws it, and while it's
+ * down a button of its own takes that one's place, turned into a cross; on
+ * phones, where the sidebar is tucked away, a floating button does both.
+ */
+export function FocusMode({
+  focus,
+  widgets,
+}: {
+  focus: FocusControls;
+  widgets?: Widget[];
+}) {
+  const { open, setOpen, warm, warmUp, toggle } = focus;
+  const { isMobile } = useSidebar();
   const [curtain, setCurtain] = useState<Curtain>("pending");
   const still = useReducedMotion() ?? false;
   const drawn = useMotionValue(0);
   const [down, setDown] = useState(false);
   const [risen, setRisen] = useState(false);
   const [onCurtain, setOnCurtain] = useState(false);
+  const rect = useAnchorRect(focus.anchor, open || down);
   useMotionValueEvent(drawn, "change", (value) => {
     setDown(value > 0);
     setRisen(value >= CONTENT_AT);
     setOnCurtain(value >= BUTTON_AT);
   });
   useCurtainDown(open, setOpen);
+  useShortcut(toggle);
 
   useEffect(() => {
     if (!open || curtain !== "pending") {
@@ -250,10 +479,15 @@ export function FocusMode({ widgets }: { widgets?: Widget[] }) {
     return () => controls.stop();
   }, [curtain, drawn, open, still]);
 
-  const warmUp = () => setWarm(true);
   // Out of sight, the curtain stays mounted but stops drawing. Only while it
   // first compiles does it draw unseen, fully lifted.
   const hidden = !(open || down || curtain === "pending");
+  const showing = open || down;
+  // Over the sidebar's own while the curtain's down, looking just like it
+  // until the curtain reaches it; once it lifts, the sidebar's shows again.
+  const anchor = isMobile || !showing ? undefined : rect;
+  // On phones always; elsewhere only if the sidebar's button can't be found.
+  const floating = isMobile || (showing && !rect);
 
   // Outside the app's root, so it stays in reach while the app is inert.
   return createPortal(
@@ -285,48 +519,15 @@ export function FocusMode({ widgets }: { widgets?: Widget[] }) {
       <AnimatePresence>
         {open && risen && <FocusContent key="focus" widgets={widgets} />}
       </AnimatePresence>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              aria-label="Focus mode"
-              aria-pressed={open}
-              className={cn(
-                "fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex size-10 items-center justify-center rounded-full ring-1 backdrop-blur-md transition-[background-color,color,box-shadow,scale] duration-300 ease-out outline-none focus-visible:ring-3 active:scale-[0.94]",
-                onCurtain
-                  ? "bg-white/12 text-white ring-white/20 hover:bg-white/20 focus-visible:ring-white/50"
-                  : "bg-primary/10 text-primary ring-primary/20 shadow-primary/15 hover:bg-primary/15 focus-visible:ring-ring/50 shadow-lg"
-              )}
-              onClick={() => {
-                warmUp();
-                setOpen((now) => !now);
-              }}
-              onFocus={warmUp}
-              onPointerEnter={warmUp}
-              type="button"
-            />
-          }
-        >
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              animate={{ filter: "blur(0px)", opacity: 1, scale: 1 }}
-              exit={{ filter: "blur(4px)", opacity: 0, scale: 0.25 }}
-              initial={{ filter: "blur(4px)", opacity: 0, scale: 0.25 }}
-              key={open ? "leave" : "enter"}
-              transition={{ bounce: 0, duration: 0.3, type: "spring" }}
-            >
-              {open ? (
-                <XIcon aria-hidden className="size-4.5" />
-              ) : (
-                <FocusIcon aria-hidden className="size-4.5" />
-              )}
-            </motion.span>
-          </AnimatePresence>
-        </TooltipTrigger>
-        <TooltipContent side="left">
-          {open ? "Leave focus mode" : "Focus mode"}
-        </TooltipContent>
-      </Tooltip>
+      {(anchor || floating) && (
+        <CurtainButton
+          anchor={anchor}
+          onCurtain={onCurtain}
+          onToggle={toggle}
+          onWarmUp={warmUp}
+          open={open}
+        />
+      )}
     </>,
     document.body
   );

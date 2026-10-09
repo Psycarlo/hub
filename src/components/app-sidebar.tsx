@@ -49,6 +49,7 @@ import { TableIcon } from "@/features/crm/table-icon";
 import { SidebarDocs } from "@/features/docs/sidebar-docs";
 import { SidebarDrive } from "@/features/drive/sidebar-drive";
 import { accountPath } from "@/features/finance/finance-context";
+import { FocusButton } from "@/features/focus/focus-mode";
 import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
@@ -354,8 +355,8 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon">
-      {/* The mark sits on the icon column's centre line, folded or not. */}
-      <SidebarHeader className="flex-row items-center py-3 pl-2.5">
+      {/* The mark sits on the icon column's centre line, folded or not; folded, focus mode goes under it. */}
+      <SidebarHeader className="flex-row items-center py-3 pr-2.5 pl-2.5 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-start">
         <NavLink
           aria-label="Home"
           className="focus-visible:ring-ring/50 -mx-1.5 flex min-w-0 items-center rounded-lg px-1.5 py-1 outline-none focus-visible:ring-3"
@@ -364,6 +365,10 @@ export function AppSidebar({
           <Logo className="h-7 group-data-[collapsible=icon]:hidden" />
           <LogoMark className="hidden size-7 group-data-[collapsible=icon]:block" />
         </NavLink>
+        {/* Phones get a floating one instead: there the sidebar is tucked away. */}
+        {!isMobile && (
+          <FocusButton className="ml-auto group-data-[collapsible=icon]:ml-0" />
+        )}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
