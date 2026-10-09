@@ -361,13 +361,15 @@ export function Toolbar(props: ToolbarProps) {
                 onChange={props.onTextChange}
                 value={props.text}
               />
-              {view !== "recent" && (
-                <SortMenu onChange={props.onSortChange} sort={props.sort} />
-              )}
-              <LayoutSwitch
-                onChange={props.onLayoutChange}
-                value={props.layout}
-              />
+              <FluidTooltip.Group>
+                {view !== "recent" && (
+                  <SortMenu onChange={props.onSortChange} sort={props.sort} />
+                )}
+                <LayoutSwitch
+                  onChange={props.onLayoutChange}
+                  value={props.layout}
+                />
+              </FluidTooltip.Group>
             </div>
           </motion.div>
         )}
