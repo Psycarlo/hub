@@ -27,6 +27,13 @@ import {
   boardPath,
   cardPath,
 } from "@/features/board/board-context";
+import type { CardView } from "@/features/board/card-order";
+import {
+  cardNeighbours,
+  cardOrder,
+  groupedByStatus,
+} from "@/features/board/card-order";
+import { outsideWindow, useDoneWindow } from "@/features/board/display-options";
 import { DoneView } from "@/features/board/done-view";
 import type { BoardLayout } from "@/features/board/layout-switch";
 import { LayoutSwitch, useBoardLayout } from "@/features/board/layout-switch";
@@ -37,7 +44,7 @@ import type { NewCardDefaults } from "@/features/card/new-card-dialog";
 import { NewCardDialog } from "@/features/card/new-card-dialog";
 import { useBoardContent } from "@/hooks/use-board-content";
 import { useMe } from "@/hooks/use-users";
-import type { Board } from "@/lib/model";
+import type { Board, Card } from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { canEdit, canManage, projectPath } from "@/lib/project";
 
@@ -169,28 +176,65 @@ function SprintTabs({
 }
 
 interface OpenCardProps {
+  board: Board;
   number: number;
   crumbs: Crumb[];
   boardHref: string;
+  /** The tab the card was opened from, which its previous and next follow. */
+  tab: Tab;
   /** Whether the board's cards have loaded. */
   loaded: boolean;
   onLeave: () => void;
 }
 
+/**
+ * The cards either side of one, as the view it was opened from lists them.
+ * A card that view leaves out, like one opened from the inbox, steps through
+ * the whole board instead.
+ */
+function useNeighbours(board: Board, tab: Tab, card: Card | undefined) {
+  const scope = use(BoardContext);
+  // A board without sprints has the one view.
+  const view: CardView = board.usesSprints ? tab : "board";
+  // Read as the card opens, so it matches the board just left.
+  const [doneWindow] = useDoneWindow(board);
+  if (!(scope && card)) {
+    return {};
+  }
+  const shown =
+    view === "board"
+      ? scope.cards.filter((item) => !outsideWindow(item, doneWindow))
+      : scope.cards;
+  return (
+    cardNeighbours(card, cardOrder(view, scope.content, shown)) ??
+    cardNeighbours(card, groupedByStatus(scope.content.cards)) ??
+    {}
+  );
+}
+
 /** The card a link points at, or back to the board once it turns out to be gone. */
 function OpenCard({
+  board,
   number,
   crumbs,
   boardHref,
+  tab,
   loaded,
   onLeave,
 }: OpenCardProps) {
-  const card = use(BoardContext)?.content.cards.find(
-    (item) => item.number === number
-  );
-  if (card) {
+  const scope = use(BoardContext);
+  const card = scope?.content.cards.find((item) => item.number === number);
+  const { previous, next } = useNeighbours(board, tab, card);
+  if (scope && card) {
     return (
-      <CardPage card={card} crumbs={crumbs} key={card._id} onLeave={onLeave} />
+      <CardPage
+        card={card}
+        crumbs={crumbs}
+        key={card._id}
+        nextHref={next && scope.cardHref(next)}
+        onLeave={onLeave}
+        previousHref={previous && scope.cardHref(previous)}
+      />
     );
   }
   return loaded ? (
@@ -333,11 +377,13 @@ export function BoardPage({
       </Activity>
       {cardNumber !== undefined && (
         <OpenCard
+          board={board}
           boardHref={boardHref}
           crumbs={crumbs}
           loaded={loaded}
           number={cardNumber}
           onLeave={leaveCard}
+          tab={tab}
         />
       )}
       {scope && adding && (

@@ -1,7 +1,8 @@
 import { cn } from "cn";
-import { Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, Trash2Icon } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useEffect, useId, useState } from "react";
+import { useLocation } from "wouter";
 
 import { CopyButton } from "@/components/copy";
 import { IconButton } from "@/components/icon-button";
@@ -29,6 +30,7 @@ import { useSaveWhileTyping } from "@/hooks/use-save-while-typing";
 import { deleteCard, updateCard } from "@/lib/actions";
 import type { Card } from "@/lib/model";
 import { cardKey } from "@/lib/model";
+import { isTyping } from "@/lib/utils";
 
 // The text and activity read down a column in the middle, beside a panel of
 // properties. Narrower screens stack them, with the properties between the two.
@@ -198,6 +200,72 @@ function useEscapeToLeave(onLeave: () => void) {
   }, [onLeave]);
 }
 
+/** The key a step answers to, shown in its tooltip. */
+function StepTooltip({ label, shortcut }: { label: string; shortcut: string }) {
+  return (
+    <>
+      {label}
+      <kbd className="text-background/60 ml-1.5 font-sans">{shortcut}</kbd>
+    </>
+  );
+}
+
+type Navigate = ReturnType<typeof useLocation>[1];
+
+/** Swaps the open card for another, kept as one history entry with how it was opened. */
+function swapCard(navigate: Navigate, href: string) {
+  navigate(href, { replace: true, state: history.state });
+}
+
+interface CardStepsProps {
+  previousHref?: string;
+  nextHref?: string;
+}
+
+/**
+ * Up and down through the cards around this one, by button or by K and J.
+ * Leaving after any number of steps still goes back to the board.
+ */
+function CardSteps({ previousHref, nextHref }: CardStepsProps) {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const href = { j: nextHref, k: previousHref }[event.key];
+      if (
+        href &&
+        !(event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) &&
+        !event.defaultPrevented &&
+        !isTyping(event.target)
+      ) {
+        event.preventDefault();
+        swapCard(navigate, href);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [navigate, nextHref, previousHref]);
+  return (
+    <>
+      <IconButton
+        disabled={!previousHref}
+        label="Previous card"
+        onClick={() => previousHref && swapCard(navigate, previousHref)}
+        tooltip={<StepTooltip label="Previous card" shortcut="K" />}
+      >
+        <ChevronUpIcon />
+      </IconButton>
+      <IconButton
+        disabled={!nextHref}
+        label="Next card"
+        onClick={() => nextHref && swapCard(navigate, nextHref)}
+        tooltip={<StepTooltip label="Next card" shortcut="J" />}
+      >
+        <ChevronDownIcon />
+      </IconButton>
+    </>
+  );
+}
+
 function cardCrumb(card: Card, label: string): Crumb {
   const status = STATUS_STYLES[card.status];
   return {
@@ -211,7 +279,7 @@ function cardCrumb(card: Card, label: string): Crumb {
   };
 }
 
-interface CardPageProps {
+interface CardPageProps extends CardStepsProps {
   card: Card;
   /** The way to the board, which the card's own crumb ends. */
   crumbs: Crumb[];
@@ -220,7 +288,13 @@ interface CardPageProps {
 }
 
 /** A card on a page of its own: its text and activity, with its properties beside them. */
-export function CardPage({ card, crumbs, onLeave }: CardPageProps) {
+export function CardPage({
+  card,
+  crumbs,
+  onLeave,
+  previousHref,
+  nextHref,
+}: CardPageProps) {
   const id = useId();
   const { board, canEdit, project } = useBoard();
   useEscapeToLeave(onLeave);
@@ -228,6 +302,7 @@ export function CardPage({ card, crumbs, onLeave }: CardPageProps) {
     <>
       <TopBar crumbs={[...crumbs, cardCrumb(card, cardKey(board, card))]}>
         <FluidTooltip.Group>
+          <CardSteps nextHref={nextHref} previousHref={previousHref} />
           <CopyButton
             label="Copy link"
             value={

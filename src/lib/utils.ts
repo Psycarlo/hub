@@ -34,6 +34,17 @@ export function writeStorage(key: string, value: string | null): void {
   }
 }
 
+/** Whether a key pressed here goes to a field or a popup, not to a page shortcut. */
+export function isTyping(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.closest(
+        "input, textarea, select, [role=dialog], [role=alertdialog], [role=menu], [role=listbox]"
+      ) !== null)
+  );
+}
+
 /** Where on screen an event happened: the pointer, or the middle of what was pressed. */
 export function eventPoint(event: Event): [number, number] {
   // Keyboard presses arrive as synthetic clicks with no pointer position.

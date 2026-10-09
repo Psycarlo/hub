@@ -95,7 +95,7 @@ import {
 } from "@/lib/drive-upload";
 import type { Project } from "@/lib/project";
 import { canEdit, canManage, projectPath } from "@/lib/project";
-import { readStorage, writeStorage } from "@/lib/utils";
+import { isTyping, readStorage, writeStorage } from "@/lib/utils";
 
 const SORT_KEY = "drive:sort";
 const LAYOUT_KEY = "drive:layout";
@@ -140,14 +140,6 @@ function useSettled(value: string): string {
     return () => clearTimeout(timer);
   }, [value]);
   return value.trim() ? settled : "";
-}
-
-function isTyping(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-      target.closest("input, textarea, select, [role=dialog]") !== null)
-  );
 }
 
 /** A pasted screenshot named for when it was pasted; other files keep their names. */
