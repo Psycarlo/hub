@@ -5,7 +5,8 @@ import { toast } from "sonner";
 
 import { IconButton } from "@/components/icon-button";
 
-const ICON_SWAP = {
+/** One icon blurring into another, like copy into a check. */
+export const ICON_SWAP = {
   animate: { filter: "blur(0px)", opacity: 1, scale: 1 },
   exit: { filter: "blur(4px)", opacity: 0, scale: 0.25 },
   initial: { filter: "blur(4px)", opacity: 0, scale: 0.25 },

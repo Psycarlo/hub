@@ -34,6 +34,18 @@ export function writeStorage(key: string, value: string | null): void {
   }
 }
 
+/** Where on screen an event happened: the pointer, or the middle of what was pressed. */
+export function eventPoint(event: Event): [number, number] {
+  // Keyboard presses arrive as synthetic clicks with no pointer position.
+  if (event instanceof MouseEvent && event.isTrusted) {
+    return [event.clientX, event.clientY];
+  }
+  const { x, y, width, height } = (
+    event.target as Element
+  ).getBoundingClientRect();
+  return [x + width / 2, y + height / 2];
+}
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB"] as const;
 const fineSize = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const wholeSize = new Intl.NumberFormat(undefined, {

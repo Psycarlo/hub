@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { CARD_SURFACE } from "@/features/boards/board-card";
+import { Discreet } from "@/features/portfolios/discreet";
 import {
   portfolioPath,
   portfoliosPath,
@@ -69,9 +70,15 @@ function HoldingsCardLink({
             excluded && "text-muted-foreground"
           )}
         >
-          {price === undefined ? "—" : formatFiat(fiatValue(sats, price), fiat)}
+          {price === undefined ? (
+            "—"
+          ) : (
+            <Discreet>{formatFiat(fiatValue(sats, price), fiat)}</Discreet>
+          )}
         </span>
-        <span className="text-muted-foreground text-sm">{formatBtc(sats)}</span>
+        <span className="text-muted-foreground text-sm">
+          <Discreet>{formatBtc(sats)}</Discreet>
+        </span>
       </div>
     </Link>
   );

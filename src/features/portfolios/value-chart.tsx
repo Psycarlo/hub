@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { useMemo } from "react";
 
 import type { ChartMode, SeriesPoint } from "@/features/portfolios/series";
+import { maskAmount, useDiscreet } from "@/lib/discreet";
 import type { Fiat } from "@/lib/portfolio";
 import {
   SATS_PER_BTC,
@@ -90,18 +91,21 @@ function TooltipBody({
   fiat,
   mode,
   withTime,
+  discreet,
 }: {
   point: Datum;
   fiat: Fiat;
   mode: ChartMode;
   withTime: boolean;
+  discreet: boolean;
 }) {
+  const hide = (text: string) => (discreet ? maskAmount(text) : text);
   // Without prices, only the bitcoin is known.
   const fiatText =
     point.price > 0
-      ? formatFiat(fiatValue(point.sats, point.price), fiat)
+      ? hide(formatFiat(fiatValue(point.sats, point.price), fiat))
       : undefined;
-  const btcText = formatBtc(point.sats);
+  const btcText = hide(formatBtc(point.sats));
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-muted-foreground">
@@ -139,6 +143,7 @@ export function ValueChart({
   ariaLabel,
   height = 260,
 }: ValueChartProps) {
+  const discreet = useDiscreet();
   const span = (points.at(-1)?.t ?? 0) - (points[0]?.t ?? 0);
   // Candles of a day or longer have no meaningful time of day.
   const withTime = span <= 120 * DAY;
@@ -155,10 +160,14 @@ export function ValueChart({
     const y = scaleLinear().domain([lo, hi]);
     const pattern = tickFormat(span);
     const formatFiatTick = fiatTickFormat(y.ticks(Y_TICKS), fiat);
-    const formatY = (value: number) =>
-      mode === "fiat"
-        ? formatFiatTick(value)
-        : formatBtc(Math.round(value * SATS_PER_BTC));
+    const formatY = (value: number) => {
+      const text =
+        mode === "fiat"
+          ? formatFiatTick(value)
+          : formatBtc(Math.round(value * SATS_PER_BTC));
+      // The line keeps its shape; only what it's worth is hidden.
+      return discreet ? maskAmount(text) : text;
+    };
     const x = (datum: Datum) => new Date(datum.t);
 
     return defineChart({
@@ -242,7 +251,7 @@ export function ValueChart({
         use: tooltip,
       },
     });
-  }, [points, fiat, mode, span]);
+  }, [points, fiat, mode, span, discreet]);
 
   return (
     <RendererChart
@@ -255,6 +264,7 @@ export function ValueChart({
           primaryPoint ?? focused[0];
         return point ? (
           <TooltipBody
+            discreet={discreet}
             fiat={fiat}
             mode={mode}
             point={point.datum}

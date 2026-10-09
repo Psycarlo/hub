@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { readStorage, writeStorage } from "@/lib/utils";
+import { eventPoint, readStorage, writeStorage } from "@/lib/utils";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -30,17 +30,6 @@ function apply(theme: Theme): void {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
   window.getComputedStyle(document.body);
   requestAnimationFrame(() => freeze.remove());
-}
-
-function origin(event: Event): [number, number] {
-  // Keyboard presses arrive as synthetic clicks with no pointer position.
-  if (event instanceof MouseEvent && event.isTrusted) {
-    return [event.clientX, event.clientY];
-  }
-  const { x, y, width, height } = (
-    event.target as Element
-  ).getBoundingClientRect();
-  return [x + width / 2, y + height / 2];
 }
 
 async function reveal(
@@ -86,7 +75,7 @@ export function setTheme(theme: Theme, event: Event): void {
   }
   const transition = document.startViewTransition(() => apply(theme));
   if (!reducedMotion.matches) {
-    reveal(transition, origin(event));
+    reveal(transition, eventPoint(event));
   }
 }
 

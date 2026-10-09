@@ -32,6 +32,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Discreet } from "@/features/portfolios/discreet";
 import { HoldingsCard } from "@/features/portfolios/holdings-card";
 import { portfoliosPath } from "@/features/portfolios/portfolio-context";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
@@ -162,17 +163,20 @@ function TransactionRows({
                   </span>
                 </TableCell>
                 <TableCell className={cn(NUMERIC, "font-medium")}>
-                  {sell ? "−" : "+"}
-                  {formatBtc(transaction.sats)}
+                  <Discreet>
+                    {`${sell ? "−" : "+"}${formatBtc(transaction.sats)}`}
+                  </Discreet>
                 </TableCell>
                 <TableCell className={cn(NUMERIC, "max-lg:hidden")}>
                   {formatFiat(transaction.price, transaction.currency)}
                 </TableCell>
                 <TableCell className={NUMERIC}>
-                  {formatFiat(
-                    fiatValue(transaction.sats, transaction.price),
-                    transaction.currency
-                  )}
+                  <Discreet>
+                    {formatFiat(
+                      fiatValue(transaction.sats, transaction.price),
+                      transaction.currency
+                    )}
+                  </Discreet>
                 </TableCell>
                 <TableCell className="text-muted-foreground max-w-72 truncate max-md:hidden">
                   {transaction.note}

@@ -16,11 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
+import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import type { Fiat } from "@/lib/portfolio";
 import { fiatSymbol } from "@/lib/portfolio";
 import type { Theme } from "@/lib/theme";
@@ -320,6 +322,36 @@ function CurrencyPicker() {
   );
 }
 
+function DiscreetField() {
+  const id = useId();
+  const discreet = useDiscreet();
+  return (
+    <label
+      className="flex cursor-pointer items-center gap-3 select-none"
+      htmlFor={id}
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-sm font-medium" id={`${id}-label`}>
+          Discreet mode
+        </span>
+        <span className="text-muted-foreground text-xs" id={`${id}-hint`}>
+          Hides what portfolios hold, for screen sharing or a busy café. The eye
+          beside a portfolio’s worth switches it too.
+        </span>
+      </span>
+      <Switch
+        aria-describedby={`${id}-hint`}
+        aria-labelledby={`${id}-label`}
+        checked={discreet}
+        id={id}
+        onCheckedChange={(checked, details) =>
+          setDiscreet(checked, details.event)
+        }
+      />
+    </label>
+  );
+}
+
 export function SettingsPage() {
   return (
     <>
@@ -348,6 +380,9 @@ export function SettingsPage() {
           title="Currency"
         >
           <CurrencyPicker />
+        </Section>
+        <Section description="Saved on this device." title="Privacy">
+          <DiscreetField />
         </Section>
       </main>
     </>

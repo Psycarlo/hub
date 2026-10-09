@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Discreet, DiscreetToggle } from "@/features/portfolios/discreet";
 import type { ChartMode, Range } from "@/features/portfolios/series";
 import {
   RANGES,
@@ -124,7 +125,11 @@ export function HoldingsCard({
 
   let value = <Skeleton className="h-9 w-48 rounded-lg" />;
   if (live !== undefined) {
-    value = <span>{formatFiat(fiatValue(sats, live), fiat)}</span>;
+    value = (
+      <span>
+        <Discreet>{formatFiat(fiatValue(sats, live), fiat)}</Discreet>
+      </span>
+    );
   } else if (prices.failed) {
     value = <span className="text-muted-foreground">Price unavailable</span>;
   }
@@ -154,12 +159,15 @@ export function HoldingsCard({
               label
             )}
           </h2>
-          <div className="text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">
-            {value}
+          <div className="flex items-center gap-1.5">
+            <div className="text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">
+              {value}
+            </div>
+            <DiscreetToggle className="text-muted-foreground" />
           </div>
           <p className="text-muted-foreground flex flex-col text-sm tabular-nums sm:flex-row sm:gap-2">
             <span className="text-foreground font-medium">
-              {formatBtc(sats)}
+              <Discreet>{formatBtc(sats)}</Discreet>
             </span>
             {live !== undefined && (
               <>

@@ -270,6 +270,80 @@
   }
 }
 
+/*
+ * A portfolio amount changing between its digits and discreet mode's dots.
+ * Revealed, the digits come into focus one after another while the dots
+ * dissolve; hidden, the digits blur away and the dots settle in. --wave
+ * delays it all by how far the change was made from; Discreet sets it.
+ */
+@layer components {
+  .discreet {
+    position: relative;
+    display: inline-block;
+    white-space: pre;
+
+    & > .discreet-digit,
+    & > .discreet-mask > span {
+      display: inline-block;
+      white-space: pre;
+    }
+
+    & > .discreet-mask {
+      position: absolute;
+      inset-block: 0;
+      left: 0;
+      pointer-events: none;
+    }
+
+    &[data-phase="reveal"] {
+      & > .discreet-digit {
+        animation: discreet-focus 600ms var(--ease-out)
+          calc(var(--wave, 0ms) + var(--i) * var(--stagger)) both;
+      }
+
+      & > .discreet-mask > span {
+        animation: discreet-dissolve 260ms var(--ease-out)
+          calc(var(--wave, 0ms) + var(--i) * 30ms) both;
+      }
+    }
+
+    &[data-phase="conceal"] {
+      & > .discreet-digit {
+        animation: discreet-dissolve 200ms ease-in var(--wave, 0ms) both;
+      }
+
+      & > .discreet-mask > span {
+        animation: discreet-settle 360ms var(--ease-out)
+          calc(var(--wave, 0ms) + 100ms + var(--i) * 45ms) both;
+      }
+    }
+  }
+
+  @keyframes discreet-focus {
+    from {
+      opacity: 0;
+      filter: blur(6px);
+      transform: translateY(0.22em);
+    }
+  }
+
+  @keyframes discreet-dissolve {
+    to {
+      opacity: 0;
+      filter: blur(5px);
+      transform: scale(0.8);
+    }
+  }
+
+  @keyframes discreet-settle {
+    from {
+      opacity: 0;
+      filter: blur(4px);
+      transform: scale(0.4);
+    }
+  }
+}
+
 /* Rich text: card descriptions. */
 @layer components {
   .rich-text {
