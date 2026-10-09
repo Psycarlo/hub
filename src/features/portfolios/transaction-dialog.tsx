@@ -65,7 +65,7 @@ import {
 } from "@/lib/portfolio-actions";
 import { readStorage, writeStorage } from "@/lib/utils";
 
-const UNIT_KEY = "portfolio:unit";
+export const UNIT_KEY = "portfolio:unit";
 /** Bitcoin's first block; nothing was bought before that day. */
 const GENESIS = new Date(2009, 0, 3);
 const TIME = /^(?<hours>\d{2}):(?<minutes>\d{2})$/u;
@@ -102,7 +102,7 @@ function currentTime(): number {
   return Date.now();
 }
 
-function storedUnit(): Unit {
+export function storedUnit(): Unit {
   return readStorage(UNIT_KEY) === "sats" ? "sats" : "btc";
 }
 
@@ -207,7 +207,8 @@ function check(
   return checked;
 }
 
-function UnitToggle({
+/** Bitcoin or satoshis, at the end of an amount field. */
+export function UnitToggle({
   unit,
   onChange,
 }: {

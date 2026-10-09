@@ -5,13 +5,14 @@ import {
   PlusIcon,
   SquareKanbanIcon,
   Table2Icon,
+  WalletIcon,
 } from "lucide-react";
 
 import { SplitButton } from "@/components/split-button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 /** What a project can hold. */
-export type ProjectItem = "board" | "table" | "page" | "portfolio";
+export type ProjectItem = "board" | "table" | "page" | "portfolio" | "account";
 
 const ITEMS: {
   kind: ProjectItem;
@@ -42,6 +43,12 @@ const ITEMS: {
     icon: BitcoinIcon,
     kind: "portfolio",
     label: "Portfolio",
+  },
+  {
+    description: "Follow money going out and coming in, month by month.",
+    icon: WalletIcon,
+    kind: "account",
+    label: "Finance account",
   },
 ];
 

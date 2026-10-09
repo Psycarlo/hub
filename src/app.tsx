@@ -39,6 +39,7 @@ import { convex } from "@/lib/convex";
 import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
 import { docsByProject } from "@/lib/docs";
+import type { Account } from "@/lib/finance";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -55,6 +56,7 @@ const NO_BOARDS: Board[] = [];
 const NO_TABLES: NavTable[] = [];
 const NO_PAGES: DocPage[] = [];
 const NO_PORTFOLIOS: Portfolio[] = [];
+const NO_ACCOUNTS: Account[] = [];
 
 // Projects carry the CRM and its table library, which board-only visits never need.
 const ProjectRoute = lazy(async () => {
@@ -99,6 +101,7 @@ function Workspace() {
   const tables = useQuery(api.crm.navTables) ?? NO_TABLES;
   const pages = useQuery(api.docs.tree);
   const portfolioList = useQuery(api.portfolios.list);
+  const accountList = useQuery(api.finance.accounts);
   const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
@@ -106,6 +109,7 @@ function Workspace() {
   const boards = boardList ?? NO_BOARDS;
   const docs = docsByProject(pages ?? NO_PAGES);
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
+  const accounts = accountList ?? NO_ACCOUNTS;
   const [creatingProject, setCreatingProject] = useState(false);
   const projectsLoaded = projectList !== undefined;
   const boardsLoaded = boardList !== undefined;
@@ -114,6 +118,7 @@ function Workspace() {
   return (
     <SidebarProvider>
       <AppSidebar
+        accounts={accounts}
         boards={boards}
         docs={docs}
         onNewProject={newProject}
@@ -151,6 +156,8 @@ function Workspace() {
               {(route) => (
                 <Suspense fallback={<RouteFallback />}>
                   <ProjectRoute
+                    accounts={accounts}
+                    accountsLoaded={accountList !== undefined}
                     boards={boards}
                     boardsLoaded={boardsLoaded}
                     docs={docs}

@@ -65,19 +65,23 @@ function labelChanges(
 /** Why the labels can't be saved, or undefined when they can. */
 function labelsProblem(
   base: BoardLabel[],
-  draft: BoardLabel[]
+  draft: BoardLabel[],
+  noun: string
 ): string | undefined {
   return clashing(base, draft).size > 0
-    ? "Two labels can’t share a name."
+    ? `Two ${noun}s can’t share a name.`
     : undefined;
 }
 
 /**
  * A board's labels as its settings edit them. Until first edited they follow
  * the board; from then on, only what changed since is saved, so labels added
- * from cards meanwhile stay.
+ * from cards meanwhile stay. Categories are edited the same way, as `noun`.
  */
-export function useLabelsDraft(labels: BoardLabel[] | undefined) {
+export function useLabelsDraft(
+  labels: BoardLabel[] | undefined,
+  noun = "label"
+) {
   const [edit, setEdit] = useState<{
     base: BoardLabel[];
     draft: BoardLabel[];
@@ -93,24 +97,27 @@ export function useLabelsDraft(labels: BoardLabel[] | undefined) {
       labels: edit?.draft ?? base,
       onChange: (draft: BoardLabel[]) => setEdit({ base, draft }),
     },
-    problem: edit && labelsProblem(edit.base, edit.draft),
+    problem: edit && labelsProblem(edit.base, edit.draft, noun),
   };
 }
 
 function LabelRow({
   label,
+  noun,
   repeated,
   autoFocus,
   onChange,
   onRemove,
 }: {
   label: BoardLabel;
+  noun: string;
   repeated: boolean;
   autoFocus: boolean;
   onChange: (label: BoardLabel) => void;
   onRemove: () => void;
 }) {
-  const name = label.name.trim() || "label";
+  const name = label.name.trim() || noun;
+  const Noun = `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
   return (
     <li className="flex items-center gap-1.5">
       <Popover>
@@ -132,13 +139,13 @@ function LabelRow({
       </Popover>
       <Input
         aria-invalid={repeated || undefined}
-        aria-label="Label name"
+        aria-label={`${Noun} name`}
         autoComplete="off"
         autoFocus={autoFocus}
         className="h-8 px-2.5"
         maxLength={MAX_LABEL_NAME}
         onChange={(event) => onChange({ ...label, name: event.target.value })}
-        placeholder="Label name"
+        placeholder={`${Noun} name`}
         value={label.name}
       />
       <IconButton label={`Delete ${name}`} onClick={onRemove} size="icon-xs">
@@ -148,21 +155,26 @@ function LabelRow({
   );
 }
 
-/** A board's labels in its settings: renamed, recolored, added or deleted. */
+/**
+ * A board's labels in its settings: renamed, recolored, added or deleted.
+ * A project's categories too, as `noun`, without the heading their dialog has.
+ */
 export function LabelsEditor({
   base,
   labels,
   onChange,
+  noun = "label",
 }: {
   /** The labels as saved, which an emptied name falls back to. */
   base: BoardLabel[];
   labels: BoardLabel[];
   onChange: (labels: BoardLabel[]) => void;
+  noun?: string;
 }) {
   // The label just added, whose name is typed next.
   const [added, setAdded] = useState<string>();
   const clashes = clashing(base, labels);
-  const problem = labelsProblem(base, labels);
+  const problem = labelsProblem(base, labels, noun);
 
   const add = () => {
     const label = { color: nextLabelColor(labels), id: shortId(), name: "" };
@@ -172,7 +184,7 @@ export function LabelsEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">Labels</h3>
+      {noun === "label" && <h3 className="text-sm font-medium">Labels</h3>}
       {labels.length > 0 && (
         <FluidTooltip.Group>
           <ul className="flex flex-col gap-1">
@@ -181,6 +193,7 @@ export function LabelsEditor({
                 autoFocus={label.id === added}
                 key={label.id}
                 label={label}
+                noun={noun}
                 onChange={(next) =>
                   onChange(
                     labels.map((item) => (item.id === label.id ? next : item))
@@ -209,7 +222,7 @@ export function LabelsEditor({
         variant="ghost"
       >
         <PlusIcon />
-        Add label
+        Add {noun}
       </Button>
     </div>
   );

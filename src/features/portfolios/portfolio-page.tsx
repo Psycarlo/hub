@@ -1,7 +1,7 @@
 import { api } from "@convex/_generated/api";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   ArrowDownLeftIcon,
   ArrowUpRightIcon,
@@ -9,6 +9,7 @@ import {
   ChartSplineIcon,
   PlusIcon,
   Settings2Icon,
+  WalletIcon,
 } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
@@ -26,6 +27,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { HoldingsCard } from "@/features/portfolios/holdings-card";
 import { portfoliosPath } from "@/features/portfolios/portfolio-context";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
@@ -41,12 +47,48 @@ const NUMERIC = "text-right tabular-nums";
 /** Rows shown at first, and how many more each "Show more" adds. */
 const PAGE = 25;
 
+/** Marks a buy a finance debit paid for, saying which on hover. */
+function PaidFrom({ children }: { children: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="text-muted-foreground inline-flex size-5 items-center justify-center rounded-full" />
+        }
+      >
+        <WalletIcon aria-hidden className="size-3.5" />
+        <span className="sr-only">{children}</span>
+      </TooltipTrigger>
+      <TooltipContent>{children}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Which debit paid for each buy, said in a line, by transaction id. */
+function usePaidFrom(project: Project): Map<string, string> {
+  const links = useQuery(api.finance.buyLinks, { projectId: project._id });
+  const accounts = useQuery(api.finance.accounts);
+  const paid = new Map<string, string>();
+  for (const link of links ?? []) {
+    const account = accounts?.find((item) => item._id === link.accountId);
+    const day = format(parseISO(link.date), "MMM d");
+    paid.set(
+      link.buyId,
+      `Paid from ${account?.title ?? "an account"} on ${day}: ${link.name}`
+    );
+  }
+  return paid;
+}
+
 function TransactionRows({
   transactions,
+  paidFrom,
   onOpen,
 }: {
   /** Newest first. */
   transactions: Transaction[];
+  /** What paid for each buy a debit paid for, by transaction id. */
+  paidFrom: ReadonlyMap<string, string>;
   /** Opens a transaction to change it; rows stay still without it. */
   onOpen?: (transaction: Transaction) => void;
 }) {
@@ -77,6 +119,7 @@ function TransactionRows({
         <TableBody>
           {transactions.slice(0, shown).map((transaction) => {
             const sell = transaction.kind === "sell";
+            const paid = paidFrom.get(transaction._id);
             const date = (
               <>
                 {format(transaction.at, "MMM d, yyyy")}
@@ -115,6 +158,7 @@ function TransactionRows({
                       <ArrowDownLeftIcon className="text-primary size-3.5" />
                     )}
                     {sell ? "Sell" : "Buy"}
+                    {paid && <PaidFrom>{paid}</PaidFrom>}
                   </span>
                 </TableCell>
                 <TableCell className={cn(NUMERIC, "font-medium")}>
@@ -180,6 +224,7 @@ export function PortfolioPage({
     [projectTransactions, portfolio._id]
   );
   const newest = useMemo(() => transactions?.toReversed(), [transactions]);
+  const paidFrom = usePaidFrom(project);
 
   const openTransaction = (transaction?: Transaction) => {
     setEditing(transaction);
@@ -189,6 +234,7 @@ export function PortfolioPage({
   let list = (
     <TransactionRows
       onOpen={editable ? openTransaction : undefined}
+      paidFrom={paidFrom}
       transactions={newest ?? []}
     />
   );

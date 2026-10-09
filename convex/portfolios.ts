@@ -13,6 +13,7 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
+import { releaseBuy } from "./lib/finance";
 import { vFiat, vTransactionKind } from "./lib/validators";
 import { canManageRole } from "./shared/model";
 import { MAX_SATS, byTime, signedSats } from "./shared/portfolio";
@@ -141,6 +142,39 @@ async function settle(
   await ctx.db.patch(portfolioId, { sats });
 }
 
+/** A buy recorded from elsewhere, like a debit that paid for it; resolves with its id. */
+export async function insertBuy(
+  ctx: MutationCtx,
+  {
+    portfolio,
+    userId,
+    ...buy
+  }: {
+    portfolio: Doc<"portfolios">;
+    userId: Id<"users">;
+    at: number;
+    currency: Doc<"portfolioTransactions">["currency"];
+    note: string;
+    price: number;
+    sats: number;
+  }
+): Promise<Id<"portfolioTransactions">> {
+  const transactionId = await ctx.db.insert("portfolioTransactions", {
+    at: cleanAt(buy.at),
+    createdBy: userId,
+    currency: buy.currency,
+    kind: "buy",
+    note: buy.note.trim().slice(0, MAX_NOTE),
+    portfolioId: portfolio._id,
+    price: cleanPrice(buy.price),
+    projectId: portfolio.projectId,
+    sats: cleanSats(buy.sats),
+    updatedAt: Date.now(),
+  });
+  await settle(ctx, portfolio._id);
+  return transactionId;
+}
+
 export const create = mutation({
   args: {
     description: v.string(),
@@ -250,7 +284,11 @@ export const updateTransaction = mutation({
     transactionId: v.id("portfolioTransactions"),
   },
   handler: async (ctx, { transactionId, ...changes }) => {
-    const { portfolio } = await requireTransaction(ctx, transactionId, "edit");
+    const { portfolio, transaction } = await requireTransaction(
+      ctx,
+      transactionId,
+      "edit"
+    );
     const patch: Partial<Doc<"portfolioTransactions">> = {
       updatedAt: Date.now(),
     };
@@ -262,6 +300,10 @@ export const updateTransaction = mutation({
     }
     if (changes.kind !== undefined) {
       patch.kind = changes.kind;
+      // A debit pays for a buy; one turned into a sell has nothing to pay for.
+      if (changes.kind === "sell" && transaction.kind === "buy") {
+        await releaseBuy(ctx, transaction.projectId, transactionId);
+      }
     }
     if (changes.note !== undefined) {
       patch.note = changes.note.trim().slice(0, MAX_NOTE);
@@ -280,8 +322,13 @@ export const updateTransaction = mutation({
 export const removeTransaction = mutation({
   args: { transactionId: v.id("portfolioTransactions") },
   handler: async (ctx, { transactionId }) => {
-    const { portfolio } = await requireTransaction(ctx, transactionId, "edit");
+    const { portfolio, transaction } = await requireTransaction(
+      ctx,
+      transactionId,
+      "edit"
+    );
     await ctx.db.delete(transactionId);
+    await releaseBuy(ctx, transaction.projectId, transactionId);
     await settle(ctx, portfolio._id);
   },
 });

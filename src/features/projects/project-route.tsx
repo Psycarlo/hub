@@ -15,6 +15,14 @@ import {
 } from "@/features/docs/docs-context";
 import { DocsPage } from "@/features/docs/docs-page";
 import { PageView } from "@/features/docs/page-view";
+import { AccountPage } from "@/features/finance/account-page";
+import {
+  FINANCE_SEGMENT,
+  accountPath,
+  financePath,
+  parseAccountParam,
+} from "@/features/finance/finance-context";
+import { FinancePage } from "@/features/finance/finance-page";
 import {
   PORTFOLIOS_SEGMENT,
   parsePortfolioParam,
@@ -28,6 +36,7 @@ import { useProjectContent } from "@/hooks/use-project-content";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
+import type { Account } from "@/lib/finance";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -74,6 +83,9 @@ interface ProjectViewProps {
   /** The project's portfolios. */
   portfolios: Portfolio[];
   portfoliosLoaded: boolean;
+  /** The project's finance accounts. */
+  accounts: Account[];
+  accountsLoaded: boolean;
   tableSlug?: string;
   recordId?: string;
 }
@@ -241,9 +253,86 @@ function PortfoliosView({
   );
 }
 
+/** What of `items` is in the project; nothing when there's no project. */
+function ofProject<T extends { projectId: string }>(
+  items: T[],
+  project: Project | undefined
+): T[] {
+  return project ? items.filter((item) => item.projectId === project._id) : [];
+}
+
+interface FinanceViewProps {
+  project: Project;
+  accounts: Account[];
+  /** The project's portfolios, which debits can buy bitcoin into. */
+  portfolios: Portfolio[];
+  loaded: boolean;
+  /** The account part of the link: its name, then its id. */
+  accountParam?: string;
+}
+
+function FinanceView({
+  project,
+  accounts,
+  portfolios,
+  loaded,
+  accountParam,
+}: FinanceViewProps) {
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const id = accountParam ? parseAccountParam(accountParam) : undefined;
+  // A list of one would only repeat it, so its own page stands in.
+  const alone = accounts.length === 1;
+  const lone = !accountParam && alone ? accounts[0] : undefined;
+  const account = id ? accounts.find((item) => item._id === id) : lone;
+  const path = account ? accountPath(project, account) : undefined;
+  // The link follows the name as it changes; any name before the id still opens it.
+  useEffect(() => {
+    if (path && !(accountParam && path.endsWith(`/${accountParam}`))) {
+      navigate(search ? `${path}?${search}` : path, { replace: true });
+    }
+  }, [accountParam, navigate, path, search]);
+
+  if (account) {
+    return (
+      <AccountPage
+        account={account}
+        alone={alone}
+        key={account._id}
+        portfolios={portfolios}
+        project={project}
+      />
+    );
+  }
+  if (!accountParam) {
+    return (
+      <FinancePage accounts={accounts} loaded={loaded} project={project} />
+    );
+  }
+  return (
+    <>
+      <TopBar
+        crumbs={[
+          { href: projectPath(project), label: project.title },
+          { href: financePath(project), label: "Finance" },
+        ]}
+      />
+      {loaded ? (
+        <NotFound
+          href={financePath(project)}
+          label="Finance"
+          title="Account not found"
+        />
+      ) : (
+        <Loading />
+      )}
+    </>
+  );
+}
+
 interface ProjectRouteProps extends Omit<
   ProjectViewProps,
-  "project" | "docs" | "portfolios"
+  "project" | "docs" | "portfolios" | "accounts"
 > {
   slug: string;
   loaded: boolean;
@@ -251,6 +340,8 @@ interface ProjectRouteProps extends Omit<
   docs: Map<string, DocsContent>;
   /** Portfolios in every project. */
   portfolios: Portfolio[];
+  /** Finance accounts in every project. */
+  accounts: Account[];
 }
 
 export function ProjectRoute({
@@ -260,13 +351,14 @@ export function ProjectRoute({
   docs,
   docsLoaded,
   portfolios,
+  accounts,
   ...props
 }: ProjectRouteProps) {
   const search = useSearch();
   const project = findProject(projects, slug);
-  const projectPortfolios = project
-    ? portfolios.filter((item) => item.projectId === project._id)
-    : [];
+  const projectPortfolios = ofProject(portfolios, project);
+  const projectAccounts = ofProject(accounts, project);
+  const segment = props.tableSlug?.toLowerCase();
   if (project && project.slug !== slug) {
     // Reached by a link the project had before, or typed in capitals.
     const path = [projectPath(project), props.tableSlug, props.recordId]
@@ -274,11 +366,11 @@ export function ProjectRoute({
       .join("/");
     return <Redirect replace to={search ? `${path}?${search}` : path} />;
   }
-  if (project && props.tableSlug?.toLowerCase() === BOARDS_SEGMENT) {
+  if (project && segment === BOARDS_SEGMENT) {
     // Boards are listed on the project page.
     return <Redirect replace to={projectPath(project)} />;
   }
-  if (project && props.tableSlug?.toLowerCase() === PORTFOLIOS_SEGMENT) {
+  if (project && segment === PORTFOLIOS_SEGMENT) {
     return (
       <PortfoliosView
         key={project._id}
@@ -289,7 +381,19 @@ export function ProjectRoute({
       />
     );
   }
-  if (project && props.tableSlug?.toLowerCase() === DOCS_SEGMENT) {
+  if (project && segment === FINANCE_SEGMENT) {
+    return (
+      <FinanceView
+        accountParam={props.recordId}
+        accounts={projectAccounts}
+        key={project._id}
+        loaded={props.accountsLoaded}
+        portfolios={projectPortfolios}
+        project={project}
+      />
+    );
+  }
+  if (project && segment === DOCS_SEGMENT) {
     return (
       <DocsView
         docs={docs.get(project._id) ?? EMPTY_DOCS}
@@ -303,6 +407,7 @@ export function ProjectRoute({
   if (project) {
     return (
       <ProjectView
+        accounts={projectAccounts}
         docs={docs.get(project._id) ?? EMPTY_DOCS}
         docsLoaded={docsLoaded}
         key={project._id}

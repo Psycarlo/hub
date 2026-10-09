@@ -260,6 +260,55 @@ export async function requireTransaction(
   };
 }
 
+export async function requireAccount(
+  ctx: QueryCtx,
+  accountId: Id<"financeAccounts">,
+  need: Need
+): Promise<ProjectAccess & { account: Doc<"financeAccounts"> }> {
+  const account = await ctx.db.get(accountId);
+  if (!account) {
+    throw new ConvexError("This account doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, account.projectId, need)), account };
+}
+
+export async function requireEntry(
+  ctx: QueryCtx,
+  entryId: Id<"financeEntries">,
+  need: Need
+): Promise<
+  ProjectAccess & {
+    account: Doc<"financeAccounts">;
+    entry: Doc<"financeEntries">;
+  }
+> {
+  const entry = await ctx.db.get(entryId);
+  if (!entry) {
+    throw new ConvexError("This entry doesn’t exist anymore.");
+  }
+  return { ...(await requireAccount(ctx, entry.accountId, need)), entry };
+}
+
+export async function requireRecurring(
+  ctx: QueryCtx,
+  recurringId: Id<"financeRecurring">,
+  need: Need
+): Promise<
+  ProjectAccess & {
+    account: Doc<"financeAccounts">;
+    recurring: Doc<"financeRecurring">;
+  }
+> {
+  const recurring = await ctx.db.get(recurringId);
+  if (!recurring) {
+    throw new ConvexError("This monthly entry doesn’t exist anymore.");
+  }
+  return {
+    ...(await requireAccount(ctx, recurring.accountId, need)),
+    recurring,
+  };
+}
+
 /**
  * The access check's result, or null when the thing is gone or no longer
  * shared. Live queries for one card, record or board use it, so a screen open

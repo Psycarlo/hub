@@ -24,6 +24,8 @@ import { tablePath } from "@/features/crm/crm-context";
 import { NewTableDialog } from "@/features/crm/new-table-dialog";
 import { TableIcon } from "@/features/crm/table-icon";
 import { PageGrid, useNewPage } from "@/features/docs/docs-page";
+import { AccountGrid } from "@/features/finance/account-card";
+import { AccountDialog } from "@/features/finance/account-dialog";
 import { PortfolioGrid } from "@/features/portfolios/portfolio-card";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import type { ProjectItem } from "@/features/projects/new-in-project";
@@ -32,6 +34,7 @@ import { ProjectDialog } from "@/features/projects/project-dialog";
 import type { CrmRecord, CrmTable, NavTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
 import type { DocPage, DocsContent } from "@/lib/docs";
+import type { Account } from "@/lib/finance";
 import type { Board } from "@/lib/model";
 import { SWATCH_COLORS } from "@/lib/palette";
 import type { Portfolio } from "@/lib/portfolio";
@@ -160,6 +163,9 @@ interface ProjectPageProps {
   /** The project's portfolios. */
   portfolios: Portfolio[];
   portfoliosLoaded: boolean;
+  /** The project's finance accounts. */
+  accounts: Account[];
+  accountsLoaded: boolean;
   content?: ProjectContent;
   loaded: boolean;
 }
@@ -306,6 +312,7 @@ function ProjectSections({
   members,
   pages,
   portfolios,
+  accounts,
   onNew,
 }: {
   project: Project;
@@ -317,6 +324,7 @@ function ProjectSections({
   /** The pages at the top of the project's docs. */
   pages: DocPage[];
   portfolios: Portfolio[];
+  accounts: Account[];
   onNew: (kind: ProjectItem) => void;
 }) {
   const editable = canEdit(project);
@@ -368,11 +376,26 @@ function ProjectSections({
           <PortfolioGrid portfolios={portfolios} project={project} withTotal />
         </Section>
       )}
+      {accounts.length > 0 && (
+        <Section
+          action={
+            editable && (
+              <Button onClick={() => onNew("account")} variant="outline">
+                <PlusIcon />
+                New account
+              </Button>
+            )
+          }
+          title="Finance"
+        >
+          <AccountGrid accounts={accounts} project={project} withTotal />
+        </Section>
+      )}
     </>
   );
 }
 
-/** Where a project's boards, tables, docs and portfolios go, before it has any. */
+/** Where a project's boards, tables, docs, portfolios and accounts go, before it has any. */
 function NoContent({
   editable,
   onNew,
@@ -385,8 +408,8 @@ function NoContent({
       <EmptyTitle>Nothing here yet</EmptyTitle>
       <EmptyDescription className="max-w-sm">
         {editable
-          ? "Plan work on boards, track deals in CRM tables, write docs and follow bitcoin portfolios."
-          : "Boards, tables, docs and portfolios in this project show up here."}
+          ? "Plan work on boards, track deals in CRM tables, write docs, follow bitcoin portfolios and the money in your accounts."
+          : "Boards, tables, docs, portfolios and accounts in this project show up here."}
       </EmptyDescription>
       {editable && <NewInProject onNew={onNew} />}
     </Empty>
@@ -403,11 +426,13 @@ export function ProjectPage({
   tables,
   portfolios,
   portfoliosLoaded,
+  accounts,
+  accountsLoaded,
   content,
   loaded,
 }: ProjectPageProps) {
   const [dialog, setDialog] = useState<
-    "settings" | "board" | "table" | "portfolio"
+    "settings" | "board" | "table" | "portfolio" | "account"
   >();
   const newPage = useNewPage(project);
   const editable = canEdit(project);
@@ -420,7 +445,9 @@ export function ProjectPage({
   const projectTables = loaded
     ? (content?.tables ?? [])
     : tables.filter((table) => table.projectId === project._id);
-  const dialogProps = (name: "settings" | "board" | "table" | "portfolio") => ({
+  const dialogProps = (
+    name: "settings" | "board" | "table" | "portfolio" | "account"
+  ) => ({
     onOpenChange: (open: boolean) => setDialog(open ? name : undefined),
     open: dialog === name,
   });
@@ -437,11 +464,14 @@ export function ProjectPage({
     projectTables.length > 0 ||
     projectBoards.length > 0 ||
     docs.roots.length > 0 ||
-    portfolios.length > 0;
-  const allLoaded = loaded && boardsLoaded && docsLoaded && portfoliosLoaded;
+    portfolios.length > 0 ||
+    accounts.length > 0;
+  const allLoaded =
+    loaded && boardsLoaded && docsLoaded && portfoliosLoaded && accountsLoaded;
 
   let body: ReactNode = (
     <ProjectSections
+      accounts={accounts}
       boards={projectBoards}
       content={loaded ? content : undefined}
       members={members}
@@ -494,6 +524,7 @@ export function ProjectPage({
       />
       <NewTableDialog {...dialogProps("table")} project={project} />
       <PortfolioDialog {...dialogProps("portfolio")} project={project} />
+      <AccountDialog {...dialogProps("account")} project={project} />
     </>
   );
 }

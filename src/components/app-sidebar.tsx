@@ -7,6 +7,7 @@ import {
   PlusIcon,
   ShieldIcon,
   SquareKanbanIcon,
+  WalletIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
@@ -45,12 +46,14 @@ import { findBoard, parseSlug } from "@/features/board/board-route";
 import { tablePath } from "@/features/crm/crm-context";
 import { TableIcon } from "@/features/crm/table-icon";
 import { SidebarDocs } from "@/features/docs/sidebar-docs";
+import { accountPath } from "@/features/finance/finance-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
+import type { Account } from "@/lib/finance";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -115,6 +118,8 @@ interface ProjectItemProps {
   boards: Board[];
   /** This project's portfolios. */
   portfolios: Portfolio[];
+  /** This project's finance accounts. */
+  accounts: Account[];
   openBoard?: Board;
   location: string;
   open: boolean;
@@ -129,6 +134,7 @@ function ProjectItem({
   docs,
   boards,
   portfolios,
+  accounts,
   openBoard,
   location,
   open,
@@ -208,6 +214,22 @@ function ProjectItem({
               </SidebarMenuSubItem>
             );
           })}
+          {accounts.map((account) => {
+            const href = accountPath(project, account);
+            return (
+              <SidebarMenuSubItem key={account._id}>
+                <SidebarMenuSubButton
+                  isActive={
+                    location === href || location.startsWith(`${href}/`)
+                  }
+                  render={<NavLink href={href} />}
+                >
+                  <WalletIcon />
+                  <span>{account.title}</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
           <SidebarDocs
             canEdit={canEdit(project)}
             docs={docs}
@@ -227,6 +249,8 @@ interface AppSidebarProps {
   docs: Map<string, DocsContent>;
   /** Portfolios in every project. */
   portfolios: Portfolio[];
+  /** Finance accounts in every project. */
+  accounts: Account[];
   /** Unread notifications in the inbox. */
   unread: number;
   onNewProject: () => void;
@@ -238,6 +262,7 @@ export function AppSidebar({
   tables,
   docs,
   portfolios,
+  accounts,
   unread,
   onNewProject,
 }: AppSidebarProps) {
@@ -271,6 +296,7 @@ export function AppSidebar({
 
   const item = (project: Project) => (
     <ProjectItem
+      accounts={accounts.filter((account) => account.projectId === project._id)}
       boards={boards.filter((board) => board.projectId === project._id)}
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       key={project._id}

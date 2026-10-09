@@ -1,5 +1,6 @@
 /**
- * What's left once a project, board, card, table, page or portfolio is deleted. The parent
+ * What's left once a project, board, card, table, page, portfolio or finance
+ * account is deleted. The parent
  * goes first, so nobody sees it anymore; the rest is cleared here in batches
  * that stay well within a mutation's limits.
  */
@@ -10,6 +11,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { dropFile } from "./lib/files";
+import { releaseBuy } from "./lib/finance";
 
 const BATCH = 100;
 
@@ -167,10 +169,47 @@ export const portfolio = internalMutation({
       .take(BATCH);
     for (const transaction of transactions) {
       await ctx.db.delete(transaction._id);
+      await releaseBuy(ctx, transaction.projectId, transaction._id);
     }
     if (transactions.length === BATCH) {
       await ctx.scheduler.runAfter(0, internal.cleanup.portfolio, {
         portfolioId,
+      });
+    }
+  },
+});
+
+export const financeAccount = internalMutation({
+  args: { accountId: v.id("financeAccounts") },
+  handler: async (ctx, { accountId }) => {
+    const entries = await ctx.db
+      .query("financeEntries")
+      .withIndex("by_account_and_date", (q) => q.eq("accountId", accountId))
+      .take(BATCH);
+    for (const entry of entries) {
+      await ctx.db.delete(entry._id);
+    }
+    const recurring = await ctx.db
+      .query("financeRecurring")
+      .withIndex("by_account", (q) => q.eq("accountId", accountId))
+      .take(BATCH);
+    for (const item of recurring) {
+      await ctx.db.delete(item._id);
+    }
+    const months = await ctx.db
+      .query("financeMonths")
+      .withIndex("by_account_and_month", (q) => q.eq("accountId", accountId))
+      .take(BATCH);
+    for (const month of months) {
+      await ctx.db.delete(month._id);
+    }
+    if (
+      entries.length === BATCH ||
+      recurring.length === BATCH ||
+      months.length === BATCH
+    ) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.financeAccount, {
+        accountId,
       });
     }
   },
@@ -216,11 +255,29 @@ export const project = internalMutation({
         portfolioId: item._id,
       });
     }
+    const accounts = await ctx.db
+      .query("financeAccounts")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    for (const item of accounts) {
+      await ctx.db.delete(item._id);
+      await ctx.scheduler.runAfter(0, internal.cleanup.financeAccount, {
+        accountId: item._id,
+      });
+    }
+    const settings = await ctx.db
+      .query("financeSettings")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    for (const item of settings) {
+      await ctx.db.delete(item._id);
+    }
     if (
       boards.length > 0 ||
       tables.length > 0 ||
       pages.length > 0 ||
-      portfolios.length > 0
+      portfolios.length > 0 ||
+      accounts.length > 0
     ) {
       await ctx.scheduler.runAfter(0, internal.cleanup.project, { projectId });
     }

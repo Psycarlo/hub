@@ -8,6 +8,7 @@ import {
   vBoardLabel,
   vCardChange,
   vCardDefaults,
+  vEntryKind,
   vField,
   vFiat,
   vPriority,
@@ -308,6 +309,86 @@ export default defineSchema({
   })
     .index("by_portfolio_and_at", ["portfolioId", "at"])
     .index("by_project", ["projectId"]),
+
+  /** Money a project follows month by month: a bank account, a card, cash. */
+  financeAccounts: defineTable({
+    createdBy: v.id("users"),
+    /** What its amounts are in. */
+    currency: vFiat,
+    description: v.string(),
+    /** Left out of the project's total, like savings kept apart. */
+    excludedFromTotal: v.optional(v.boolean()),
+    projectId: v.id("projects"),
+    title: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  /** What a project's accounts share, made with its first account. */
+  financeSettings: defineTable({
+    /** What entries are filed under, in every account of the project. */
+    categories: v.array(vBoardLabel),
+    projectId: v.id("projects"),
+  }).index("by_project", ["projectId"]),
+
+  /** A month someone started on an account, which brought in its monthly entries. */
+  financeMonths: defineTable({
+    accountId: v.id("financeAccounts"),
+    /** `YYYY-MM`. */
+    month: v.string(),
+    projectId: v.id("projects"),
+    /** The monthly entries brought in, so ones made since can be offered, and none twice. */
+    recurring: v.array(v.id("financeRecurring")),
+    startedBy: v.id("users"),
+  })
+    .index("by_account_and_month", ["accountId", "month"])
+    .index("by_project_and_month", ["projectId", "month"]),
+
+  /** What an account pays or gets every month, added to each month as it starts. */
+  financeRecurring: defineTable({
+    accountId: v.id("financeAccounts"),
+    /** Id of one of the project's categories. */
+    category: v.optional(v.string()),
+    /** Positive, in cents of the account's currency. */
+    cents: v.number(),
+    createdBy: v.id("users"),
+    /** Day of the month, 1 to 31; shorter months take their last. */
+    day: v.number(),
+    kind: vEntryKind,
+    name: v.string(),
+    note: v.string(),
+    projectId: v.id("projects"),
+  })
+    .index("by_account", ["accountId"])
+    .index("by_project", ["projectId"]),
+
+  /** Money out of an account or into it. */
+  financeEntries: defineTable({
+    accountId: v.id("financeAccounts"),
+    /** The bitcoin buy it paid for, on a debit. */
+    buyId: v.optional(v.id("portfolioTransactions")),
+    /**
+     * Id of one of the project's categories. One deleted since is left
+     * behind and reads as none, since a new category never takes its id.
+     */
+    category: v.optional(v.string()),
+    /** Positive, in cents of the account's currency. */
+    cents: v.number(),
+    createdBy: v.id("users"),
+    /** `YYYY-MM-DD`. */
+    date: v.string(),
+    kind: vEntryKind,
+    name: v.string(),
+    note: v.string(),
+    /** Paid on a debit, received on a credit. The month's sums count only these. */
+    paid: v.boolean(),
+    projectId: v.id("projects"),
+    /** The monthly entry it was added from, when its month started. */
+    recurringId: v.optional(v.id("financeRecurring")),
+    updatedAt: v.number(),
+  })
+    .index("by_account_and_date", ["accountId", "date"])
+    .index("by_account_and_paid_and_date", ["accountId", "paid", "date"])
+    .index("by_project_and_date", ["projectId", "date"])
+    .index("by_project_and_buy", ["projectId", "buyId"]),
 
   /** Files uploaded to R2, and who uploaded them. */
   files: defineTable({

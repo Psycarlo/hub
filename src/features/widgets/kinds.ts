@@ -1,4 +1,5 @@
 import { BITCOIN_PRICE } from "@/features/widgets/bitcoin-widget";
+import { FINANCE } from "@/features/widgets/finance-widget";
 import { MY_TASKS } from "@/features/widgets/tasks-widget";
 import type { WidgetKind } from "@/features/widgets/widget-kind";
 import type { SettingsOf, WidgetSettings, WidgetType } from "@/lib/widgets";
@@ -6,6 +7,7 @@ import type { SettingsOf, WidgetSettings, WidgetType } from "@/lib/widgets";
 /** Every kind of widget, in the order they're offered. */
 export const WIDGET_KINDS: { [T in WidgetType]: WidgetKind<SettingsOf<T>> } = {
   bitcoinPrice: BITCOIN_PRICE,
+  finance: FINANCE,
   myTasks: MY_TASKS,
 };
 

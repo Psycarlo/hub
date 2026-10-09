@@ -12,7 +12,6 @@ import {
   ListTodoIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useSyncExternalStore } from "react";
 import { Link } from "wouter";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +19,7 @@ import { cardPath } from "@/features/board/board-context";
 import { STATUS_STYLES } from "@/features/card/card-fields";
 import type { WidgetKind } from "@/features/widgets/widget-kind";
 import { SettingTabs, WidgetBleed } from "@/features/widgets/widget-parts";
+import { useToday } from "@/hooks/use-today";
 import type { Priority } from "@/lib/model";
 import { cardKey, PRIORITIES, statusKind, statusLabel } from "@/lib/model";
 import { CHIP_COLORS } from "@/lib/palette";
@@ -31,7 +31,6 @@ type Settings = SettingsOf<"myTasks">;
 /** Tasks the list shows; the count above it says how many there are in all. */
 const SHOWN = 3;
 const ROW_HEIGHT = 32;
-const MINUTE = 60_000;
 
 interface Scope {
   /** Its name among the scopes to pick from. */
@@ -103,18 +102,6 @@ const SORTS: Record<TaskSort, Sort> = {
   },
   updated: { compare: byUpdated, tab: "Updated" },
 };
-
-function subscribeMinute(onChange: () => void): () => void {
-  const timer = setInterval(onChange, MINUTE);
-  return () => clearInterval(timer);
-}
-
-/** Today as `YYYY-MM-DD`, like due dates, turning over with the page left open. */
-function useToday(): string {
-  return useSyncExternalStore(subscribeMinute, () =>
-    format(new Date(), "yyyy-MM-dd")
-  );
-}
 
 const OVERDUE = { color: CHIP_COLORS.red, icon: CalendarXIcon };
 const DUE_TODAY = { color: CHIP_COLORS.yellow, icon: CalendarClockIcon };

@@ -22,5 +22,8 @@ export const MY_TASKS_DEFAULTS = {
   type: "myTasks",
 } as const;
 
+/** A new Finance widget, following every account in the total. */
+export const FINANCE_DEFAULTS = { type: "finance" } as const;
+
 /** Widgets one person can keep on their home. */
 export const MAX_WIDGETS = 12;

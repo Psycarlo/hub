@@ -8,6 +8,7 @@ import {
   STAGE_KINDS,
   TABLE_ICONS,
 } from "../shared/crm";
+import { ENTRY_KINDS } from "../shared/finance";
 import {
   APP_ROLES,
   PRIORITIES,
@@ -48,6 +49,7 @@ export const vCurrency = oneOf(CURRENCIES);
 export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
 export const vFiat = oneOf(FIATS);
 export const vTransactionKind = oneOf(TRANSACTION_KINDS);
+export const vEntryKind = oneOf(ENTRY_KINDS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vTaskSort = oneOf(TASK_SORTS);
@@ -162,6 +164,11 @@ export const vWidgetSettings = v.union(
     scope: vTaskScope,
     sort: vTaskSort,
     type: v.literal("myTasks"),
+  }),
+  v.object({
+    /** One account to follow; missing follows every account in the total. */
+    accountId: v.optional(v.id("financeAccounts")),
+    type: v.literal("finance"),
   })
 );
 
