@@ -274,6 +274,13 @@ export const portfolio = internalMutation({
     for (const transaction of transactions) {
       await ctx.db.delete(transaction._id);
       await releaseBuy(ctx, transaction.projectId, transaction._id);
+      // The other side of a send between portfolios stays, now to or from outside.
+      if (transaction.transfer) {
+        const other = await ctx.db.get(transaction.transfer.transactionId);
+        if (other) {
+          await ctx.db.patch(other._id, { transfer: undefined });
+        }
+      }
     }
     if (transactions.length === BATCH) {
       await ctx.scheduler.runAfter(0, internal.cleanup.portfolio, {

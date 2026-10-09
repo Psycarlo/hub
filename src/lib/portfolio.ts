@@ -1,5 +1,5 @@
 import type { Doc } from "@convex/_generated/dataModel";
-import type { Fiat } from "@convex/shared/portfolio";
+import type { Fiat, TransactionKind } from "@convex/shared/portfolio";
 import { SATS_PER_BTC, signedSats } from "@convex/shared/portfolio";
 
 import { plural } from "@/lib/utils";
@@ -9,6 +9,8 @@ export {
   FIATS,
   MAX_SATS,
   SATS_PER_BTC,
+  TRANSACTION_KINDS,
+  isIncoming,
   signedSats,
 } from "@convex/shared/portfolio";
 export type { Fiat, TransactionKind } from "@convex/shared/portfolio";
@@ -18,6 +20,13 @@ export type Transaction = Doc<"portfolioTransactions">;
 
 /** How an amount of bitcoin is typed: whole coins or satoshis. */
 export type Unit = "btc" | "sats";
+
+export const KIND_NAMES: Record<TransactionKind, string> = {
+  buy: "Buy",
+  receive: "Receive",
+  sell: "Sell",
+  send: "Send",
+};
 
 const BTC_DIGITS = 8;
 /** How long the left-out names may run in a total's label before it counts instead. */
@@ -79,6 +88,22 @@ export function fiatValue(amount: number, price: number): number {
 }
 
 /**
+ * What a transaction came to in its currency: a buy's cost with the fee on
+ * top, a sell's proceeds with it taken off, or what a send or receive was
+ * worth then.
+ */
+export function transactionTotal(
+  transaction: Pick<Transaction, "fee" | "kind" | "price" | "sats">
+): number {
+  const value = fiatValue(transaction.sats, transaction.price);
+  const fee = transaction.fee ?? 0;
+  if (transaction.kind === "buy") {
+    return value + fee;
+  }
+  return transaction.kind === "sell" ? value - fee : value;
+}
+
+/**
  * Satoshis typed as text, or undefined if it isn't an amount. Bitcoin takes
  * up to eight decimals, with a point or a comma; satoshis are whole, and any
  * thousands separators are skipped.
@@ -133,8 +158,9 @@ export function parsePrice(text: string): number | undefined {
 }
 
 /**
- * The most a new sell at `at` can take: what's held then, less whatever later
- * sells still need. Transactions are in the order they happened.
+ * The most a new sell or send at `at` can take, fees included: what's held
+ * then, less whatever later sells and sends still need. Transactions are in
+ * the order they happened.
  */
 export function sellableAt(transactions: Transaction[], at: number): number {
   let held = 0;

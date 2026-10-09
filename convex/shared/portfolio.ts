@@ -5,7 +5,7 @@ export const FIATS = ["USD", "EUR"] as const;
 /** What people see prices in until they pick one in their settings. */
 export const DEFAULT_FIAT: Fiat = "USD";
 
-export const TRANSACTION_KINDS = ["buy", "sell"] as const;
+export const TRANSACTION_KINDS = ["buy", "sell", "send", "receive"] as const;
 
 export const SATS_PER_BTC = 100_000_000;
 /** Every bitcoin there will ever be, in satoshis. */
@@ -14,12 +14,23 @@ export const MAX_SATS = 21_000_000 * SATS_PER_BTC;
 export type Fiat = (typeof FIATS)[number];
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
-/** What a transaction adds to the holdings: positive for buys, negative for sells. */
+/** Whether the kind brings bitcoin in: a buy or a receive. */
+export function isIncoming(kind: TransactionKind): boolean {
+  return kind === "buy" || kind === "receive";
+}
+
+/**
+ * What a transaction adds to the holdings: positive for buys and receives,
+ * negative for sells and sends, a send's network fee included.
+ */
 export function signedSats(transaction: {
   kind: TransactionKind;
   sats: number;
+  feeSats?: number;
 }): number {
-  return transaction.kind === "buy" ? transaction.sats : -transaction.sats;
+  return isIncoming(transaction.kind)
+    ? transaction.sats
+    : -(transaction.sats + (transaction.feeSats ?? 0));
 }
 
 /** Transactions in the order they happened; same-moment ones in the order they were added. */

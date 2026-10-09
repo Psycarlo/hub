@@ -4,6 +4,8 @@ import { useQuery } from "convex/react";
 import { format, parseISO } from "date-fns";
 import {
   ArrowDownLeftIcon,
+  ArrowLeftToLineIcon,
+  ArrowRightFromLineIcon,
   ArrowUpRightIcon,
   BitcoinIcon,
   ChartSplineIcon,
@@ -39,8 +41,15 @@ import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import { TransactionDialog } from "@/features/portfolios/transaction-dialog";
 import { Section } from "@/features/projects/project-page";
 import { useMe } from "@/hooks/use-users";
-import type { Portfolio, Transaction } from "@/lib/portfolio";
-import { fiatValue, formatBtc, formatFiat } from "@/lib/portfolio";
+import type { Portfolio, Transaction, TransactionKind } from "@/lib/portfolio";
+import {
+  KIND_NAMES,
+  formatBtc,
+  formatFiat,
+  formatSats,
+  isIncoming,
+  transactionTotal,
+} from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { canEdit, canManage, projectPath } from "@/lib/project";
 
@@ -65,6 +74,24 @@ function PaidFrom({ children }: { children: string }) {
   );
 }
 
+const KIND_ICONS: Record<TransactionKind, typeof ArrowDownLeftIcon> = {
+  buy: ArrowDownLeftIcon,
+  receive: ArrowLeftToLineIcon,
+  sell: ArrowUpRightIcon,
+  send: ArrowRightFromLineIcon,
+};
+
+/** A transaction's fee as it was entered: money on a trade, satoshis on a send. */
+function feeText(transaction: Transaction): string | undefined {
+  if (transaction.feeSats) {
+    return formatSats(transaction.feeSats);
+  }
+  if (transaction.fee) {
+    return formatFiat(transaction.fee, transaction.currency);
+  }
+  return undefined;
+}
+
 /** Which debit paid for each buy, said in a line, by transaction id. */
 function usePaidFrom(project: Project): Map<string, string> {
   const links = useQuery(api.finance.buyLinks, { projectId: project._id });
@@ -84,12 +111,15 @@ function usePaidFrom(project: Project): Map<string, string> {
 function TransactionRows({
   transactions,
   paidFrom,
+  portfolioTitles,
   onOpen,
 }: {
   /** Newest first. */
   transactions: Transaction[];
   /** What paid for each buy a debit paid for, by transaction id. */
   paidFrom: ReadonlyMap<string, string>;
+  /** Every portfolio the person can see, to name where sends went and receives came from. */
+  portfolioTitles: ReadonlyMap<string, string>;
   /** Opens a transaction to change it; rows stay still without it. */
   onOpen?: (transaction: Transaction) => void;
 }) {
@@ -113,14 +143,21 @@ function TransactionRows({
             <TableHead className="max-sm:hidden">Type</TableHead>
             <TableHead className="text-right">Amount</TableHead>
             <TableHead className="text-right max-lg:hidden">Price</TableHead>
+            <TableHead className="text-right max-lg:hidden">Fee</TableHead>
             <TableHead className="text-right">Total</TableHead>
             <TableHead className="max-md:hidden">Note</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.slice(0, shown).map((transaction) => {
-            const sell = transaction.kind === "sell";
+            const incoming = isIncoming(transaction.kind);
+            const KindIcon = KIND_ICONS[transaction.kind];
             const paid = paidFrom.get(transaction._id);
+            const fee = feeText(transaction);
+            const other =
+              transaction.transfer &&
+              (portfolioTitles.get(transaction.transfer.portfolioId) ??
+                "another portfolio");
             const date = (
               <>
                 {format(transaction.at, "MMM d, yyyy")}
@@ -151,29 +188,40 @@ function TransactionRows({
                     date
                   )}
                 </TableCell>
-                <TableCell className="max-sm:hidden">
-                  <span className="flex items-center gap-1.5">
-                    {sell ? (
-                      <ArrowUpRightIcon className="text-muted-foreground size-3.5" />
-                    ) : (
-                      <ArrowDownLeftIcon className="text-primary size-3.5" />
+                <TableCell className="max-w-56 max-sm:hidden">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <KindIcon
+                      className={cn(
+                        "size-3.5 shrink-0",
+                        incoming ? "text-primary" : "text-muted-foreground"
+                      )}
+                    />
+                    {KIND_NAMES[transaction.kind]}
+                    {other && (
+                      <span className="text-muted-foreground truncate">
+                        {transaction.kind === "send" ? "to" : "from"} {other}
+                      </span>
                     )}
-                    {sell ? "Sell" : "Buy"}
                     {paid && <PaidFrom>{paid}</PaidFrom>}
                   </span>
                 </TableCell>
                 <TableCell className={cn(NUMERIC, "font-medium")}>
                   <Discreet>
-                    {`${sell ? "−" : "+"}${formatBtc(transaction.sats)}`}
+                    {`${incoming ? "+" : "−"}${formatBtc(transaction.sats)}`}
                   </Discreet>
                 </TableCell>
                 <TableCell className={cn(NUMERIC, "max-lg:hidden")}>
                   {formatFiat(transaction.price, transaction.currency)}
                 </TableCell>
+                <TableCell
+                  className={cn(NUMERIC, "text-muted-foreground max-lg:hidden")}
+                >
+                  {fee ? <Discreet>{fee}</Discreet> : "—"}
+                </TableCell>
                 <TableCell className={NUMERIC}>
                   <Discreet>
                     {formatFiat(
-                      fiatValue(transaction.sats, transaction.price),
+                      transactionTotal(transaction),
                       transaction.currency
                     )}
                   </Discreet>
@@ -229,6 +277,11 @@ export function PortfolioPage({
   );
   const newest = useMemo(() => transactions?.toReversed(), [transactions]);
   const paidFrom = usePaidFrom(project);
+  const portfolios = useQuery(api.portfolios.list);
+  const portfolioTitles = useMemo(
+    () => new Map(portfolios?.map((item) => [item._id, item.title])),
+    [portfolios]
+  );
 
   const openTransaction = (transaction?: Transaction) => {
     setEditing(transaction);
@@ -239,6 +292,7 @@ export function PortfolioPage({
     <TransactionRows
       onOpen={editable ? openTransaction : undefined}
       paidFrom={paidFrom}
+      portfolioTitles={portfolioTitles}
       transactions={newest ?? []}
     />
   );
@@ -246,7 +300,7 @@ export function PortfolioPage({
     list = editable ? (
       <Empty className="bg-muted/60 rounded-2xl py-10">
         <EmptyDescription className="mt-0 max-w-sm">
-          Add what was bought or sold, when, and at what price.
+          Add what was bought, sold, sent or received, when, and at what price.
         </EmptyDescription>
         <Button onClick={() => openTransaction()}>
           <PlusIcon />

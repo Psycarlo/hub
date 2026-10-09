@@ -409,7 +409,7 @@ export default defineSchema({
     fileId: v.id("driveFiles"),
   }).index("by_file", ["fileId"]),
 
-  /** Bitcoin a project holds, tracked through what it bought and sold. */
+  /** Bitcoin a project holds, tracked through what it bought, sold, sent and received. */
   portfolios: defineTable({
     createdBy: v.id("users"),
     description: v.string(),
@@ -425,16 +425,30 @@ export default defineSchema({
     /** When it happened, in ms. */
     at: v.number(),
     createdBy: v.id("users"),
-    /** The currency the price is in. */
+    /** The currency the price and fee are in. */
     currency: vFiat,
+    /** The exchange's fee on a buy or sell, in `currency`. */
+    fee: v.optional(v.number()),
+    /** The network fee on a send, in satoshis, leaving on top of `sats`. */
+    feeSats: v.optional(v.number()),
     kind: vTransactionKind,
     note: v.string(),
     portfolioId: v.id("portfolios"),
     /** What one bitcoin cost then. */
     price: v.number(),
     projectId: v.id("projects"),
-    /** Satoshis bought or sold, always positive. */
+    /** Satoshis bought, sold, sent or received, always positive. */
     sats: v.number(),
+    /**
+     * The other side of a send between portfolios: a send's receive, or a
+     * receive's send. Both keep the same moment, amount and price.
+     */
+    transfer: v.optional(
+      v.object({
+        portfolioId: v.id("portfolios"),
+        transactionId: v.id("portfolioTransactions"),
+      })
+    ),
     updatedAt: v.number(),
   })
     .index("by_portfolio_and_at", ["portfolioId", "at"])

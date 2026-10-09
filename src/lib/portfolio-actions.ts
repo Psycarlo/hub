@@ -25,6 +25,12 @@ export interface TransactionDraft {
   currency: Fiat;
   at: number;
   note: string;
+  /** The exchange's fee on a buy or sell, in `currency`; zero for none. */
+  fee: number;
+  /** The network fee on a send, in satoshis; zero for none. */
+  feeSats: number;
+  /** Where a send goes: another portfolio, or null for outside. */
+  toPortfolioId: Id<"portfolios"> | null;
 }
 
 function patchTransactions(

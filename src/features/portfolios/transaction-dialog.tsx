@@ -1,4 +1,7 @@
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "cn";
+import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import type { FormEvent } from "react";
@@ -32,6 +35,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,16 +56,18 @@ import type {
   Unit,
 } from "@/lib/portfolio";
 import {
+  KIND_NAMES,
   MAX_SATS,
+  TRANSACTION_KINDS,
   amountText,
   fiatSymbol,
-  fiatValue,
   formatBtc,
   formatFiat,
   formatSats,
   parseAmount,
   parsePrice,
   sellableAt,
+  transactionTotal,
 } from "@/lib/portfolio";
 import type { TransactionDraft } from "@/lib/portfolio-actions";
 import {
@@ -63,6 +75,7 @@ import {
   deleteTransaction,
   updateTransaction,
 } from "@/lib/portfolio-actions";
+import { canEdit } from "@/lib/project";
 import { readStorage, writeStorage } from "@/lib/utils";
 
 export const UNIT_KEY = "portfolio:unit";
@@ -71,6 +84,9 @@ const GENESIS = new Date(2009, 0, 3);
 const TIME = /^(?<hours>\d{2}):(?<minutes>\d{2})$/u;
 const HINT = "flex flex-wrap items-center gap-x-2 text-xs tabular-nums";
 const HINT_ACTION = "text-primary font-medium hover:underline";
+/** Where a send goes when it's not to another portfolio. */
+const OUTSIDE = "outside";
+const ZERO = /^0*(?:[.,]0*)?$/u;
 
 /** The form as typed, before it's checked. */
 interface Fields {
@@ -82,20 +98,34 @@ interface Fields {
   day: Date;
   time: string;
   note: string;
+  /** A buy's or sell's fee, in the currency. */
+  fee: string;
+  /** A send's network fee, in `unit`. */
+  feeSats: string;
+  /** Where a send goes: a portfolio's id, or `OUTSIDE`. */
+  to: string;
 }
 
 /** The form checked: what it means, and what's wrong with it. */
 interface Checked {
   sats?: number;
   price?: number;
+  /** The fee the kind takes, in the currency or in satoshis; zero when there's none. */
+  fee?: number;
   /** The price as the field shows it. */
   shownPrice: string;
-  /** The most that can be sold at the chosen moment. */
+  /** The most that can be sold or sent at the chosen moment, fees included. */
   sellable: number;
   amountError?: string;
   priceError?: string;
+  feeError?: string;
   /** Everything the change needs, once nothing's wrong. */
   draft?: Omit<TransactionDraft, "currency" | "note">;
+}
+
+/** Whether the kind trades bitcoin for money, so takes a fee in it. */
+function isTrade(kind: TransactionKind): boolean {
+  return kind === "buy" || kind === "sell";
 }
 
 function currentTime(): number {
@@ -127,9 +157,12 @@ function initialFields(transaction?: Transaction): Fields {
     return {
       amount: "",
       day: now,
+      fee: "",
+      feeSats: "",
       kind: "buy",
       note: "",
       time: format(now, "HH:mm"),
+      to: OUTSIDE,
       typedPrice: undefined,
       unit,
     };
@@ -138,18 +171,53 @@ function initialFields(transaction?: Transaction): Fields {
   return {
     amount: amountText(transaction.sats, unit),
     day: at,
+    fee: transaction.fee ? priceText(transaction.fee) : "",
+    feeSats: transaction.feeSats ? amountText(transaction.feeSats, unit) : "",
     kind: transaction.kind,
     note: transaction.note,
     time: format(at, "HH:mm"),
+    to:
+      transaction.kind === "send" && transaction.transfer
+        ? transaction.transfer.portfolioId
+        : OUTSIDE,
     typedPrice: priceText(transaction.price),
     unit,
   };
 }
 
+/** The fee the kind takes, typed: zero when blank, undefined if it isn't an amount. */
+function parseFee(fields: Fields): number | undefined {
+  if (fields.kind === "send") {
+    return fields.feeSats.trim() === ""
+      ? 0
+      : parseAmount(fields.feeSats, fields.unit);
+  }
+  if (!isTrade(fields.kind) || ZERO.test(fields.fee.trim())) {
+    return 0;
+  }
+  return parsePrice(fields.fee);
+}
+
+function feeError(fields: Fields, fee: number | undefined): string | undefined {
+  if (fee === undefined) {
+    if (fields.kind === "send") {
+      return fields.unit === "btc"
+        ? "Enter bitcoin with up to 8 decimals, like 0.00001."
+        : "Enter whole satoshis, like 1500.";
+    }
+    return "Enter a fee, like 2.50.";
+  }
+  if (fields.kind === "send" && fee > MAX_SATS) {
+    return "That’s more bitcoin than there will ever be.";
+  }
+  return undefined;
+}
+
 function amountError(
   fields: Fields,
   sats: number | undefined,
-  sellable: number
+  sellable: number,
+  feeSats: number
 ): string | undefined {
   if (sats === undefined) {
     if (fields.amount.trim() === "") {
@@ -165,12 +233,18 @@ function amountError(
   if (fields.kind === "sell" && sats > sellable) {
     return `Only ${formatBtc(sellable)} can be sold then.`;
   }
+  if (fields.kind === "send" && sats + feeSats > sellable) {
+    const most = Math.max(0, sellable - feeSats);
+    return feeSats > 0
+      ? `Only ${formatBtc(most)} can be sent then, after the fee.`
+      : `Only ${formatBtc(most)} can be sent then.`;
+  }
   return undefined;
 }
 
 /**
  * What the fields mean. `others` are the portfolio's other transactions, in
- * the order they happened, which limit what a sell can take.
+ * the order they happened, which limit what a sell or send can take.
  */
 function check(
   fields: Fields,
@@ -185,8 +259,12 @@ function check(
   const price = parsePrice(shownPrice);
   const at = combine(fields.day, fields.time);
   const sellable = sellableAt(others, at);
+  const fee = parseFee(fields);
+  const feeSats = fields.kind === "send" ? (fee ?? 0) : 0;
   const checked: Checked = {
-    amountError: amountError(fields, sats, sellable),
+    amountError: amountError(fields, sats, sellable, feeSats),
+    fee,
+    feeError: feeError(fields, fee),
     price,
     priceError:
       shownPrice.trim() !== "" && price === undefined
@@ -200,9 +278,22 @@ function check(
     sats !== undefined &&
     sats > 0 &&
     price !== undefined &&
-    !checked.amountError
+    fee !== undefined &&
+    !checked.amountError &&
+    !checked.feeError
   ) {
-    checked.draft = { at, kind: fields.kind, price, sats };
+    checked.draft = {
+      at,
+      fee: isTrade(fields.kind) ? fee : 0,
+      feeSats,
+      kind: fields.kind,
+      price,
+      sats,
+      toPortfolioId:
+        fields.kind === "send" && fields.to !== OUTSIDE
+          ? (fields.to as Id<"portfolios">)
+          : null,
+    };
   }
   return checked;
 }
@@ -254,7 +345,7 @@ function AmountField({
   id,
   autoFocus,
   fields: { amount, kind, unit },
-  checked: { sats, sellable, amountError: error },
+  checked: { sats, sellable, fee, amountError: error },
   onAmountChange,
   onUnitChange,
 }: AmountFieldProps) {
@@ -262,7 +353,9 @@ function AmountField({
   if (sats !== undefined) {
     hint = unit === "btc" ? formatSats(sats) : formatBtc(sats);
   }
-  const selling = kind === "sell" && !error;
+  const selling = (kind === "sell" || kind === "send") && !error;
+  // A send's fee leaves too, so all of it is what's left after the fee.
+  const all = Math.max(0, sellable - (kind === "send" ? (fee ?? 0) : 0));
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>Amount</Label>
@@ -293,19 +386,222 @@ function AmountField({
           <>
             {hint && <span aria-hidden>·</span>}
             <span>{formatBtc(sellable)} available</span>
-            {sellable > 0 && sats !== sellable && (
+            {all > 0 && sats !== all && (
               <button
                 className={HINT_ACTION}
-                onClick={() => onAmountChange(amountText(sellable, unit))}
+                onClick={() => onAmountChange(amountText(all, unit))}
                 type="button"
               >
-                Sell all
+                {kind === "send" ? "Send all" : "Sell all"}
               </button>
             )}
           </>
         )}
       </p>
     </div>
+  );
+}
+
+interface FeeFieldProps {
+  id: string;
+  currency: Fiat;
+  fields: Fields;
+  checked: Checked;
+  onChange: (patch: Pick<Fields, "fee"> | Pick<Fields, "feeSats">) => void;
+}
+
+/**
+ * What the trade or send cost on top: an exchange's fee in money on a buy or
+ * sell, a network fee in bitcoin on a send.
+ */
+function FeeField({
+  id,
+  currency,
+  fields: { kind, unit, fee: typedFee, feeSats: typedFeeSats },
+  checked: { fee, feeError: error },
+  onChange,
+}: FeeFieldProps) {
+  const send = kind === "send";
+  let hint = "Optional. Added to the cost.";
+  if (kind === "sell") {
+    hint = "Optional. Taken off what’s received.";
+  } else if (send) {
+    hint = "Optional. Leaves the portfolio on top of the amount.";
+    if (fee) {
+      hint = unit === "btc" ? formatSats(fee) : formatBtc(fee);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{send ? "Network fee" : "Fee"}</Label>
+      <div className="relative">
+        {!send && (
+          <span
+            aria-hidden
+            className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
+          >
+            {fiatSymbol(currency)}
+          </span>
+        )}
+        <Input
+          aria-describedby={`${id}-hint`}
+          aria-invalid={error ? true : undefined}
+          autoComplete="off"
+          className={cn("tabular-nums", send ? "pr-14" : "pl-7")}
+          id={id}
+          inputMode={send && unit === "sats" ? "numeric" : "decimal"}
+          onChange={(event) =>
+            onChange(
+              send
+                ? { feeSats: event.target.value }
+                : { fee: event.target.value }
+            )
+          }
+          placeholder={send && unit === "sats" ? "0" : "0.00"}
+          value={send ? typedFeeSats : typedFee}
+        />
+        {send && (
+          <span
+            aria-hidden
+            className="text-muted-foreground pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium"
+          >
+            {unit === "btc" ? "BTC" : "sats"}
+          </span>
+        )}
+      </div>
+      <p
+        className={cn(
+          HINT,
+          error ? "text-destructive" : "text-muted-foreground"
+        )}
+        id={`${id}-hint`}
+      >
+        {error ?? hint}
+      </p>
+    </div>
+  );
+}
+
+/** A portfolio to send to, named with its project when that's another one. */
+interface Destination {
+  value: string;
+  title: string;
+  project?: string;
+}
+
+/**
+ * The portfolios a send from `portfolio` can go to: any other one in a
+ * project the person can edit. `current` stays listed even once it isn't.
+ */
+function useDestinations(portfolio: Portfolio, current: string): Destination[] {
+  const portfolios = useQuery(api.portfolios.list);
+  const projects = useQuery(api.projects.list);
+  const editable = new Map(
+    (projects ?? [])
+      .filter((project) => canEdit(project))
+      .map((project) => [project._id as string, project.title])
+  );
+  const destinations: Destination[] = [
+    { title: "Outside, like a wallet or exchange", value: OUTSIDE },
+  ];
+  for (const item of portfolios ?? []) {
+    const project = editable.get(item.projectId);
+    if (item._id !== portfolio._id && project !== undefined) {
+      destinations.push({
+        project: item.projectId === portfolio.projectId ? undefined : project,
+        title: item.title,
+        value: item._id,
+      });
+    }
+  }
+  if (!destinations.some((item) => item.value === current)) {
+    // One the person can see but no longer edit keeps its name.
+    const title = portfolios?.find((item) => item._id === current)?.title;
+    destinations.push({ title: title ?? "Another portfolio", value: current });
+  }
+  return destinations;
+}
+
+function DestinationLabel({ destination }: { destination: Destination }) {
+  return (
+    <>
+      <span className="truncate">{destination.title}</span>
+      {destination.project && (
+        <span className="text-muted-foreground truncate">
+          {destination.project}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Where a send goes: outside, or another portfolio, which then shows it as a receive. */
+function DestinationField({
+  id,
+  portfolio,
+  value,
+  onChange,
+}: {
+  id: string;
+  portfolio: Portfolio;
+  value: string;
+  onChange: (to: string) => void;
+}) {
+  const destinations = useDestinations(portfolio, value);
+  const items = destinations.map((destination) => ({
+    label: <DestinationLabel destination={destination} />,
+    value: destination.value,
+  }));
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>To</Label>
+      <Select
+        items={items}
+        onValueChange={(next: string | null) => {
+          if (next) {
+            onChange(next);
+          }
+        }}
+        value={value}
+      >
+        <SelectTrigger
+          aria-describedby={`${id}-hint`}
+          className="w-full"
+          id={id}
+        >
+          <SelectValue className="items-center gap-2" />
+        </SelectTrigger>
+        <SelectContent>
+          {destinations.map((destination) => (
+            <SelectItem key={destination.value} value={destination.value}>
+              <DestinationLabel destination={destination} />
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className={cn(HINT, "text-muted-foreground")} id={`${id}-hint`}>
+        {value === OUTSIDE
+          ? "Leaves the bitcoin tracked here."
+          : "Shows up there as a receive."}
+      </p>
+    </div>
+  );
+}
+
+/** Where a receive from another portfolio came from, which changes along with it. */
+function TransferSource({ transaction }: { transaction: Transaction }) {
+  const portfolios = useQuery(api.portfolios.list);
+  const from = portfolios?.find(
+    (item) => item._id === transaction.transfer?.portfolioId
+  );
+  return (
+    <p className="bg-muted/60 text-muted-foreground rounded-xl px-4 py-3 text-sm">
+      Sent from{" "}
+      <span className="text-foreground font-medium">
+        {from?.title ?? "another portfolio"}
+      </span>
+      . Changes here change the send too.
+    </p>
   );
 }
 
@@ -450,9 +746,16 @@ function DateField({ id, day, time, onChange, future }: DateFieldProps) {
   );
 }
 
+const TOTAL_LABELS: Record<TransactionKind, string> = {
+  buy: "Total cost",
+  receive: "Value received",
+  sell: "Total received",
+  send: "Value sent",
+};
+
 function TotalRow({
   kind,
-  checked: { sats, price },
+  checked: { sats, price, fee },
   currency,
 }: {
   kind: TransactionKind;
@@ -461,13 +764,15 @@ function TotalRow({
 }) {
   let total = "—";
   if (sats !== undefined && price !== undefined) {
-    total = formatFiat(fiatValue(sats, price), currency);
+    const tradeFee = isTrade(kind) ? fee : undefined;
+    total = formatFiat(
+      transactionTotal({ fee: tradeFee, kind, price, sats }),
+      currency
+    );
   }
   return (
     <div className="bg-muted/60 flex items-center justify-between gap-4 rounded-xl px-4 py-3 text-sm">
-      <span className="text-muted-foreground">
-        {kind === "buy" ? "Total cost" : "Total received"}
-      </span>
+      <span className="text-muted-foreground">{TOTAL_LABELS[kind]}</span>
       <span className="font-semibold tabular-nums">{total}</span>
     </div>
   );
@@ -493,7 +798,9 @@ function DeleteTransaction({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this {transaction.kind}?</AlertDialogTitle>
           <AlertDialogDescription>
-            It comes off the portfolio for everyone.
+            {transaction.transfer
+              ? "It comes off both portfolios it moved between, for everyone."
+              : "It comes off the portfolio for everyone."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -542,10 +849,17 @@ function TransactionForm({
   const change = (patch: Partial<Fields>) =>
     setFields((current) => ({ ...current, ...patch }));
 
+  // A receive from another portfolio follows its send, so stays a receive.
+  const fromTransfer = transaction?.kind === "receive" && transaction.transfer;
+
   const changeUnit = (unit: Unit) => {
-    const sats = parseAmount(fields.amount, fields.unit);
+    const convert = (text: string) => {
+      const sats = parseAmount(text, fields.unit);
+      return sats === undefined ? text : amountText(sats, unit);
+    };
     change({
-      amount: sats === undefined ? fields.amount : amountText(sats, unit),
+      amount: convert(fields.amount),
+      feeSats: convert(fields.feeSats),
       unit,
     });
     writeStorage(UNIT_KEY, unit);
@@ -585,15 +899,28 @@ function TransactionForm({
         value={fields.kind}
       >
         <TabsList aria-label="Type" className="w-full">
-          <TabsTrigger className="flex-1 justify-center" value="buy">
-            Buy
-          </TabsTrigger>
-          <TabsTrigger className="flex-1 justify-center" value="sell">
-            Sell
-          </TabsTrigger>
+          {TRANSACTION_KINDS.map((kind) => (
+            <TabsTrigger
+              className="flex-1 justify-center px-2"
+              disabled={Boolean(fromTransfer) && kind !== "receive"}
+              key={kind}
+              value={kind}
+            >
+              {KIND_NAMES[kind]}
+            </TabsTrigger>
+          ))}
         </TabsList>
       </Tabs>
 
+      {fromTransfer && <TransferSource transaction={transaction} />}
+      {fields.kind === "send" && (
+        <DestinationField
+          id={`${id}-to`}
+          onChange={(to) => change({ to })}
+          portfolio={portfolio}
+          value={fields.to}
+        />
+      )}
       <AmountField
         autoFocus={!transaction}
         checked={checked}
@@ -602,6 +929,15 @@ function TransactionForm({
         onAmountChange={(amount) => change({ amount })}
         onUnitChange={changeUnit}
       />
+      {fields.kind !== "receive" && (
+        <FeeField
+          checked={checked}
+          currency={currency}
+          fields={fields}
+          id={`${id}-fee`}
+          onChange={change}
+        />
+      )}
       <PriceField
         checked={checked}
         currency={currency}
