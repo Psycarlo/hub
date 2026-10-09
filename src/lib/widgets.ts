@@ -4,6 +4,7 @@ import type { WidgetSettings } from "@convex/lib/validators";
 export type { WidgetSettings } from "@convex/lib/validators";
 export {
   FINANCE_DEFAULTS,
+  HABITS_DEFAULTS,
   MAX_WIDGETS,
   MY_TASKS_DEFAULTS,
   TASK_SCOPES,

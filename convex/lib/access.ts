@@ -309,6 +309,18 @@ export async function requireRecurring(
   };
 }
 
+export async function requireHabit(
+  ctx: QueryCtx,
+  habitId: Id<"habits">,
+  need: Need
+): Promise<ProjectAccess & { habit: Doc<"habits"> }> {
+  const habit = await ctx.db.get(habitId);
+  if (!habit) {
+    throw new ConvexError("This habit doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, habit.projectId, need)), habit };
+}
+
 /**
  * The access check's result, or null when the thing is gone or no longer
  * shared. Live queries for one card, record or board use it, so a screen open

@@ -28,6 +28,7 @@ interface ColorPickerProps {
   value: Color | HexColor;
   onChange: (color: Color) => void;
   className?: string;
+  "aria-label"?: string;
   "aria-labelledby"?: string;
 }
 

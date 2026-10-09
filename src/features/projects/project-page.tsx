@@ -26,6 +26,8 @@ import { TableIcon } from "@/features/crm/table-icon";
 import { PageGrid, useNewPage } from "@/features/docs/docs-page";
 import { AccountGrid } from "@/features/finance/account-card";
 import { AccountDialog } from "@/features/finance/account-dialog";
+import { HabitGrid } from "@/features/habits/habit-card";
+import { HabitDialog } from "@/features/habits/habit-dialog";
 import { PortfolioGrid } from "@/features/portfolios/portfolio-card";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import type { ProjectItem } from "@/features/projects/new-in-project";
@@ -35,6 +37,7 @@ import type { CrmRecord, CrmTable, NavTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
 import type { DocPage, DocsContent } from "@/lib/docs";
 import type { Account } from "@/lib/finance";
+import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
 import { SWATCH_COLORS } from "@/lib/palette";
 import type { Portfolio } from "@/lib/portfolio";
@@ -166,6 +169,9 @@ interface ProjectPageProps {
   /** The project's finance accounts. */
   accounts: Account[];
   accountsLoaded: boolean;
+  /** The project's habits; only personal projects have them. */
+  habits: Habit[];
+  habitsLoaded: boolean;
   content?: ProjectContent;
   loaded: boolean;
 }
@@ -313,6 +319,7 @@ function ProjectSections({
   pages,
   portfolios,
   accounts,
+  habits,
   onNew,
 }: {
   project: Project;
@@ -325,11 +332,28 @@ function ProjectSections({
   pages: DocPage[];
   portfolios: Portfolio[];
   accounts: Account[];
+  habits: Habit[];
   onNew: (kind: ProjectItem) => void;
 }) {
   const editable = canEdit(project);
   return (
     <>
+      {/* Checked off every day, so they lead. */}
+      {habits.length > 0 && (
+        <Section
+          action={
+            editable && (
+              <Button onClick={() => onNew("habit")} variant="outline">
+                <PlusIcon />
+                New habit
+              </Button>
+            )
+          }
+          title="Habits"
+        >
+          <HabitGrid habits={habits} project={project} />
+        </Section>
+      )}
       {tables.length > 0 && (
         <ProjectTables
           content={content}
@@ -395,26 +419,37 @@ function ProjectSections({
   );
 }
 
-/** Where a project's boards, tables, docs, portfolios and accounts go, before it has any. */
+/** Where a project's boards, tables, docs, portfolios, accounts and habits go, before it has any. */
 function NoContent({
   editable,
+  personal,
   onNew,
 }: {
   editable: boolean;
+  /** A personal project, which can keep habits too. */
+  personal: boolean;
   onNew: (kind: ProjectItem) => void;
 }) {
+  let description =
+    "Boards, tables, docs, portfolios and accounts in this project show up here.";
+  if (editable && personal) {
+    description =
+      "Build habits, plan work on boards, track deals in CRM tables, write docs, follow bitcoin portfolios and the money in your accounts.";
+  } else if (editable) {
+    description =
+      "Plan work on boards, track deals in CRM tables, write docs, follow bitcoin portfolios and the money in your accounts.";
+  }
   return (
     <Empty className="bg-muted/60 rounded-2xl py-10">
       <EmptyTitle>Nothing here yet</EmptyTitle>
-      <EmptyDescription className="max-w-sm">
-        {editable
-          ? "Plan work on boards, track deals in CRM tables, write docs, follow bitcoin portfolios and the money in your accounts."
-          : "Boards, tables, docs, portfolios and accounts in this project show up here."}
-      </EmptyDescription>
-      {editable && <NewInProject onNew={onNew} />}
+      <EmptyDescription className="max-w-sm">{description}</EmptyDescription>
+      {editable && <NewInProject onNew={onNew} personal={personal} />}
     </Empty>
   );
 }
+
+/** What the page can open: the project's settings, or a new thing in it. */
+type Dialog = "settings" | Exclude<ProjectItem, "page">;
 
 export function ProjectPage({
   project,
@@ -428,12 +463,12 @@ export function ProjectPage({
   portfoliosLoaded,
   accounts,
   accountsLoaded,
+  habits,
+  habitsLoaded,
   content,
   loaded,
 }: ProjectPageProps) {
-  const [dialog, setDialog] = useState<
-    "settings" | "board" | "table" | "portfolio" | "account"
-  >();
+  const [dialog, setDialog] = useState<Dialog>();
   const newPage = useNewPage(project);
   const editable = canEdit(project);
   const members = project.members.map((member) => member.userId);
@@ -445,9 +480,7 @@ export function ProjectPage({
   const projectTables = loaded
     ? (content?.tables ?? [])
     : tables.filter((table) => table.projectId === project._id);
-  const dialogProps = (
-    name: "settings" | "board" | "table" | "portfolio" | "account"
-  ) => ({
+  const dialogProps = (name: Dialog) => ({
     onOpenChange: (open: boolean) => setDialog(open ? name : undefined),
     open: dialog === name,
   });
@@ -460,19 +493,28 @@ export function ProjectPage({
   };
 
   // Only what the project has gets a section; nothing at all gets one note.
-  const hasAny =
-    projectTables.length > 0 ||
-    projectBoards.length > 0 ||
-    docs.roots.length > 0 ||
-    portfolios.length > 0 ||
-    accounts.length > 0;
-  const allLoaded =
-    loaded && boardsLoaded && docsLoaded && portfoliosLoaded && accountsLoaded;
+  const hasAny = [
+    projectTables,
+    projectBoards,
+    docs.roots,
+    portfolios,
+    accounts,
+    habits,
+  ].some((items) => items.length > 0);
+  const allLoaded = [
+    loaded,
+    boardsLoaded,
+    docsLoaded,
+    portfoliosLoaded,
+    accountsLoaded,
+    habitsLoaded,
+  ].every(Boolean);
 
   let body: ReactNode = (
     <ProjectSections
       accounts={accounts}
       boards={projectBoards}
+      habits={habits}
       content={loaded ? content : undefined}
       members={members}
       onNew={onNew}
@@ -490,7 +532,13 @@ export function ProjectPage({
       </div>
     );
   } else if (!hasAny) {
-    body = <NoContent editable={editable} onNew={onNew} />;
+    body = (
+      <NoContent
+        editable={editable}
+        onNew={onNew}
+        personal={project.personalFor !== undefined}
+      />
+    );
   }
 
   return (
@@ -501,7 +549,12 @@ export function ProjectPage({
         ]}
       >
         {editable && hasAny && (
-          <NewInProject onNew={onNew} size="sm" variant="outline" />
+          <NewInProject
+            onNew={onNew}
+            personal={project.personalFor !== undefined}
+            size="sm"
+            variant="outline"
+          />
         )}
       </TopBar>
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 pt-4 pb-10 sm:px-6">
@@ -525,6 +578,9 @@ export function ProjectPage({
       <NewTableDialog {...dialogProps("table")} project={project} />
       <PortfolioDialog {...dialogProps("portfolio")} project={project} />
       <AccountDialog {...dialogProps("account")} project={project} />
+      {project.personalFor && (
+        <HabitDialog {...dialogProps("habit")} project={project} />
+      )}
     </>
   );
 }

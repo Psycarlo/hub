@@ -40,6 +40,7 @@ import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
 import { docsByProject } from "@/lib/docs";
 import type { Account } from "@/lib/finance";
+import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -57,6 +58,7 @@ const NO_TABLES: NavTable[] = [];
 const NO_PAGES: DocPage[] = [];
 const NO_PORTFOLIOS: Portfolio[] = [];
 const NO_ACCOUNTS: Account[] = [];
+const NO_HABITS: Habit[] = [];
 
 // Projects carry the CRM and its table library, which board-only visits never need.
 const ProjectRoute = lazy(async () => {
@@ -102,6 +104,7 @@ function Workspace() {
   const pages = useQuery(api.docs.tree);
   const portfolioList = useQuery(api.portfolios.list);
   const accountList = useQuery(api.finance.accounts);
+  const habitList = useQuery(api.habits.list);
   const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
@@ -110,6 +113,7 @@ function Workspace() {
   const docs = docsByProject(pages ?? NO_PAGES);
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const accounts = accountList ?? NO_ACCOUNTS;
+  const habits = habitList ?? NO_HABITS;
   const [creatingProject, setCreatingProject] = useState(false);
   const projectsLoaded = projectList !== undefined;
   const boardsLoaded = boardList !== undefined;
@@ -121,6 +125,7 @@ function Workspace() {
         accounts={accounts}
         boards={boards}
         docs={docs}
+        habits={habits}
         onNewProject={newProject}
         portfolios={portfolios}
         projects={projects}
@@ -162,6 +167,8 @@ function Workspace() {
                     boardsLoaded={boardsLoaded}
                     docs={docs}
                     docsLoaded={pages !== undefined}
+                    habits={habits}
+                    habitsLoaded={habitList !== undefined}
                     loaded={projectsLoaded}
                     portfolios={portfolios}
                     portfoliosLoaded={portfolioList !== undefined}

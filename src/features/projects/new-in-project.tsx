@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BitcoinIcon,
+  CalendarCheckIcon,
   FileTextIcon,
   PlusIcon,
   SquareKanbanIcon,
@@ -11,14 +12,21 @@ import {
 import { SplitButton } from "@/components/split-button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
-/** What a project can hold. */
-export type ProjectItem = "board" | "table" | "page" | "portfolio" | "account";
+/** What a project can hold. Habits are kept only in personal projects. */
+export type ProjectItem =
+  | "board"
+  | "table"
+  | "page"
+  | "portfolio"
+  | "account"
+  | "habit";
 
 const ITEMS: {
   kind: ProjectItem;
   label: string;
   description: string;
   icon: LucideIcon;
+  personalOnly?: boolean;
 }[] = [
   {
     description: "Plan work as cards, with sprints if you want them.",
@@ -50,21 +58,32 @@ const ITEMS: {
     kind: "account",
     label: "Finance account",
   },
+  {
+    description: "Do something every day, or on the days you pick.",
+    icon: CalendarCheckIcon,
+    kind: "habit",
+    label: "Habit",
+    personalOnly: true,
+  },
 ];
 
 /** Starts a board, or from its menu anything else a project holds. */
 export function NewInProject({
   onNew,
+  personal = false,
   size,
   variant,
 }: {
   onNew: (kind: ProjectItem) => void;
+  /** A personal project, which offers habits too. */
+  personal?: boolean;
   size?: "default" | "sm";
   variant?: "default" | "outline";
 }) {
+  const items = ITEMS.filter((item) => personal || !item.personalOnly);
   return (
     <SplitButton
-      menu={ITEMS.map(({ kind, label, description, icon: Icon }) => (
+      menu={items.map(({ kind, label, description, icon: Icon }) => (
         <DropdownMenuItem
           className="items-start gap-3 py-2"
           key={kind}

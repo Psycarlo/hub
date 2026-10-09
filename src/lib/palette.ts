@@ -33,6 +33,19 @@ export const CHIP_COLORS: Record<Color, string> = {
     "bg-yellow-400/25 text-yellow-900 dark:bg-yellow-300/16 dark:text-yellow-100",
 };
 
+/** The swatch's color as text, for icons and strokes drawn in it. */
+export const TEXT_COLORS: Record<Color, string> = {
+  blue: "text-blue-500",
+  gray: "text-neutral-400 dark:text-neutral-500",
+  green: "text-green-500",
+  orange: "text-orange-500",
+  pink: "text-pink-500",
+  purple: "text-violet-500",
+  red: "text-red-500",
+  teal: "text-teal-500",
+  yellow: "text-yellow-400",
+};
+
 /** Solid swatch for dots, bars and badges. */
 export const SWATCH_COLORS: Record<Color, string> = {
   blue: "bg-blue-500",

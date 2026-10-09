@@ -9,6 +9,7 @@ import {
   TABLE_ICONS,
 } from "../shared/crm";
 import { ENTRY_KINDS } from "../shared/finance";
+import { HABIT_ICONS } from "../shared/habits";
 import {
   APP_ROLES,
   PRIORITIES,
@@ -50,6 +51,7 @@ export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
 export const vFiat = oneOf(FIATS);
 export const vTransactionKind = oneOf(TRANSACTION_KINDS);
 export const vEntryKind = oneOf(ENTRY_KINDS);
+export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vTaskSort = oneOf(TASK_SORTS);
@@ -169,6 +171,11 @@ export const vWidgetSettings = v.union(
     /** One account to follow; missing follows every account in the total. */
     accountId: v.optional(v.id("financeAccounts")),
     type: v.literal("finance"),
+  }),
+  v.object({
+    /** One habit to follow; missing lists every habit. */
+    habitId: v.optional(v.id("habits")),
+    type: v.literal("habits"),
   })
 );
 

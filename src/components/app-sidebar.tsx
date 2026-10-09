@@ -1,5 +1,6 @@
 import {
   BitcoinIcon,
+  CalendarCheckIcon,
   CameraIcon,
   ChevronRightIcon,
   HouseIcon,
@@ -47,6 +48,7 @@ import { tablePath } from "@/features/crm/crm-context";
 import { TableIcon } from "@/features/crm/table-icon";
 import { SidebarDocs } from "@/features/docs/sidebar-docs";
 import { accountPath } from "@/features/finance/finance-context";
+import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
@@ -54,6 +56,7 @@ import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Account } from "@/lib/finance";
+import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -120,6 +123,8 @@ interface ProjectItemProps {
   portfolios: Portfolio[];
   /** This project's finance accounts. */
   accounts: Account[];
+  /** Whether the project keeps habits, which share one page. */
+  hasHabits: boolean;
   openBoard?: Board;
   location: string;
   open: boolean;
@@ -135,6 +140,7 @@ function ProjectItem({
   boards,
   portfolios,
   accounts,
+  hasHabits,
   openBoard,
   location,
   open,
@@ -142,6 +148,7 @@ function ProjectItem({
   rail,
 }: ProjectItemProps) {
   const base = projectPath(project);
+  const habits = habitsPath(project);
   return (
     <Collapsible
       onOpenChange={onOpenChange}
@@ -171,6 +178,19 @@ function ProjectItem({
       </CollapsibleTrigger>
       <CollapsibleContent keepMounted>
         <SidebarMenuSub className="pt-0.5">
+          {hasHabits && (
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                isActive={
+                  location === habits || location.startsWith(`${habits}/`)
+                }
+                render={<NavLink href={habits} />}
+              >
+                <CalendarCheckIcon />
+                <span>Habits</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          )}
           {tables.map((table) => {
             const href = tablePath(project, table);
             return (
@@ -251,6 +271,8 @@ interface AppSidebarProps {
   portfolios: Portfolio[];
   /** Finance accounts in every project. */
   accounts: Account[];
+  /** Habits in every project. */
+  habits: Habit[];
   /** Unread notifications in the inbox. */
   unread: number;
   onNewProject: () => void;
@@ -263,6 +285,7 @@ export function AppSidebar({
   docs,
   portfolios,
   accounts,
+  habits,
   unread,
   onNewProject,
 }: AppSidebarProps) {
@@ -299,6 +322,7 @@ export function AppSidebar({
       accounts={accounts.filter((account) => account.projectId === project._id)}
       boards={boards.filter((board) => board.projectId === project._id)}
       docs={docs.get(project._id) ?? EMPTY_DOCS}
+      hasHabits={habits.some((habit) => habit.projectId === project._id)}
       key={project._id}
       location={location}
       onOpenChange={(open) => setOpened({ ...opened, [project._id]: open })}

@@ -1,6 +1,6 @@
 /**
- * What's left once a project, board, card, table, page, portfolio or finance
- * account is deleted. The parent
+ * What's left once a project, board, card, table, page, portfolio, finance
+ * account or habit is deleted. The parent
  * goes first, so nobody sees it anymore; the rest is cleared here in batches
  * that stay well within a mutation's limits.
  */
@@ -215,6 +215,22 @@ export const financeAccount = internalMutation({
   },
 });
 
+export const habit = internalMutation({
+  args: { habitId: v.id("habits") },
+  handler: async (ctx, { habitId }) => {
+    const logs = await ctx.db
+      .query("habitLogs")
+      .withIndex("by_habit_and_date", (q) => q.eq("habitId", habitId))
+      .take(BATCH);
+    for (const log of logs) {
+      await ctx.db.delete(log._id);
+    }
+    if (logs.length === BATCH) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.habit, { habitId });
+    }
+  },
+});
+
 export const project = internalMutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
@@ -272,12 +288,23 @@ export const project = internalMutation({
     for (const item of settings) {
       await ctx.db.delete(item._id);
     }
+    const habits = await ctx.db
+      .query("habits")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    for (const item of habits) {
+      await ctx.db.delete(item._id);
+      await ctx.scheduler.runAfter(0, internal.cleanup.habit, {
+        habitId: item._id,
+      });
+    }
     if (
       boards.length > 0 ||
       tables.length > 0 ||
       pages.length > 0 ||
       portfolios.length > 0 ||
-      accounts.length > 0
+      accounts.length > 0 ||
+      habits.length > 0
     ) {
       await ctx.scheduler.runAfter(0, internal.cleanup.project, { projectId });
     }

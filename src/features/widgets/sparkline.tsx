@@ -1,6 +1,8 @@
 import { cn } from "cn";
-import type { KeyboardEvent, PointerEvent, RefObject } from "react";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import type { KeyboardEvent, PointerEvent } from "react";
+import { useId, useRef } from "react";
+
+import { useWidth } from "@/hooks/use-width";
 
 export interface SparkPoint {
   /** When, in ms. */
@@ -67,24 +69,6 @@ function nearest(coords: Coord[], x: number): number {
   const before = coords[after - 1];
   const next = coords[after];
   return before && next && x - before.x < next.x - x ? after - 1 : after;
-}
-
-/** The element's width, kept current as it resizes. */
-function useWidth(ref: RefObject<HTMLElement | null>): number {
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return;
-    }
-    const measure = () => setWidth(element.clientWidth);
-    // Measured before the first paint, so the line never flashes in late.
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-  return width;
 }
 
 /** A dot on the line, ringed in the card's color so it stands off the line. */

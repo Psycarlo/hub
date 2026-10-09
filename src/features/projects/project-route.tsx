@@ -23,6 +23,14 @@ import {
   parseAccountParam,
 } from "@/features/finance/finance-context";
 import { FinancePage } from "@/features/finance/finance-page";
+import { HabitPage } from "@/features/habits/habit-page";
+import {
+  HABITS_SEGMENT,
+  habitPath,
+  habitsPath,
+  parseHabitParam,
+} from "@/features/habits/habits-context";
+import { HabitsPage } from "@/features/habits/habits-page";
 import {
   PORTFOLIOS_SEGMENT,
   parsePortfolioParam,
@@ -37,6 +45,7 @@ import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Account } from "@/lib/finance";
+import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -86,6 +95,9 @@ interface ProjectViewProps {
   /** The project's finance accounts. */
   accounts: Account[];
   accountsLoaded: boolean;
+  /** The project's habits. */
+  habits: Habit[];
+  habitsLoaded: boolean;
   tableSlug?: string;
   recordId?: string;
 }
@@ -330,9 +342,57 @@ function FinanceView({
   );
 }
 
+interface HabitsViewProps {
+  project: Project;
+  habits: Habit[];
+  loaded: boolean;
+  /** The habit part of the link: its name, then its id. */
+  habitParam?: string;
+}
+
+function HabitsView({ project, habits, loaded, habitParam }: HabitsViewProps) {
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const id = habitParam ? parseHabitParam(habitParam) : undefined;
+  const habit = id ? habits.find((item) => item._id === id) : undefined;
+  const path = habit ? habitPath(project, habit) : undefined;
+  // The link follows the name as it changes; any name before the id still opens it.
+  useEffect(() => {
+    if (path && habitParam && !path.endsWith(`/${habitParam}`)) {
+      navigate(search ? `${path}?${search}` : path, { replace: true });
+    }
+  }, [habitParam, navigate, path, search]);
+
+  if (habit) {
+    return <HabitPage habit={habit} key={habit._id} project={project} />;
+  }
+  if (!habitParam) {
+    return <HabitsPage habits={habits} loaded={loaded} project={project} />;
+  }
+  return (
+    <>
+      <TopBar
+        crumbs={[
+          { href: projectPath(project), label: project.title },
+          { href: habitsPath(project), label: "Habits" },
+        ]}
+      />
+      {loaded ? (
+        <NotFound
+          href={habitsPath(project)}
+          label="Habits"
+          title="Habit not found"
+        />
+      ) : (
+        <Loading />
+      )}
+    </>
+  );
+}
+
 interface ProjectRouteProps extends Omit<
   ProjectViewProps,
-  "project" | "docs" | "portfolios" | "accounts"
+  "project" | "docs" | "portfolios" | "accounts" | "habits"
 > {
   slug: string;
   loaded: boolean;
@@ -342,6 +402,8 @@ interface ProjectRouteProps extends Omit<
   portfolios: Portfolio[];
   /** Finance accounts in every project. */
   accounts: Account[];
+  /** Habits in every project. */
+  habits: Habit[];
 }
 
 export function ProjectRoute({
@@ -352,12 +414,14 @@ export function ProjectRoute({
   docsLoaded,
   portfolios,
   accounts,
+  habits,
   ...props
 }: ProjectRouteProps) {
   const search = useSearch();
   const project = findProject(projects, slug);
   const projectPortfolios = ofProject(portfolios, project);
   const projectAccounts = ofProject(accounts, project);
+  const projectHabits = ofProject(habits, project);
   const segment = props.tableSlug?.toLowerCase();
   if (project && project.slug !== slug) {
     // Reached by a link the project had before, or typed in capitals.
@@ -393,6 +457,20 @@ export function ProjectRoute({
       />
     );
   }
+  if (project && segment === HABITS_SEGMENT) {
+    // Only personal projects keep habits.
+    return project.personalFor ? (
+      <HabitsView
+        habitParam={props.recordId}
+        habits={projectHabits}
+        key={project._id}
+        loaded={props.habitsLoaded}
+        project={project}
+      />
+    ) : (
+      <Redirect replace to={projectPath(project)} />
+    );
+  }
   if (project && segment === DOCS_SEGMENT) {
     return (
       <DocsView
@@ -410,6 +488,7 @@ export function ProjectRoute({
         accounts={projectAccounts}
         docs={docs.get(project._id) ?? EMPTY_DOCS}
         docsLoaded={docsLoaded}
+        habits={projectHabits}
         key={project._id}
         portfolios={projectPortfolios}
         project={project}

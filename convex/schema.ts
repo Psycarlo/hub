@@ -8,9 +8,11 @@ import {
   vBoardLabel,
   vCardChange,
   vCardDefaults,
+  vColor,
   vEntryKind,
   vField,
   vFiat,
+  vHabitIcon,
   vPriority,
   vProjectColor,
   vProjectRole,
@@ -389,6 +391,34 @@ export default defineSchema({
     .index("by_account_and_paid_and_date", ["accountId", "paid", "date"])
     .index("by_project_and_date", ["projectId", "date"])
     .index("by_project_and_buy", ["projectId", "buyId"]),
+
+  /** Something someone means to do on certain days; only in personal projects. */
+  habits: defineTable({
+    color: vColor,
+    createdBy: v.id("users"),
+    /** Days of the week it's due, Sunday as 0; all seven for every day. */
+    days: v.array(v.number()),
+    description: v.string(),
+    /** Times a day that make the day done; 1 for a plain check. */
+    goal: v.number(),
+    icon: vHabitIcon,
+    projectId: v.id("projects"),
+    /** `YYYY-MM-DD`, the day it began: nothing is logged before it. */
+    start: v.string(),
+    title: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  /** How many times a habit was done on a day. A day without any has no row. */
+  habitLogs: defineTable({
+    /** At least 1, and at most the habit's goal when it was logged. */
+    count: v.number(),
+    /** `YYYY-MM-DD`. */
+    date: v.string(),
+    habitId: v.id("habits"),
+    projectId: v.id("projects"),
+  })
+    .index("by_habit_and_date", ["habitId", "date"])
+    .index("by_project_and_date", ["projectId", "date"]),
 
   /** Files uploaded to R2, and who uploaded them. */
   files: defineTable({
