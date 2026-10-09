@@ -217,7 +217,9 @@ function fromExact(value: string): number | undefined {
   }
   if (ZONED.test(value) && /^\d{4}-/u.test(value)) {
     // A bare hour offset, like Swan's `+00`, gets its minutes.
-    const iso = value.replace(" ", "T").replace(/([+-]\d{2})$/u, "$1:00");
+    const iso = value
+      .replace(" ", "T")
+      .replace(/(?<offset>[+-]\d{2})$/u, "$<offset>:00");
     const at = Date.parse(iso);
     return Number.isNaN(at) ? undefined : at;
   }
@@ -362,7 +364,6 @@ export const hub: CsvFormat = {
   matches: (keys) =>
     hasAll(keys, ["date", "type", "amountbtc", "networkfeebtc"]),
   name: "Hub export",
-  source: "Hub",
   read: (table) =>
     eachRow(table, (row, line) => {
       const at = parseMoment(row.get("date"));
@@ -391,6 +392,7 @@ export const hub: CsvFormat = {
         sats,
       };
     }),
+  source: "Hub",
 };
 
 // Columns matched by hand.

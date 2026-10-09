@@ -41,6 +41,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMe } from "@/hooks/use-users";
 import { findPricesAt, foundPriceAt } from "@/lib/bitcoin-price";
 import { parseCsv } from "@/lib/csv";
+import { FORMATS, SOURCES } from "@/lib/exchange-csv";
 import type {
   Fiat,
   Portfolio,
@@ -69,7 +70,6 @@ import type {
 } from "@/lib/portfolio-csv";
 import {
   COLUMN_ROLES,
-  FORMATS,
   alreadyThere,
   detect,
   firstShortfall,
@@ -282,12 +282,12 @@ function DropZone({
         </span>
       </span>
       <span className="mt-1 flex flex-wrap justify-center gap-1.5">
-        {FORMATS.map((item) => (
+        {SOURCES.map((source) => (
           <span
             className="bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 text-xs"
-            key={item.id}
+            key={source}
           >
-            {item.name}
+            {source}
           </span>
         ))}
       </span>
@@ -920,7 +920,7 @@ function ImportForm({
   const [saving, setSaving] = useState(false);
 
   const load = async (file: File) => {
-    const detected = detect(parseCsv(await file.text()));
+    const detected = detect(parseCsv(await file.text()), FORMATS);
     setLoaded({ detected, name: file.name });
     setFormatId(detected.format?.id ?? CUSTOM);
     setOptions(initialOptions(detected, fiat));

@@ -4,7 +4,12 @@
  * transactions and says why it leaves the rest out.
  */
 import type { TransactionKind } from "@/lib/portfolio";
-import type { CsvFormat, ReadResult, Table } from "@/lib/portfolio-csv";
+import type {
+  CsvFormat,
+  ImportRow,
+  ReadResult,
+  Table,
+} from "@/lib/portfolio-csv";
 import {
   baseRow,
   btcToSats,
@@ -24,7 +29,7 @@ const CASH_ONLY = "Money only, no bitcoin";
 /** A trade's price per bitcoin from what changed hands, if both are there. */
 function priceOf(fiat: number | undefined, btc: number | undefined) {
   if (!fiat || !btc) {
-    return undefined;
+    return;
   }
   return Math.abs(fiat) / Math.abs(btc);
 }
@@ -67,10 +72,7 @@ interface LedgerEntry {
   refid: string;
 }
 
-function readLedgerTrade(
-  btc: LedgerEntry,
-  legs: LedgerEntry[]
-): ReadResult {
+function readLedgerTrade(btc: LedgerEntry, legs: LedgerEntry[]): ReadResult {
   const quote = legs.find((leg) => leg !== btc && leg.asset !== "KFEE");
   const fiat = parseFiat(quote?.asset);
   const incoming = btc.amount > 0;
@@ -155,8 +157,14 @@ const krakenLedger: CsvFormat = {
       }
       const others = legs.filter((leg) => leg !== btc);
       if (KRAKEN_INTERNAL.test(btc.subtype) || btc.type === "transfer") {
-        results.push({ line: btc.line, reason: "Between Kraken’s own wallets" });
-      } else if (["trade", "spend", "receive"].includes(btc.type) && others.length > 0) {
+        results.push({
+          line: btc.line,
+          reason: "Between Kraken’s own wallets",
+        });
+      } else if (
+        ["trade", "spend", "receive"].includes(btc.type) &&
+        others.length > 0
+      ) {
         results.push(readLedgerTrade(btc, legs));
       } else if (btc.amount === 0) {
         results.push({ line: btc.line, reason: "No amount of bitcoin" });
@@ -245,17 +253,31 @@ function coinbaseKind(
   return undefined;
 }
 
-/** The first header key that ends with one of the endings, for columns named after the currency. */
+/**
+ * The column for one of the names, or else one named after its currency,
+ * like `USD Fees`; never a total that only mentions it.
+ */
 function keyEnding(row: Map<string, string>, endings: string[]) {
-  return [...row.keys()].find((name) =>
-    endings.some((ending) => name.endsWith(ending))
+  const exact = endings.find((ending) => row.has(ending));
+  return (
+    exact ??
+    [...row.keys()].find(
+      (name) =>
+        !name.includes("total") &&
+        endings.some((ending) => name.endsWith(ending))
+    )
   );
 }
 
 const coinbase: CsvFormat = {
   id: "coinbase",
   matches: (keys) =>
-    hasAll(keys, ["timestamp", "transactiontype", "asset", "quantitytransacted"]),
+    hasAll(keys, [
+      "timestamp",
+      "transactiontype",
+      "asset",
+      "quantitytransacted",
+    ]),
   name: "Coinbase transaction history",
   read: (table) =>
     eachRow(table, (row, line): ReadResult | undefined => {
@@ -278,7 +300,10 @@ const coinbase: CsvFormat = {
         return missing;
       }
       // v1 names its money columns after the currency, like `USD Fees`.
-      const priceKey = keyEnding(row, ["priceattransaction"]);
+      const priceKey = keyEnding(row, [
+        "priceattransaction",
+        "spotpriceattransaction",
+      ]);
       const feeKey = keyEnding(row, ["feesandorspread", "fees"]);
       const currencyCode =
         row.get("pricecurrency") ??
@@ -342,7 +367,8 @@ const strike: CsvFormat = {
       }
       const type = (row.get("transactiontype") ?? "").trim().toLowerCase();
       const cash = code ? parseNumber(row.get(`amount${code}`)) : undefined;
-      const kind = STRIKE_KINDS[type] ?? byDirection(btc > 0, cash !== undefined);
+      const kind =
+        STRIKE_KINDS[type] ?? byDirection(btc > 0, cash !== undefined);
       const at = parseMoment(row.get("datetimeutc") ?? row.get("timeutc"));
       const sats = btcToSats(btc);
       const missing = baseRow(line, at, sats);
@@ -350,7 +376,8 @@ const strike: CsvFormat = {
         return missing;
       }
       const price =
-        parseNumber(row.get("btcprice")) ?? parseNumber(row.get("exchangerate"));
+        parseNumber(row.get("btcprice")) ??
+        parseNumber(row.get("exchangerate"));
       return {
         at,
         currency: fiat,
@@ -371,7 +398,13 @@ const strike: CsvFormat = {
 const strikeLegacy: CsvFormat = {
   id: "strike-legacy",
   matches: (keys) =>
-    hasAll(keys, ["transactiontype", "amount1", "currency1", "amount2", "currency2"]),
+    hasAll(keys, [
+      "transactiontype",
+      "amount1",
+      "currency1",
+      "amount2",
+      "currency2",
+    ]),
   name: "Strike statement (before 2024)",
   read: (table) =>
     eachRow(table, (row, line): ReadResult | undefined => {
@@ -404,7 +437,9 @@ const strikeLegacy: CsvFormat = {
         at,
         currency: fiat,
         fee: traded ? parseNumber(row.get(`fee${cashLeg}`)) : undefined,
-        feeSats: traded ? undefined : btcToSats(parseNumber(row.get(`fee${leg}`)) ?? 0),
+        feeSats: traded
+          ? undefined
+          : btcToSats(parseNumber(row.get(`fee${leg}`)) ?? 0),
         kind,
         line,
         note: noteOf(`Strike ${row.get("transactiontype") ?? ""}`),
@@ -416,6 +451,18 @@ const strikeLegacy: CsvFormat = {
 };
 
 // River, and Swan's CoinTracker file: what was sent and what was received.
+
+/** A fee in money, or in bitcoin on a send; a bitcoin fee on anything else is in the amounts. */
+function sentReceivedFees(
+  row: Map<string, string>,
+  kind: TransactionKind
+): Pick<ImportRow, "fee" | "feeSats"> {
+  const fee = parseNumber(row.get("feeamount"));
+  if ((row.get("feecurrency") ?? "").toUpperCase() !== "BTC") {
+    return { fee };
+  }
+  return { feeSats: kind === "send" ? btcToSats(fee ?? 0) : undefined };
+}
 
 /** Reads files that say, a row each, what went out and what came in. */
 function readSentReceived(
@@ -446,16 +493,12 @@ function readSentReceived(
     if (missing || at === undefined) {
       return missing;
     }
-    const feeCurrency = (row.get("feecurrency") ?? "").toUpperCase();
-    const fee = parseNumber(row.get("feeamount"));
     const kind = byDirection(incoming, traded);
     const listed = parseNumber(row.get("bitcoinpriceamount"));
     return {
+      ...sentReceivedFees(row, kind),
       at,
       currency: traded ? fiat : parseFiat(row.get("bitcoinpricecurrency")),
-      fee: feeCurrency === "BTC" ? undefined : fee,
-      feeSats:
-        feeCurrency === "BTC" && kind === "send" ? btcToSats(fee ?? 0) : undefined,
       kind,
       line,
       note: noteOf(row.get("tag"), row.get("transactiontype")),
@@ -476,7 +519,8 @@ const river: CsvFormat = {
       "receivedcurrency",
     ]),
   name: "River activity",
-  read: (table) => readSentReceived(table, { amount: "amount", source: "River" }),
+  read: (table) =>
+    readSentReceived(table, { amount: "amount", source: "River" }),
   source: "River",
 };
 
@@ -600,4 +644,3 @@ export const FORMATS: CsvFormat[] = [
 
 /** Who makes the layouts, once each, to show which files are known. */
 export const SOURCES = [...new Set(FORMATS.map((item) => item.source))];
-
