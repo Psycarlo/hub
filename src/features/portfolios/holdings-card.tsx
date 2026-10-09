@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   Popover,
@@ -16,6 +16,7 @@ import {
   rangeStart,
 } from "@/features/portfolios/series";
 import { ValueChart } from "@/features/portfolios/value-chart";
+import { useNow } from "@/hooks/use-now";
 import { useMe } from "@/hooks/use-users";
 import { useBtcHistory, useBtcPrices } from "@/lib/bitcoin-price";
 import type { Transaction } from "@/lib/portfolio";
@@ -24,22 +25,7 @@ import { readStorage, writeStorage } from "@/lib/utils";
 
 const RANGE_KEY = "portfolio:range";
 const MODE_KEY = "portfolio:mode";
-const TICK = 30_000;
 const CHART_HEIGHT = 260;
-
-function currentTime(): number {
-  return Date.now();
-}
-
-/** The time, moving on every half minute so the chart's right edge keeps up. */
-function useNow(): number {
-  const [now, setNow] = useState(currentTime);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(currentTime()), TICK);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
 
 function storedRange(): Range {
   const stored = readStorage(RANGE_KEY);

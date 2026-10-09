@@ -4,8 +4,8 @@ import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import type { FormEvent } from "react";
-import { useId, useState } from "react";
+import type { ChangeEvent, FocusEvent, FormEvent, KeyboardEvent } from "react";
+import { useId, useRef, useState } from "react";
 
 import {
   AlertDialog,
@@ -46,8 +46,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useNow } from "@/hooks/use-now";
 import { useMe } from "@/hooks/use-users";
-import { useBtcPrices } from "@/lib/bitcoin-price";
+import { useBtcPriceAt, useBtcPrices } from "@/lib/bitcoin-price";
 import type {
   Fiat,
   Portfolio,
@@ -82,6 +83,8 @@ export const UNIT_KEY = "portfolio:unit";
 /** Bitcoin's first block; nothing was bought before that day. */
 const GENESIS = new Date(2009, 0, 3);
 const TIME = /^(?<hours>\d{2}):(?<minutes>\d{2})$/u;
+/** A moment this close to now goes by the live price. */
+const RECENT = 10 * 60 * 1000;
 const HINT = "flex flex-wrap items-center gap-x-2 text-xs tabular-nums";
 const HINT_ACTION = "text-primary font-medium hover:underline";
 /** Where a send goes when it's not to another portfolio. */
@@ -93,7 +96,7 @@ interface Fields {
   kind: TransactionKind;
   unit: Unit;
   amount: string;
-  /** Undefined until typed, so the price follows the market meanwhile. */
+  /** Undefined until typed, so the price follows the moment picked meanwhile. */
   typedPrice: string | undefined;
   day: Date;
   time: string;
@@ -248,12 +251,13 @@ function amountError(
  */
 function check(
   fields: Fields,
-  market: number | undefined,
+  /** What one bitcoin cost at the moment picked, once known. */
+  reference: number | undefined,
   others: Transaction[]
 ): Checked {
   let shownPrice = fields.typedPrice ?? "";
-  if (fields.typedPrice === undefined && market !== undefined) {
-    shownPrice = priceText(market);
+  if (fields.typedPrice === undefined && reference !== undefined) {
+    shownPrice = priceText(reference);
   }
   const sats = parseAmount(fields.amount, fields.unit);
   const price = parsePrice(shownPrice);
@@ -605,29 +609,44 @@ function TransferSource({ transaction }: { transaction: Transaction }) {
   );
 }
 
+/** What one bitcoin cost at the moment picked, as far as it's known. */
+interface Reference {
+  /** Whether that's about now, so the live price stands for it. */
+  live: boolean;
+  /** Undefined while it loads; null when there's no price that far back. */
+  price: number | null | undefined;
+}
+
 interface PriceFieldProps {
   id: string;
   currency: Fiat;
-  /** What one bitcoin costs now, once known. */
-  market?: number;
+  reference: Reference;
   fields: Fields;
   checked: Checked;
-  /** Undefined goes back to the market price. */
+  /** Undefined goes back to the price at the moment picked. */
   onChange: (typedPrice?: string) => void;
 }
 
-/** What one bitcoin cost, following the market until something's typed. */
+/** What one bitcoin cost, following the price at the moment picked until something's typed. */
 function PriceField({
   id,
   currency,
-  market,
+  reference: { live, price },
   fields: { typedPrice },
   checked: { shownPrice, priceError: error },
   onChange,
 }: PriceFieldProps) {
-  let hint = `In ${currency}.`;
-  if (market !== undefined) {
-    hint = `Current price: ${formatFiat(market, currency)}`;
+  let hint = live ? `In ${currency}.` : "Finding the price then…";
+  if (typeof price === "number") {
+    hint = `${live ? "Current price" : "Price then"}: ${formatFiat(price, currency)}`;
+  } else if (price === null) {
+    hint = "No price this far back. Enter what it cost.";
+  }
+  let placeholder: string | undefined;
+  if (price === undefined) {
+    placeholder = "Loading price…";
+  } else if (price === null) {
+    placeholder = "0.00";
   }
   return (
     <div className="flex flex-col gap-2">
@@ -647,7 +666,7 @@ function PriceField({
           id={id}
           inputMode="decimal"
           onChange={(event) => onChange(event.target.value)}
-          placeholder={market === undefined ? "Loading price…" : undefined}
+          placeholder={placeholder}
           value={shownPrice}
         />
       </div>
@@ -659,17 +678,110 @@ function PriceField({
         id={`${id}-hint`}
       >
         {error ?? hint}
-        {market !== undefined && typedPrice !== undefined && (
+        {typeof price === "number" && typedPrice !== undefined && (
           <button
             className={HINT_ACTION}
             onClick={() => onChange()}
             type="button"
           >
-            Use current price
+            {live ? "Use current price" : "Use price then"}
           </button>
         )}
       </p>
     </div>
+  );
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+const SEGMENT =
+  "focus-visible:bg-accent w-7 rounded-md bg-transparent py-0.5 text-center tabular-nums outline-none selection:bg-transparent";
+
+/**
+ * Hours and minutes in two short boxes. Typing starts a box afresh and moves
+ * on once no other digit could follow; the arrow keys step through.
+ */
+function TimeInput({
+  value,
+  onChange,
+  onDone,
+}: {
+  /** As `HH:mm`. */
+  value: string;
+  onChange: (time: string) => void;
+  /** Enter was pressed: the time is as wanted. */
+  onDone: () => void;
+}) {
+  const { hours = "00", minutes = "00" } = TIME.exec(value)?.groups ?? {};
+  const minutesRef = useRef<HTMLInputElement>(null);
+  // Digits typed into the box since it took focus: none, one, or both.
+  const typed = useRef(0);
+
+  const segment = (part: "hours" | "minutes") => {
+    const max = part === "hours" ? 23 : 59;
+    const current = Number(part === "hours" ? hours : minutes);
+    const update = (next: number) =>
+      onChange(
+        part === "hours" ? `${pad(next)}:${minutes}` : `${hours}:${pad(next)}`
+      );
+    return {
+      "aria-label": part === "hours" ? "Hours" : "Minutes",
+      autoComplete: "off",
+      className: SEGMENT,
+      inputMode: "numeric" as const,
+      onChange: (event: ChangeEvent<HTMLInputElement>) => {
+        const digit = event.target.value.replaceAll(/\D/gu, "").at(-1);
+        if (digit === undefined) {
+          return;
+        }
+        // A second digit goes after the first while that's still a time.
+        const joined = current * 10 + Number(digit);
+        const second = typed.current === 1 && joined <= max;
+        const next = second ? joined : Number(digit);
+        typed.current = second ? 2 : 1;
+        update(next);
+        if (part === "hours" && (second || next > 2)) {
+          minutesRef.current?.focus();
+        }
+      },
+      onFocus: (event: FocusEvent<HTMLInputElement>) => {
+        typed.current = 0;
+        event.currentTarget.select();
+      },
+      onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+          event.preventDefault();
+          const step = event.key === "ArrowUp" ? 1 : max;
+          typed.current = 0;
+          update((current + step) % (max + 1));
+        } else if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          typed.current = 0;
+          update(0);
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          onDone();
+        }
+      },
+    };
+  };
+
+  return (
+    <fieldset
+      aria-label="Time"
+      className={cn(
+        FIELD,
+        "focus-within:border-ring focus-within:ring-ring/30 flex h-8 w-auto items-center px-1 focus-within:ring-3"
+      )}
+    >
+      <input {...segment("hours")} value={hours} />
+      <span aria-hidden className="text-muted-foreground">
+        :
+      </span>
+      <input {...segment("minutes")} ref={minutesRef} value={minutes} />
+    </fieldset>
   );
 }
 
@@ -682,63 +794,72 @@ interface DateFieldProps {
   future: boolean;
 }
 
-/** A day from a calendar and a time beside it. */
+/** The day from a calendar and the time on it, in one field. */
 function DateField({ id, day, time, onChange, future }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   // Moved on whenever the calendar opens, so a form left open keeps up.
   const [today, setToday] = useState(() => new Date(currentTime()));
+  const now = () => {
+    const moment = new Date(currentTime());
+    onChange({ day: moment, time: format(moment, "HH:mm") });
+  };
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>Date</Label>
-      <div className="grid grid-cols-[1fr_7rem] gap-2">
-        <Popover
-          onOpenChange={(next) => {
-            if (next) {
-              setToday(new Date(currentTime()));
-            }
-            setOpen(next);
-          }}
-          open={open}
-        >
-          <PopoverTrigger
-            aria-invalid={future || undefined}
-            className={cn(
-              FIELD,
-              "flex h-9 items-center justify-between gap-2 text-left select-none"
-            )}
-            id={id}
-          >
-            <span>{format(day, "MMM d, yyyy")}</span>
-            <CalendarIcon className="text-muted-foreground size-4 shrink-0" />
-          </PopoverTrigger>
-          <PopoverContent align="start" className="p-2">
-            <Calendar
-              captionLayout="dropdown"
-              defaultMonth={day}
-              disabled={[{ before: GENESIS }, { after: today }]}
-              endMonth={today}
-              mode="single"
-              onSelect={(next) => {
-                if (next) {
-                  onChange({ day: next, time });
-                  setOpen(false);
-                }
-              }}
-              required
-              selected={day}
-              startMonth={GENESIS}
-            />
-          </PopoverContent>
-        </Popover>
-        <Input
+      <Popover
+        onOpenChange={(next) => {
+          if (next) {
+            setToday(new Date(currentTime()));
+          }
+          setOpen(next);
+        }}
+        open={open}
+      >
+        <PopoverTrigger
           aria-invalid={future || undefined}
-          aria-label="Time"
-          className="tabular-nums"
-          onChange={(event) => onChange({ day, time: event.target.value })}
-          type="time"
-          value={time}
-        />
-      </div>
+          className={cn(
+            FIELD,
+            "flex h-9 items-center justify-between gap-2 text-left select-none"
+          )}
+          id={id}
+        >
+          <span className="tabular-nums">
+            {format(day, "MMM d, yyyy")}
+            <span aria-hidden className="text-muted-foreground px-1.5">
+              ·
+            </span>
+            {time}
+          </span>
+          <CalendarIcon className="text-muted-foreground size-4 shrink-0" />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="p-2">
+          <Calendar
+            captionLayout="dropdown"
+            defaultMonth={day}
+            disabled={[{ before: GENESIS }, { after: today }]}
+            endMonth={today}
+            mode="single"
+            onSelect={(next) => {
+              if (next) {
+                onChange({ day: next, time });
+              }
+            }}
+            required
+            selected={day}
+            startMonth={GENESIS}
+          />
+          <div className="mt-1 flex items-center justify-between gap-3 border-t px-1 pt-2">
+            <TimeInput
+              onChange={(next) => onChange({ day, time: next })}
+              onDone={() => setOpen(false)}
+              value={time}
+            />
+            <Button onClick={now} size="sm" type="button" variant="ghost">
+              Now
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
       {future && (
         <p className="text-destructive text-xs">That time hasn’t come yet.</p>
       )}
@@ -820,6 +941,21 @@ function DeleteTransaction({
   );
 }
 
+/**
+ * What one bitcoin cost at `at`: the live price near now, or else what
+ * Kraken's trades say it was then.
+ */
+function useReference(currency: Fiat, at: number): Reference {
+  const prices = useBtcPrices();
+  const now = Math.max(useNow(), prices.data?.at ?? 0);
+  const live = at > now - RECENT;
+  const then = useBtcPriceAt(currency, live ? undefined : at);
+  return {
+    live,
+    price: live ? prices.data?.[currency] : then.data,
+  };
+}
+
 interface TransactionFormProps {
   portfolio: Portfolio;
   /** The portfolio's transactions, in the order they happened. */
@@ -839,12 +975,12 @@ function TransactionForm({
   const me = useMe();
   // A transaction keeps the currency it was entered in; new ones use the person's.
   const currency = transaction?.currency ?? me.currency;
-  const market = useBtcPrices().data?.[currency];
   const [fields, setFields] = useState(() => initialFields(transaction));
+  const reference = useReference(currency, combine(fields.day, fields.time));
   const [future, setFuture] = useState(false);
   const [saving, setSaving] = useState(false);
   const others = transactions.filter((item) => item._id !== transaction?._id);
-  const checked = check(fields, market, others);
+  const checked = check(fields, reference.price ?? undefined, others);
 
   const change = (patch: Partial<Fields>) =>
     setFields((current) => ({ ...current, ...patch }));
@@ -943,8 +1079,8 @@ function TransactionForm({
         currency={currency}
         fields={fields}
         id={`${id}-price`}
-        market={market}
         onChange={(typedPrice) => change({ typedPrice })}
+        reference={reference}
       />
       <DateField
         day={fields.day}

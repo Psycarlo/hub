@@ -3,7 +3,8 @@
  * that show a price subscribe; while any does, the price is asked for again
  * every half minute, and not at all while the tab is hidden. Pages that show
  * it live also open Kraken's socket, which sends every trade's price as it
- * happens; while it does, there's no need to ask.
+ * happens; while it does, there's no need to ask. A past moment's price is
+ * asked for once, from the trades Kraken kept.
  */
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -399,4 +400,77 @@ export function intervalFor(span: number): Interval {
     INTERVALS.at(-1) ??
     1440
   );
+}
+
+/**
+ * How long after a moment the first trade may come and still stand for it.
+ * Before Kraken began, in late 2013, the first trade comes years later.
+ */
+const MAX_TRADE_GAP = 24 * 60 * MINUTE;
+/** How long to wait for the moment to stop changing, as it's typed, before asking. */
+const PRICE_AT_DELAY = 300;
+
+/** What a bitcoin cost at a past minute, by currency and minute; null when Kraken has no trade near it. */
+const pricesAt = new Map<string, Feed<number | null>>();
+const priceAtLoading = new Set<string>();
+
+async function loadPriceAt(fiat: Fiat, minute: number): Promise<void> {
+  const key = `${fiat}:${minute}`;
+  if (priceAtLoading.has(key) || pricesAt.get(key)?.data !== undefined) {
+    return;
+  }
+  priceAtLoading.add(key);
+  try {
+    // The first trade from that minute on; Kraken keeps every one.
+    const result = await kraken("Trades", {
+      count: "1",
+      pair: PAIRS[fiat],
+      since: String(minute / 1000),
+    });
+    const rows = pairResult(result, fiat);
+    // Each row is [price, volume, time in seconds, …].
+    const [row] = Array.isArray(rows)
+      ? (rows as [string, string, number][])
+      : [];
+    const price = Number(row?.[0]);
+    const near = row !== undefined && row[2] * 1000 - minute <= MAX_TRADE_GAP;
+    pricesAt.set(key, {
+      data: near && price > 0 ? price : null,
+      failed: false,
+      fetchedAt: Date.now(),
+    });
+  } catch {
+    pricesAt.set(key, { failed: true, fetchedAt: 0 });
+  } finally {
+    priceAtLoading.delete(key);
+    notify();
+  }
+}
+
+const NO_PRICE_AT: Feed<number | null> = { failed: false, fetchedAt: 0 };
+
+/**
+ * What a bitcoin cost in `fiat` at the minute `at` falls in: undefined while
+ * it loads, null when there's no trade near it. Nothing is asked while `at`
+ * is undefined.
+ */
+export function useBtcPriceAt(
+  fiat: Fiat,
+  at: number | undefined
+): Feed<number | null> {
+  const minute =
+    at === undefined ? undefined : Math.floor(at / MINUTE) * MINUTE;
+  const snapshot = useSyncExternalStore(subscribe, () =>
+    minute === undefined
+      ? NO_PRICE_AT
+      : (pricesAt.get(`${fiat}:${minute}`) ?? NO_PRICE_AT)
+  );
+  useEffect(() => {
+    if (minute === undefined) {
+      return;
+    }
+    const timer = setTimeout(() => loadPriceAt(fiat, minute), PRICE_AT_DELAY);
+    return () => clearTimeout(timer);
+  }, [fiat, minute]);
+  return snapshot;
 }
