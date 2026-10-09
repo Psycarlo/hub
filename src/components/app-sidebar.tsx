@@ -47,6 +47,7 @@ import { findBoard, parseSlug } from "@/features/board/board-route";
 import { tablePath } from "@/features/crm/crm-context";
 import { TableIcon } from "@/features/crm/table-icon";
 import { SidebarDocs } from "@/features/docs/sidebar-docs";
+import { SidebarDrive } from "@/features/drive/sidebar-drive";
 import { accountPath } from "@/features/finance/finance-context";
 import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
@@ -55,6 +56,8 @@ import { useMe } from "@/hooks/use-users";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
+import type { DriveTree } from "@/lib/drive";
+import { EMPTY_TREE } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
@@ -117,6 +120,8 @@ interface ProjectItemProps {
   project: Project;
   tables: NavTable[];
   docs: DocsContent;
+  /** This project's Drive folders. */
+  drive: DriveTree;
   /** This project's boards. */
   boards: Board[];
   /** This project's portfolios. */
@@ -137,6 +142,7 @@ function ProjectItem({
   project,
   tables,
   docs,
+  drive,
   boards,
   portfolios,
   accounts,
@@ -255,6 +261,11 @@ function ProjectItem({
             docs={docs}
             project={project}
           />
+          <SidebarDrive
+            canEdit={canEdit(project)}
+            project={project}
+            tree={drive}
+          />
         </SidebarMenuSub>
       </CollapsibleContent>
     </Collapsible>
@@ -267,6 +278,8 @@ interface AppSidebarProps {
   tables: NavTable[];
   /** Every project's doc pages, by project id. */
   docs: Map<string, DocsContent>;
+  /** Every project's Drive folders, by project id. */
+  drive: Map<string, DriveTree>;
   /** Portfolios in every project. */
   portfolios: Portfolio[];
   /** Finance accounts in every project. */
@@ -283,6 +296,7 @@ export function AppSidebar({
   projects,
   tables,
   docs,
+  drive,
   portfolios,
   accounts,
   habits,
@@ -322,6 +336,7 @@ export function AppSidebar({
       accounts={accounts.filter((account) => account.projectId === project._id)}
       boards={boards.filter((board) => board.projectId === project._id)}
       docs={docs.get(project._id) ?? EMPTY_DOCS}
+      drive={drive.get(project._id) ?? EMPTY_TREE}
       hasHabits={habits.some((habit) => habit.projectId === project._id)}
       key={project._id}
       location={location}

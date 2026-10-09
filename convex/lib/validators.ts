@@ -180,3 +180,21 @@ export const vWidgetSettings = v.union(
 );
 
 export type WidgetSettings = Infer<typeof vWidgetSettings>;
+
+/**
+ * Something done to a Drive file, as its activity tells it. Folders are kept
+ * by name, as they were called then; a missing one is the top of the Drive.
+ */
+export const vDriveChange = v.union(
+  v.object({ kind: v.literal("uploaded") }),
+  v.object({ from: v.string(), kind: v.literal("renamed"), to: v.string() }),
+  v.object({
+    from: v.optional(v.string()),
+    kind: v.literal("moved"),
+    to: v.optional(v.string()),
+  }),
+  v.object({ kind: v.literal("trashed") }),
+  v.object({ kind: v.literal("restored") })
+);
+
+export type DriveChange = Infer<typeof vDriveChange>;

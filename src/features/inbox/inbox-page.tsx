@@ -20,6 +20,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cardPath, OPENED_FROM_BOARD } from "@/features/board/board-context";
 import { pagePath } from "@/features/docs/docs-context";
 import { PageIcon } from "@/features/docs/page-icon";
+import { fileHref } from "@/features/drive/drive-context";
+import { FileIcon } from "@/features/drive/file-icon";
 import type { Inbox, InboxItem } from "@/hooks/use-inbox";
 import { useUser } from "@/hooks/use-users";
 import { pageTitle } from "@/lib/docs";
@@ -45,9 +47,17 @@ function shortAgo(at: number): string {
   return days < 7 ? `${days}d` : format(new Date(at), "MMM d");
 }
 
-/** What the mention is in: the card by its key and title, or the page by its icon and title. */
+/** What the mention is in: the card by its key and title, or the page or file by its icon and name. */
 function Subject({ item }: { item: InboxItem }) {
   const title = cn("truncate", !item.read && "text-foreground font-medium");
+  if (item.kind === "file") {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <FileIcon file={item.file} size="sm" />
+        <span className={title}>{item.file.name}</span>
+      </span>
+    );
+  }
   if (item.kind === "page") {
     return (
       <span className="flex min-w-0 items-center gap-2">
@@ -67,6 +77,9 @@ function Subject({ item }: { item: InboxItem }) {
 }
 
 function hrefOf(item: InboxItem): string {
+  if (item.kind === "file") {
+    return fileHref(item.project, item.file);
+  }
   return item.kind === "page"
     ? pagePath(item.project, item.page)
     : cardPath(item.project, item.board, item.card);
@@ -156,7 +169,8 @@ function InboxList({ inbox }: { inbox: Inbox }) {
       <InboxIcon aria-hidden className="text-muted-foreground size-8" />
       <EmptyTitle>You’re all caught up</EmptyTitle>
       <EmptyDescription>
-        When someone mentions you in a comment or a doc, it shows up here.
+        When someone mentions you in a comment, a doc or on a file, it shows up
+        here.
       </EmptyDescription>
     </Empty>
   );

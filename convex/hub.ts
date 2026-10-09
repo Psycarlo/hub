@@ -20,7 +20,7 @@ export const setLogo = mutation({
   handler: async (ctx, { key }) => {
     const admin = await requireAdmin(ctx);
     if (key) {
-      await ownedFile(ctx, key, admin._id);
+      await ownedFile(ctx, key, admin._id, "plain");
     }
     const settings = await ctx.db.query("hubSettings").first();
     const previous = settings?.logoKey;

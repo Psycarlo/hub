@@ -66,6 +66,7 @@ export type ActivityType = (typeof ACTIVITY_TYPES)[number]["id"];
 export const RESERVED_TABLE_SLUGS: readonly string[] = [
   "boards",
   "docs",
+  "drive",
   "portfolios",
   "settings",
 ];

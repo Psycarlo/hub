@@ -24,6 +24,7 @@ import { ADMIN_PATH, SETTINGS_PATH } from "@/components/user-menu";
 import { AdminPage } from "@/features/admin/admin-page";
 import { BOARD_ROUTE } from "@/features/board/board-context";
 import { BoardRoute } from "@/features/board/board-route";
+import { UploadTray } from "@/features/drive/upload-tray";
 import { FocusMode } from "@/features/focus/focus-mode";
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
@@ -39,6 +40,8 @@ import { convex } from "@/lib/convex";
 import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
 import { docsByProject } from "@/lib/docs";
+import type { DriveFolder } from "@/lib/drive";
+import { driveByProject } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
@@ -56,6 +59,7 @@ const NO_PROJECTS: Project[] = [];
 const NO_BOARDS: Board[] = [];
 const NO_TABLES: NavTable[] = [];
 const NO_PAGES: DocPage[] = [];
+const NO_FOLDERS: DriveFolder[] = [];
 const NO_PORTFOLIOS: Portfolio[] = [];
 const NO_ACCOUNTS: Account[] = [];
 const NO_HABITS: Habit[] = [];
@@ -102,6 +106,7 @@ function Workspace() {
   const boardList = useQuery(api.boards.list);
   const tables = useQuery(api.crm.navTables) ?? NO_TABLES;
   const pages = useQuery(api.docs.tree);
+  const folders = useQuery(api.drive.tree);
   const portfolioList = useQuery(api.portfolios.list);
   const accountList = useQuery(api.finance.accounts);
   const habitList = useQuery(api.habits.list);
@@ -111,6 +116,7 @@ function Workspace() {
   const projects = projectList ?? NO_PROJECTS;
   const boards = boardList ?? NO_BOARDS;
   const docs = docsByProject(pages ?? NO_PAGES);
+  const drive = driveByProject(folders ?? NO_FOLDERS);
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const accounts = accountList ?? NO_ACCOUNTS;
   const habits = habitList ?? NO_HABITS;
@@ -125,6 +131,7 @@ function Workspace() {
         accounts={accounts}
         boards={boards}
         docs={docs}
+        drive={drive}
         habits={habits}
         onNewProject={newProject}
         portfolios={portfolios}
@@ -213,6 +220,7 @@ function Workspace() {
         projects={projects}
       />
       <FocusMode widgets={widgets} />
+      <UploadTray />
     </SidebarProvider>
   );
 }

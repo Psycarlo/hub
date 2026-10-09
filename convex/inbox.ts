@@ -14,7 +14,7 @@ interface Notification {
   actorId: Id<"users">;
   content: string;
   read: boolean;
-  /** Where the card or page sits, which its links go through. */
+  /** Where the card, page or file sits, which its links go through. */
   project: { slug: string };
 }
 
@@ -36,9 +36,20 @@ export interface PageMention extends Notification {
   };
 }
 
-export type InboxItem = CommentMention | PageMention;
+/** A mention in a comment on a Drive file. */
+export interface FileMention extends Notification {
+  kind: "file";
+  file: {
+    _id: Id<"driveFiles">;
+    name: string;
+    type: string;
+    folderId?: Id<"driveFolders">;
+  };
+}
 
-/** The card or page a notification points at, or null once it's gone or out of sight. */
+export type InboxItem = CommentMention | PageMention | FileMention;
+
+/** The card, page or file a notification points at, or null once it's gone or out of sight. */
 async function itemOf(
   ctx: QueryCtx,
   user: Doc<"users">,
@@ -67,6 +78,28 @@ async function itemOf(
         icon: page.icon,
         title: page.title,
       },
+      project: { slug: project.slug },
+    };
+  }
+  if ("fileId" in notification) {
+    const file = await ctx.db.get(notification.fileId);
+    const project = file ? await ctx.db.get(file.projectId) : null;
+    // Trashed files, and files on projects the person has since left, drop out.
+    if (
+      !(file && project && (await roleIn(ctx, user, project))) ||
+      file.trashedAt !== undefined
+    ) {
+      return null;
+    }
+    return {
+      ...common,
+      file: {
+        _id: file._id,
+        folderId: file.folderId,
+        name: file.name,
+        type: file.type,
+      },
+      kind: "file",
       project: { slug: project.slug },
     };
   }
@@ -157,6 +190,25 @@ export const readPage = mutation({
       .query("notifications")
       .withIndex("by_page_and_user", (q) =>
         q.eq("pageId", pageId).eq("userId", user._id)
+      )
+      .collect();
+    for (const notification of notifications) {
+      if (!notification.read) {
+        await ctx.db.patch(notification._id, { read: true });
+      }
+    }
+  },
+});
+
+/** Opening a Drive file reads the mentions of you in its comments. */
+export const readFile = mutation({
+  args: { fileId: v.id("driveFiles") },
+  handler: async (ctx, { fileId }) => {
+    const user = await requireUser(ctx);
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_file_and_user", (q) =>
+        q.eq("fileId", fileId).eq("userId", user._id)
       )
       .collect();
     for (const notification of notifications) {

@@ -1,15 +1,15 @@
 import { api } from "@convex/_generated/api";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
-import { LockIcon, PlusIcon, Settings2Icon } from "lucide-react";
+import { LockIcon, PlusIcon, Settings2Icon, UploadIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
 import { ProjectAvatar } from "@/components/project-avatar";
 import { TopBar } from "@/components/top-bar";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +24,8 @@ import { tablePath } from "@/features/crm/crm-context";
 import { NewTableDialog } from "@/features/crm/new-table-dialog";
 import { TableIcon } from "@/features/crm/table-icon";
 import { PageGrid, useNewPage } from "@/features/docs/docs-page";
+import { drivePath } from "@/features/drive/drive-context";
+import { RecentFiles } from "@/features/drive/recent-files";
 import { AccountGrid } from "@/features/finance/account-card";
 import { AccountDialog } from "@/features/finance/account-dialog";
 import { HabitGrid } from "@/features/habits/habit-card";
@@ -36,6 +38,8 @@ import { ProjectDialog } from "@/features/projects/project-dialog";
 import type { CrmRecord, CrmTable, NavTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
 import type { DocPage, DocsContent } from "@/lib/docs";
+import type { DriveFile } from "@/lib/drive";
+import { uploadFiles } from "@/lib/drive-upload";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
@@ -320,6 +324,7 @@ function ProjectSections({
   portfolios,
   accounts,
   habits,
+  files,
   onNew,
 }: {
   project: Project;
@@ -333,6 +338,8 @@ function ProjectSections({
   portfolios: Portfolio[];
   accounts: Account[];
   habits: Habit[];
+  /** Files lately opened or added in the Drive. */
+  files: DriveFile[];
   onNew: (kind: ProjectItem) => void;
 }) {
   const editable = canEdit(project);
@@ -385,6 +392,29 @@ function ProjectSections({
           <PageGrid pages={pages} project={project} />
         </Section>
       )}
+      {files.length > 0 && (
+        <Section
+          action={
+            <div className="flex items-center gap-2">
+              {editable && (
+                <Button onClick={() => onNew("files")} variant="ghost">
+                  <UploadIcon />
+                  Upload
+                </Button>
+              )}
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                href={drivePath(project)}
+              >
+                Open Drive
+              </Link>
+            </div>
+          }
+          title="Drive"
+        >
+          <RecentFiles files={files.slice(0, 6)} project={project} />
+        </Section>
+      )}
       {portfolios.length > 0 && (
         <Section
           action={
@@ -431,13 +461,13 @@ function NoContent({
   onNew: (kind: ProjectItem) => void;
 }) {
   let description =
-    "Boards, tables, docs, portfolios and accounts in this project show up here.";
+    "Boards, tables, docs, files, portfolios and accounts in this project show up here.";
   if (editable && personal) {
     description =
-      "Build habits, plan work on boards, track deals in CRM tables, write docs, follow bitcoin portfolios and the money in your accounts.";
+      "Build habits, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive, follow bitcoin portfolios and the money in your accounts.";
   } else if (editable) {
     description =
-      "Plan work on boards, track deals in CRM tables, write docs, follow bitcoin portfolios and the money in your accounts.";
+      "Plan work on boards, track deals in CRM tables, write docs, keep files in the Drive, follow bitcoin portfolios and the money in your accounts.";
   }
   return (
     <Empty className="bg-muted/60 rounded-2xl py-10">
@@ -449,7 +479,9 @@ function NoContent({
 }
 
 /** What the page can open: the project's settings, or a new thing in it. */
-type Dialog = "settings" | Exclude<ProjectItem, "page">;
+type Dialog = "settings" | Exclude<ProjectItem, "page" | "files">;
+
+const NO_FILES: DriveFile[] = [];
 
 export function ProjectPage({
   project,
@@ -470,6 +502,9 @@ export function ProjectPage({
 }: ProjectPageProps) {
   const [dialog, setDialog] = useState<Dialog>();
   const newPage = useNewPage(project);
+  const filePicker = useRef<HTMLInputElement>(null);
+  const recent = useQuery(api.drive.recent, { projectId: project._id });
+  const files = recent ?? NO_FILES;
   const editable = canEdit(project);
   const members = project.members.map((member) => member.userId);
   const projectBoards = boards.filter(
@@ -487,6 +522,8 @@ export function ProjectPage({
   const onNew = (kind: ProjectItem) => {
     if (kind === "page") {
       newPage();
+    } else if (kind === "files") {
+      filePicker.current?.click();
     } else {
       setDialog(kind);
     }
@@ -500,6 +537,7 @@ export function ProjectPage({
     portfolios,
     accounts,
     habits,
+    files,
   ].some((items) => items.length > 0);
   const allLoaded = [
     loaded,
@@ -508,12 +546,14 @@ export function ProjectPage({
     portfoliosLoaded,
     accountsLoaded,
     habitsLoaded,
+    recent !== undefined,
   ].every(Boolean);
 
   let body: ReactNode = (
     <ProjectSections
       accounts={accounts}
       boards={projectBoards}
+      files={files}
       habits={habits}
       content={loaded ? content : undefined}
       members={members}
@@ -565,6 +605,24 @@ export function ProjectPage({
         />
         {body}
       </main>
+      <input
+        aria-label="Upload files"
+        className="sr-only"
+        multiple
+        onChange={(event) => {
+          const picked = [...(event.target.files ?? [])];
+          event.target.value = "";
+          if (picked.length > 0) {
+            uploadFiles(picked, {
+              projectId: project._id,
+              projectSlug: project.slug,
+            });
+          }
+        }}
+        ref={filePicker}
+        tabIndex={-1}
+        type="file"
+      />
       <ProjectDialog
         {...dialogProps("settings")}
         project={project}

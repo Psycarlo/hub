@@ -107,7 +107,7 @@ export const setAvatar = mutation({
   handler: async (ctx, { key }) => {
     const user = await requireUser(ctx);
     if (key) {
-      await ownedFile(ctx, key, user._id);
+      await ownedFile(ctx, key, user._id, "plain");
     }
     const previous = user.avatarKey;
     await ctx.db.patch(user._id, { avatarKey: key ?? undefined });

@@ -321,6 +321,30 @@ export async function requireHabit(
   return { ...(await requireProject(ctx, habit.projectId, need)), habit };
 }
 
+export async function requireDriveFolder(
+  ctx: QueryCtx,
+  folderId: Id<"driveFolders">,
+  need: Need
+): Promise<ProjectAccess & { folder: Doc<"driveFolders"> }> {
+  const folder = await ctx.db.get(folderId);
+  if (!folder || folder.deleting) {
+    throw new ConvexError("This folder doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, folder.projectId, need)), folder };
+}
+
+export async function requireDriveFile(
+  ctx: QueryCtx,
+  fileId: Id<"driveFiles">,
+  need: Need
+): Promise<ProjectAccess & { file: Doc<"driveFiles"> }> {
+  const file = await ctx.db.get(fileId);
+  if (!file) {
+    throw new ConvexError("This file doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, file.projectId, need)), file };
+}
+
 /**
  * The access check's result, or null when the thing is gone or no longer
  * shared. Live queries for one card, record or board use it, so a screen open

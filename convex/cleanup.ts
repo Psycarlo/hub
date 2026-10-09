@@ -1,13 +1,13 @@
 /**
  * What's left once a project, board, card, table, page, portfolio, finance
- * account or habit is deleted. The parent
+ * account, habit, or Drive file or folder is deleted. The parent
  * goes first, so nobody sees it anymore; the rest is cleared here in batches
  * that stay well within a mutation's limits.
  */
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { dropFile } from "./lib/files";
@@ -118,6 +118,110 @@ export const card = internalMutation({
     if (files.length === FILE_BATCH || events.length === BATCH) {
       await ctx.scheduler.runAfter(0, internal.cleanup.card, { cardId });
     }
+  },
+});
+
+/**
+ * A Drive file for good: its row and its R2 objects at once, then what's kept
+ * about it, like its comments, in batches of their own.
+ */
+export async function deleteDriveFile(
+  ctx: MutationCtx,
+  file: Doc<"driveFiles">
+): Promise<void> {
+  await ctx.db.delete(file._id);
+  await dropFile(ctx, file.key);
+  if (file.thumbKey) {
+    await dropFile(ctx, file.thumbKey);
+  }
+  await ctx.scheduler.runAfter(0, internal.cleanup.driveFile, {
+    fileId: file._id,
+  });
+}
+
+export const driveFile = internalMutation({
+  args: { fileId: v.id("driveFiles") },
+  handler: async (ctx, { fileId }) => {
+    const events = await ctx.db
+      .query("driveEvents")
+      .withIndex("by_file", (q) => q.eq("fileId", fileId))
+      .take(BATCH);
+    const comments = await ctx.db
+      .query("driveComments")
+      .withIndex("by_file", (q) => q.eq("fileId", fileId))
+      .take(BATCH);
+    const stars = await ctx.db
+      .query("driveStars")
+      .withIndex("by_file", (q) => q.eq("fileId", fileId))
+      .take(BATCH);
+    const opens = await ctx.db
+      .query("driveOpens")
+      .withIndex("by_file", (q) => q.eq("fileId", fileId))
+      .take(BATCH);
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_file_and_user", (q) => q.eq("fileId", fileId))
+      .take(BATCH);
+    const batches = [events, comments, stars, opens, notifications];
+    for (const row of batches.flat()) {
+      await ctx.db.delete(row._id);
+    }
+    if (batches.some((batch) => batch.length === BATCH)) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.driveFile, { fileId });
+    }
+  },
+});
+
+/**
+ * A Drive folder for good, with everything inside it. Folders inside are let
+ * go of and cleared on their own, so each batch finds only what's left here.
+ */
+export const driveFolder = internalMutation({
+  args: { folderId: v.id("driveFolders") },
+  handler: async (ctx, { folderId }) => {
+    const folder = await ctx.db.get(folderId);
+    if (!folder) {
+      return;
+    }
+    const files = await ctx.db
+      .query("driveFiles")
+      .withIndex("by_project_and_folder", (q) =>
+        q.eq("projectId", folder.projectId).eq("folderId", folderId)
+      )
+      .take(FILE_BATCH);
+    for (const file of files) {
+      await deleteDriveFile(ctx, file);
+    }
+    const folders = await ctx.db
+      .query("driveFolders")
+      .withIndex("by_project_and_parent", (q) =>
+        q.eq("projectId", folder.projectId).eq("parentId", folderId)
+      )
+      .take(BATCH);
+    for (const inside of folders) {
+      await ctx.db.patch(inside._id, {
+        deleting: true,
+        parentId: undefined,
+        trashedAt: undefined,
+      });
+      await ctx.scheduler.runAfter(0, internal.cleanup.driveFolder, {
+        folderId: inside._id,
+      });
+    }
+    if (files.length > 0 || folders.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.driveFolder, {
+        folderId,
+      });
+      return;
+    }
+    const stars = await ctx.db
+      .query("driveStars")
+      .withIndex("by_folder", (q) => q.eq("folderId", folderId))
+      .collect();
+    for (const star of stars) {
+      await ctx.db.delete(star._id);
+    }
+    await ctx.db.delete(folderId);
   },
 });
 
@@ -298,13 +402,42 @@ export const project = internalMutation({
         habitId: item._id,
       });
     }
+    // Every file of the Drive goes, wherever it sits, so its folders can go as they are.
+    const files = await ctx.db
+      .query("driveFiles")
+      .withIndex("by_project_and_folder", (q) => q.eq("projectId", projectId))
+      .take(FILE_BATCH);
+    for (const file of files) {
+      await deleteDriveFile(ctx, file);
+    }
+    const folders =
+      files.length > 0
+        ? []
+        : await ctx.db
+            .query("driveFolders")
+            .withIndex("by_project_and_parent", (q) =>
+              q.eq("projectId", projectId)
+            )
+            .take(BATCH);
+    for (const folder of folders) {
+      const stars = await ctx.db
+        .query("driveStars")
+        .withIndex("by_folder", (q) => q.eq("folderId", folder._id))
+        .collect();
+      for (const star of stars) {
+        await ctx.db.delete(star._id);
+      }
+      await ctx.db.delete(folder._id);
+    }
     if (
       boards.length > 0 ||
       tables.length > 0 ||
       pages.length > 0 ||
       portfolios.length > 0 ||
       accounts.length > 0 ||
-      habits.length > 0
+      habits.length > 0 ||
+      files.length > 0 ||
+      folders.length > 0
     ) {
       await ctx.scheduler.runAfter(0, internal.cleanup.project, { projectId });
     }

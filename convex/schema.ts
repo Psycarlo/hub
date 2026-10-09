@@ -9,6 +9,7 @@ import {
   vCardChange,
   vCardDefaults,
   vColor,
+  vDriveChange,
   vEntryKind,
   vField,
   vFiat,
@@ -217,13 +218,25 @@ export default defineSchema({
         pageId: v.id("docPages"),
         read: v.boolean(),
         userId: v.id("users"),
+      }),
+      v.object({
+        actorId: v.id("users"),
+        archived: v.boolean(),
+        /** The comment's text. */
+        content: v.string(),
+        driveCommentId: v.id("driveComments"),
+        fileId: v.id("driveFiles"),
+        read: v.boolean(),
+        userId: v.id("users"),
       })
     )
   )
     .index("by_user_and_archived", ["userId", "archived"])
     .index("by_comment", ["commentId"])
     .index("by_card", ["cardId"])
-    .index("by_page_and_user", ["pageId", "userId"]),
+    .index("by_page_and_user", ["pageId", "userId"])
+    .index("by_drive_comment", ["driveCommentId"])
+    .index("by_file_and_user", ["fileId", "userId"]),
 
   crmTables: defineTable({
     createdBy: v.id("users"),
@@ -286,6 +299,115 @@ export default defineSchema({
     pageId: v.id("docPages"),
     revision: v.number(),
   }).index("by_page_and_revision", ["pageId", "revision"]),
+
+  /**
+   * Folders in a project's Drive. One in the trash takes everything inside it
+   * along, without marking them: they come back with it.
+   */
+  driveFolders: defineTable({
+    color: v.optional(vColor),
+    createdBy: v.id("users"),
+    /** Set while it's deleted for good, a batch at a time; it shows nowhere meanwhile. */
+    deleting: v.optional(v.boolean()),
+    /** An emoji shown on the folder, or missing for none. */
+    icon: v.optional(v.string()),
+    name: v.string(),
+    /** The name as names are compared, so two in one place never clash. */
+    nameKey: v.string(),
+    parentId: v.optional(v.id("driveFolders")),
+    projectId: v.id("projects"),
+    /** When it was put in the trash, in ms. Only on what was trashed itself. */
+    trashedAt: v.optional(v.number()),
+    trashedBy: v.optional(v.id("users")),
+    updatedAt: v.number(),
+  })
+    .index("by_project_and_parent", ["projectId", "parentId"])
+    .index("by_parent_and_name", ["projectId", "parentId", "nameKey"])
+    .index("by_project_and_trashed", ["projectId", "trashedAt"])
+    .index("by_trashed_at", ["trashedAt"]),
+
+  /** Files uploaded to a project's Drive, at the top of it or in a folder. */
+  driveFiles: defineTable({
+    /** Seconds, for videos and audio the browser could read. */
+    duration: v.optional(v.number()),
+    folderId: v.optional(v.id("driveFolders")),
+    /** Pixels, for images and videos the browser could read. */
+    height: v.optional(v.number()),
+    /** R2 key of the upload. */
+    key: v.string(),
+    name: v.string(),
+    /** The name as names are compared, so two in one place never clash. */
+    nameKey: v.string(),
+    projectId: v.id("projects"),
+    /** In bytes, as R2 has it once it's checked. */
+    size: v.number(),
+    /** R2 key of a small picture of it, made in the browser on upload. */
+    thumbKey: v.optional(v.string()),
+    /** When it was put in the trash, in ms. Only on what was trashed itself. */
+    trashedAt: v.optional(v.number()),
+    trashedBy: v.optional(v.id("users")),
+    /** MIME type, or empty when the browser didn't know it. */
+    type: v.string(),
+    /** When it was uploaded, renamed or moved, in ms. */
+    updatedAt: v.number(),
+    uploadedBy: v.id("users"),
+    width: v.optional(v.number()),
+  })
+    .index("by_project_and_folder", ["projectId", "folderId"])
+    .index("by_folder_and_name", ["projectId", "folderId", "nameKey"])
+    .index("by_project_and_updated", ["projectId", "updatedAt"])
+    .index("by_project_and_trashed", ["projectId", "trashedAt"])
+    .index("by_trashed_at", ["trashedAt"])
+    .index("by_key", ["key"])
+    .searchIndex("search_name", {
+      filterFields: ["projectId"],
+      searchField: "name",
+    }),
+
+  /**
+   * Drive uploads handed a link but not filed yet. Ones still here a day later
+   * were left behind, and are deleted.
+   */
+  driveUploads: defineTable({
+    key: v.string(),
+    userId: v.id("users"),
+  }).index("by_key", ["key"]),
+
+  /** Files and folders someone starred, which only they see. */
+  driveStars: defineTable({
+    fileId: v.optional(v.id("driveFiles")),
+    folderId: v.optional(v.id("driveFolders")),
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+  })
+    .index("by_user_and_project", ["userId", "projectId"])
+    .index("by_file", ["fileId"])
+    .index("by_folder", ["folderId"]),
+
+  /** When someone last opened a file, for their recent files. */
+  driveOpens: defineTable({
+    at: v.number(),
+    fileId: v.id("driveFiles"),
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+  })
+    .index("by_user_and_project_and_at", ["userId", "projectId", "at"])
+    .index("by_user_and_file", ["userId", "fileId"])
+    .index("by_file", ["fileId"]),
+
+  /** Who did what to a Drive file, for its activity. */
+  driveEvents: defineTable({
+    actorId: v.id("users"),
+    change: vDriveChange,
+    fileId: v.id("driveFiles"),
+  }).index("by_file", ["fileId"]),
+
+  driveComments: defineTable({
+    authorId: v.id("users"),
+    /** Text with mentions as `<@userId>` tokens. */
+    content: v.string(),
+    fileId: v.id("driveFiles"),
+  }).index("by_file", ["fileId"]),
 
   /** Bitcoin a project holds, tracked through what it bought and sold. */
   portfolios: defineTable({

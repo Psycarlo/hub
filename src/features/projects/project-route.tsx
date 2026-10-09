@@ -15,6 +15,8 @@ import {
 } from "@/features/docs/docs-context";
 import { DocsPage } from "@/features/docs/docs-page";
 import { PageView } from "@/features/docs/page-view";
+import { DRIVE_SEGMENT } from "@/features/drive/drive-context";
+import { DriveRoute } from "@/features/drive/drive-page";
 import { AccountPage } from "@/features/finance/account-page";
 import {
   FINANCE_SEGMENT,
@@ -423,18 +425,30 @@ export function ProjectRoute({
   const projectAccounts = ofProject(accounts, project);
   const projectHabits = ofProject(habits, project);
   const segment = props.tableSlug?.toLowerCase();
-  if (project && project.slug !== slug) {
+  if (!project) {
+    return (
+      <>
+        <TopBar crumbs={[{ href: "/", label: "Home" }]} />
+        {loaded ? (
+          <NotFound href="/" label="Home" title="Project not found" />
+        ) : (
+          <Loading />
+        )}
+      </>
+    );
+  }
+  if (project.slug !== slug) {
     // Reached by a link the project had before, or typed in capitals.
     const path = [projectPath(project), props.tableSlug, props.recordId]
       .filter(Boolean)
       .join("/");
     return <Redirect replace to={search ? `${path}?${search}` : path} />;
   }
-  if (project && segment === BOARDS_SEGMENT) {
+  if (segment === BOARDS_SEGMENT) {
     // Boards are listed on the project page.
     return <Redirect replace to={projectPath(project)} />;
   }
-  if (project && segment === PORTFOLIOS_SEGMENT) {
+  if (segment === PORTFOLIOS_SEGMENT) {
     return (
       <PortfoliosView
         key={project._id}
@@ -445,7 +459,7 @@ export function ProjectRoute({
       />
     );
   }
-  if (project && segment === FINANCE_SEGMENT) {
+  if (segment === FINANCE_SEGMENT) {
     return (
       <FinanceView
         accountParam={props.recordId}
@@ -457,7 +471,7 @@ export function ProjectRoute({
       />
     );
   }
-  if (project && segment === HABITS_SEGMENT) {
+  if (segment === HABITS_SEGMENT) {
     // Only personal projects keep habits.
     return project.personalFor ? (
       <HabitsView
@@ -471,7 +485,16 @@ export function ProjectRoute({
       <Redirect replace to={projectPath(project)} />
     );
   }
-  if (project && segment === DOCS_SEGMENT) {
+  if (segment === DRIVE_SEGMENT) {
+    return (
+      <DriveRoute
+        folderParam={props.recordId}
+        key={project._id}
+        project={project}
+      />
+    );
+  }
+  if (segment === DOCS_SEGMENT) {
     return (
       <DocsView
         docs={docs.get(project._id) ?? EMPTY_DOCS}
@@ -482,29 +505,17 @@ export function ProjectRoute({
       />
     );
   }
-  if (project) {
-    return (
-      <ProjectView
-        accounts={projectAccounts}
-        docs={docs.get(project._id) ?? EMPTY_DOCS}
-        docsLoaded={docsLoaded}
-        habits={projectHabits}
-        key={project._id}
-        portfolios={projectPortfolios}
-        project={project}
-        projects={projects}
-        {...props}
-      />
-    );
-  }
   return (
-    <>
-      <TopBar crumbs={[{ href: "/", label: "Home" }]} />
-      {loaded ? (
-        <NotFound href="/" label="Home" title="Project not found" />
-      ) : (
-        <Loading />
-      )}
-    </>
+    <ProjectView
+      accounts={projectAccounts}
+      docs={docs.get(project._id) ?? EMPTY_DOCS}
+      docsLoaded={docsLoaded}
+      habits={projectHabits}
+      key={project._id}
+      portfolios={projectPortfolios}
+      project={project}
+      projects={projects}
+      {...props}
+    />
   );
 }

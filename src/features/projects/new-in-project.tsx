@@ -3,6 +3,7 @@ import {
   BitcoinIcon,
   CalendarCheckIcon,
   FileTextIcon,
+  HardDriveUploadIcon,
   PlusIcon,
   SquareKanbanIcon,
   Table2Icon,
@@ -17,6 +18,7 @@ export type ProjectItem =
   | "board"
   | "table"
   | "page"
+  | "files"
   | "portfolio"
   | "account"
   | "habit";
@@ -45,6 +47,12 @@ const ITEMS: {
     icon: FileTextIcon,
     kind: "page",
     label: "Page",
+  },
+  {
+    description: "Keep PDFs, photos, videos and more in the project’s Drive.",
+    icon: HardDriveUploadIcon,
+    kind: "files",
+    label: "Files",
   },
   {
     description: "Track bitcoin bought and sold, and what it’s worth.",
