@@ -64,7 +64,10 @@ export interface Table {
 /** A layout the importer knows by its header row. */
 export interface CsvFormat {
   id: string;
+  /** Which export of whose, like `Kraken ledger`. */
   name: string;
+  /** Who makes it, shown among the layouts the importer knows. */
+  source: string;
   /** Whether the header row, as `key`s, is this layout's. */
   matches: (keys: Set<string>) => boolean;
   read: (table: Table) => ReadResult[];
@@ -137,7 +140,7 @@ const ISO_LOCAL =
   /^(?<year>\d{4})-(?<month>\d{1,2})-(?<day>\d{1,2})(?:[ T](?<hours>\d{1,2}):(?<minutes>\d{2})(?::(?<seconds>\d{2})(?:\.(?<fraction>\d+))?)?)?(?:\s*(?:UTC|GMT|Z))?$/iu;
 const SLASHED =
   /^(?<first>\d{1,2})[/.](?<second>\d{1,2})[/.](?<year>\d{4})(?:,?\s+(?<hours>\d{1,2}):(?<minutes>\d{2})(?::(?<seconds>\d{2}))?\s*(?<meridiem>[AP]M)?)?(?:\s*(?:UTC|GMT|Z))?$/iu;
-const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/u;
+const ZONED = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/u;
 
 function moment(
   utc: boolean,
@@ -213,7 +216,9 @@ function fromExact(value: string): number | undefined {
     return Number(value);
   }
   if (ZONED.test(value) && /^\d{4}-/u.test(value)) {
-    const at = Date.parse(value.replace(" ", "T"));
+    // A bare hour offset, like Swan's `+00`, gets its minutes.
+    const iso = value.replace(" ", "T").replace(/([+-]\d{2})$/u, "$1:00");
+    const at = Date.parse(iso);
     return Number.isNaN(at) ? undefined : at;
   }
   return undefined;
@@ -352,11 +357,12 @@ export function exportName(portfolio: Pick<Portfolio, "title">): string {
   return `${slug}-${format(new Date(), "yyyy-MM-dd")}.csv`;
 }
 
-const hub: CsvFormat = {
+export const hub: CsvFormat = {
   id: "hub",
   matches: (keys) =>
     hasAll(keys, ["date", "type", "amountbtc", "networkfeebtc"]),
   name: "Hub export",
+  source: "Hub",
   read: (table) =>
     eachRow(table, (row, line) => {
       const at = parseMoment(row.get("date"));
@@ -541,8 +547,6 @@ export function readCustom(table: Table, options: CustomOptions): ReadResult[] {
 
 // Telling layouts apart.
 
-export const FORMATS: CsvFormat[] = [hub];
-
 function tableFrom(cells: string[][], headerIndex: number): Table {
   return {
     headers: cells[headerIndex] ?? [],
@@ -562,10 +566,10 @@ export interface Detected {
  * Finds the header row, past any lines some exports put before it, and the
  * layout it belongs to. A file no layout knows takes its first row.
  */
-export function detect(cells: string[][]): Detected {
+export function detect(cells: string[][], formats: CsvFormat[]): Detected {
   for (const [index, row] of cells.slice(0, HEADER_SEARCH).entries()) {
     const keys = new Set(row.map(key));
-    const match = FORMATS.find((item) => item.matches(keys));
+    const match = formats.find((item) => item.matches(keys));
     if (match) {
       return { format: match, table: tableFrom(cells, index) };
     }
