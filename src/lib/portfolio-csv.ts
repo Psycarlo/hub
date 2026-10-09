@@ -70,7 +70,18 @@ export interface CsvFormat {
   source: string;
   /** Whether the header row, as `key`s, is this layout's. */
   matches: (keys: Set<string>) => boolean;
-  read: (table: Table) => ReadResult[];
+  /**
+   * Whether its money is in the account's currency, which the file doesn't
+   * name; `ReadContext.fiat` says which it is.
+   */
+  fiatUnnamed?: boolean;
+  read: (table: Table, context: ReadContext) => ReadResult[];
+}
+
+/** What the person told the importer about a file, beyond its rows. */
+export interface ReadContext {
+  /** The currency money is in, for layouts that don't say. */
+  fiat: Fiat;
 }
 
 /** A header as a lookup key: lower case, letters and digits only. */

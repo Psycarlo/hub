@@ -3,7 +3,7 @@
  * Kraken, Coinbase, Strike, River and Swan. Each reads its bitcoin rows into
  * transactions and says why it leaves the rest out.
  */
-import type { TransactionKind } from "@/lib/portfolio";
+import type { Fiat, TransactionKind } from "@/lib/portfolio";
 import type {
   CsvFormat,
   ImportRow,
@@ -348,6 +348,68 @@ const STRIKE_KINDS: Record<string, TransactionKind> = {
   send: "send",
 };
 
+/** Where Strike says bitcoin went or came from: kept when it's a name, not an address or invoice. */
+function strikeCounterparty(
+  kind: TransactionKind,
+  destination: string | undefined
+): string | undefined {
+  const name = destination?.trim() ?? "";
+  if (!name || name.length > 32 || /^(?:ln|bc1|tb1|[13])/iu.test(name)) {
+    return undefined;
+  }
+  return `${kind === "send" ? "To" : "From"} ${name}`;
+}
+
+/** One row of any of Strike's newer statements, its columns already picked out. */
+interface StrikeRow {
+  line: number;
+  type: string;
+  status?: string;
+  at?: number;
+  /** Signed: negative when it left. Sends include their network fee. */
+  btc?: number;
+  feeBtc?: number;
+  /** The money that moved, signed; undefined when none did. */
+  cash?: number;
+  fee?: number;
+  price?: number;
+  fiat?: Fiat;
+  destination?: string;
+  notes: (string | undefined)[];
+}
+
+function readStrikeRow(row: StrikeRow): ReadResult | undefined {
+  const { line, btc } = row;
+  if (/reversed|failed|cancel/iu.test(row.status ?? "")) {
+    return { line, reason: "Reversed or cancelled" };
+  }
+  if (!btc) {
+    return { line, reason: CASH_ONLY };
+  }
+  const kind =
+    STRIKE_KINDS[row.type.trim().toLowerCase()] ??
+    byDirection(btc > 0, row.cash !== undefined);
+  const feeSats = kind === "send" ? btcToSats(row.feeBtc ?? 0) : 0;
+  // What left on a send includes its fee, which the hub keeps apart.
+  const sats = btcToSats(btc) - feeSats;
+  const missing = baseRow(line, row.at, sats);
+  if (missing || row.at === undefined) {
+    return missing;
+  }
+  const trade = kind === "buy" || kind === "sell";
+  return {
+    at: row.at,
+    currency: row.fiat,
+    fee: trade ? row.fee : undefined,
+    feeSats,
+    kind,
+    line,
+    note: noteOf(strikeCounterparty(kind, row.destination), ...row.notes),
+    price: row.fiat ? row.price : undefined,
+    sats,
+  };
+}
+
 const strike: CsvFormat = {
   id: "strike",
   matches: (keys) =>
@@ -357,40 +419,59 @@ const strike: CsvFormat = {
   read: (table) => {
     const code = strikeFiat(table.headers);
     const fiat = parseFiat(code);
-    return eachRow(table, (row, line): ReadResult | undefined => {
-      if (/reversed|failed|cancel/iu.test(row.get("status") ?? "")) {
-        return { line, reason: "Reversed or cancelled" };
-      }
-      const btc = parseNumber(row.get("amountbtc"));
-      if (!btc) {
-        return { line, reason: CASH_ONLY };
-      }
-      const type = (row.get("transactiontype") ?? "").trim().toLowerCase();
-      const cash = code ? parseNumber(row.get(`amount${code}`)) : undefined;
-      const kind =
-        STRIKE_KINDS[type] ?? byDirection(btc > 0, cash !== undefined);
-      const at = parseMoment(row.get("datetimeutc") ?? row.get("timeutc"));
-      const sats = btcToSats(btc);
-      const missing = baseRow(line, at, sats);
-      if (missing || at === undefined) {
-        return missing;
-      }
-      const price =
-        parseNumber(row.get("btcprice")) ??
-        parseNumber(row.get("exchangerate"));
-      return {
-        at,
-        currency: fiat,
+    return eachRow(table, (row, line) =>
+      readStrikeRow({
+        at: parseMoment(row.get("datetimeutc") ?? row.get("timeutc")),
+        btc: parseNumber(row.get("amountbtc")),
+        cash: code ? parseNumber(row.get(`amount${code}`)) : undefined,
+        destination: row.get("destination"),
         fee: code ? parseNumber(row.get(`fee${code}`)) : undefined,
-        feeSats: btcToSats(parseNumber(row.get("feebtc")) ?? 0),
-        kind,
+        feeBtc: parseNumber(row.get("feebtc")),
+        fiat,
         line,
-        note: noteOf(row.get("description"), row.get("note")),
-        price: fiat ? price : undefined,
-        sats,
-      };
-    });
+        notes: [row.get("description"), row.get("note")],
+        price:
+          parseNumber(row.get("btcprice")) ??
+          parseNumber(row.get("exchangerate")),
+        status: row.get("status"),
+        type: row.get("transactiontype") ?? "",
+      })
+    );
   },
+  source: "Strike",
+};
+
+/**
+ * Strike's activity export from the app: money in the account's currency,
+ * which the file doesn't name.
+ */
+const strikeActivity: CsvFormat = {
+  fiatUnnamed: true,
+  id: "strike-activity",
+  matches: (keys) =>
+    hasAll(keys, [
+      "referenceid",
+      "timestamp",
+      "transactiontype",
+      "bitcoinamount",
+    ]),
+  name: "Strike activity",
+  read: (table, { fiat }) =>
+    eachRow(table, (row, line) =>
+      readStrikeRow({
+        at: parseMoment(row.get("timestamp")),
+        btc: parseNumber(row.get("bitcoinamount")),
+        cash: parseNumber(row.get("fiatamount")),
+        destination: row.get("destination"),
+        fee: parseNumber(row.get("fiatfee")),
+        feeBtc: parseNumber(row.get("bitcoinfee")),
+        fiat,
+        line,
+        notes: [row.get("description"), row.get("note")],
+        price: parseNumber(row.get("bitcoinprice")),
+        type: row.get("transactiontype") ?? "",
+      })
+    ),
   source: "Strike",
 };
 
@@ -636,6 +717,7 @@ export const FORMATS: CsvFormat[] = [
   coinbase,
   strikeLegacy,
   strike,
+  strikeActivity,
   river,
   swanPurchases,
   swanWithdrawals,

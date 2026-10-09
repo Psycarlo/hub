@@ -50,6 +50,7 @@ import type {
   Unit,
 } from "@/lib/portfolio";
 import {
+  DEFAULT_FIAT,
   FIATS,
   KIND_NAMES,
   MAX_IMPORT,
@@ -794,17 +795,141 @@ function ShortfallAlert({ at, row }: { at: number; row?: ImportRow }) {
 function readRows(
   table: Detected["table"] | undefined,
   layout: (typeof FORMATS)[number] | undefined,
-  options: CustomOptions | undefined
+  options: CustomOptions | undefined,
+  fiat: Fiat
 ) {
   if (!table) {
     return [];
   }
   if (layout) {
-    return layout.read(table);
+    return layout.read(table, { fiat });
   }
   const mapped =
     options?.columns.date !== undefined && options.columns.amount !== undefined;
   return mapped ? readCustom(table, options) : [];
+}
+
+/** How far apart two prices are, either way round. */
+function distance(price: number, market: number | null | undefined): number {
+  return typeof market === "number"
+    ? Math.abs(Math.log(price / market))
+    : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * The currency a file's money is in when it doesn't say: whichever the
+ * market's price at its first priced row comes closest to.
+ */
+function useGuessedFiat(
+  table: Detected["table"] | undefined,
+  layout: (typeof FORMATS)[number] | undefined
+): { guess?: Fiat; guessing: boolean } {
+  const sample = useMemo(() => {
+    if (!table || !layout?.fiatUnnamed) {
+      return;
+    }
+    const row = layout
+      .read(table, { fiat: DEFAULT_FIAT })
+      .find((result) => !isSkipped(result) && result.price) as
+      | ImportRow
+      | undefined;
+    return row?.price ? { at: row.at, price: row.price } : undefined;
+  }, [table, layout]);
+  const [guessed, setGuessed] = useState<{
+    sample: typeof sample;
+    guess?: Fiat;
+  }>({ sample: undefined });
+  useEffect(() => {
+    if (!sample) {
+      return;
+    }
+    let current = true;
+    const guess = async () => {
+      // One lookup a currency, side by side; both stay found for the import.
+      const found = await Promise.all(
+        FIATS.map((fiat) => findPricesAt(fiat, [sample.at]))
+      );
+      const distances = FIATS.map((fiat, index) => ({
+        away: distance(
+          sample.price,
+          foundPriceAt(found[index] ?? new Map(), sample.at)
+        ),
+        fiat,
+      })).toSorted((a, b) => a.away - b.away);
+      const [best] = distances;
+      if (current) {
+        setGuessed({
+          guess: best && Number.isFinite(best.away) ? best.fiat : undefined,
+          sample,
+        });
+      }
+    };
+    guess();
+    return () => {
+      current = false;
+    };
+  }, [sample]);
+  const done = guessed.sample === sample;
+  return {
+    guess: done ? guessed.guess : undefined,
+    guessing: sample !== undefined && !done,
+  };
+}
+
+/**
+ * The currency the file's money is in: the person's own, unless the file
+ * doesn't name it, when it's guessed and theirs to change. A pick holds for
+ * the file it was made for.
+ */
+function useFileFiat(
+  table: Detected["table"] | undefined,
+  layout: (typeof FORMATS)[number] | undefined,
+  mine: Fiat
+) {
+  const { guess, guessing } = useGuessedFiat(table, layout);
+  const [pick, setPick] = useState<{ table: typeof table; fiat: Fiat }>();
+  const picked = pick?.table === table ? pick?.fiat : undefined;
+  return {
+    fiat: layout?.fiatUnnamed ? (picked ?? guess ?? mine) : mine,
+    guessed: guess !== undefined,
+    guessing,
+    onChange: (fiat: Fiat) => setPick({ fiat, table }),
+    picked: picked !== undefined,
+  };
+}
+
+/** The currency of a file that doesn't name it: guessed, and the person's to change. */
+function FiatField({
+  fiat: value,
+  picked,
+  guessing,
+  guessed,
+  onChange,
+}: ReturnType<typeof useFileFiat>) {
+  let hint = "The file doesn’t say which.";
+  if (guessing) {
+    hint = "Checking against the market price then…";
+  } else if (guessed && !picked) {
+    hint = "Guessed from the market price then; the file doesn’t say.";
+  } else if (picked) {
+    hint = "As you picked; the file doesn’t say.";
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Setting label="Money in">
+        <Segmented<Fiat>
+          label="Money in"
+          onChange={onChange}
+          options={FIATS.map((fiat) => ({ label: fiat, value: fiat }))}
+          value={value}
+        />
+      </Setting>
+      <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        {guessing && <Spinner className="size-3" />}
+        {hint}
+      </p>
+    </div>
+  );
 }
 
 /** A filled-in value from each column, to recognize it by. */
@@ -834,8 +959,8 @@ function useImportReview({
   fiat: Fiat;
 }) {
   const rows = useMemo(
-    () => review(readRows(table, layout, options), transactions),
-    [table, layout, options, transactions]
+    () => review(readRows(table, layout, options, fiat), transactions),
+    [table, layout, options, fiat, transactions]
   );
   const market = useMarketPrices(rows.fresh, fiat);
   const pricing = market.needed > 0 && market.found === undefined;
@@ -913,7 +1038,7 @@ function ImportForm({
   onDone: () => void;
 }) {
   const id = useId();
-  const fiat = useMe().currency;
+  const myFiat = useMe().currency;
   const [loaded, setLoaded] = useState<Loaded>();
   const [formatId, setFormatId] = useState<string>(CUSTOM);
   const [options, setOptions] = useState<CustomOptions>();
@@ -923,11 +1048,13 @@ function ImportForm({
     const detected = detect(parseCsv(await file.text()), FORMATS);
     setLoaded({ detected, name: file.name });
     setFormatId(detected.format?.id ?? CUSTOM);
-    setOptions(initialOptions(detected, fiat));
+    setOptions(initialOptions(detected, myFiat));
   };
 
   const table = loaded?.detected.table;
   const layout = FORMATS.find((item) => item.id === formatId);
+  const money = useFileFiat(table, layout, myFiat);
+  const { fiat, guessing } = money;
   const mapped =
     layout !== undefined ||
     (options?.columns.date !== undefined &&
@@ -966,8 +1093,8 @@ function ImportForm({
     }
   };
 
-  const canImport =
-    ready.length > 0 && !pricing && !shortfall && !saving && mapped;
+  const busy = pricing || guessing || saving;
+  const canImport = ready.length > 0 && !busy && !shortfall && mapped;
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
@@ -993,6 +1120,8 @@ function ImportForm({
             value={formatId}
           />
 
+          {layout?.fiatUnnamed && <FiatField {...money} />}
+
           {formatId === CUSTOM && options && (
             <ColumnsCard
               headers={table.headers}
@@ -1016,7 +1145,7 @@ function ImportForm({
           Cancel
         </DialogClose>
         <Button disabled={!canImport} onClick={run}>
-          {(saving || pricing) && <Spinner />}
+          {busy && <Spinner />}
           {ready.length > 0
             ? `Import ${plural(ready.length, "transaction")}`
             : "Import"}
