@@ -139,6 +139,43 @@ export function isClosed(status: Status): boolean {
   return kind === "completed" || kind === "canceled";
 }
 
+/** The statuses a new board uses until its creator turns some off: all of them. */
+export const DEFAULT_STATUSES: readonly Status[] = STATUSES.map(({ id }) => id);
+
+/** The statuses given, each once, in the order work moves through them. */
+export function inStatusOrder(statuses: Iterable<Status>): Status[] {
+  const picked = new Set(statuses);
+  return STATUSES.flatMap(({ id }) => (picked.has(id) ? [id] : []));
+}
+
+/** The statuses a board uses. Boards from before they could be picked use them all. */
+export function boardStatuses(board: {
+  statuses?: readonly Status[];
+}): Status[] {
+  return inStatusOrder(board.statuses ?? DEFAULT_STATUSES);
+}
+
+/**
+ * Whether a board could work with these statuses: an open one for new cards to
+ * start in, and a closed one for them to finish in.
+ */
+export function workableStatuses(statuses: readonly Status[]): boolean {
+  return (
+    statuses.some((status) => !isClosed(status)) && statuses.some(isClosed)
+  );
+}
+
+/** Where a new card starts: todo, else backlog, else the first open status. */
+export function startingStatus(statuses: readonly Status[]): Status {
+  const open = statuses.filter((status) => !isClosed(status));
+  return (
+    open.find((status) => statusKind(status) === "unstarted") ??
+    open.find((status) => statusKind(status) === "backlog") ??
+    open[0] ??
+    "todo"
+  );
+}
+
 export function priorityLabel(priority: Priority): string {
   return PRIORITIES.find(({ id }) => id === priority)?.label ?? priority;
 }

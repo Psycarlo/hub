@@ -1,4 +1,5 @@
 import type { Id } from "@convex/_generated/dataModel";
+import { cn } from "cn";
 import type { FormEvent } from "react";
 import { useId, useState } from "react";
 import { useLocation } from "wouter";
@@ -36,6 +37,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { boardPath } from "@/features/board/board-context";
 import {
   CardDefaultsField,
@@ -47,10 +49,17 @@ import {
   useTakenCodes,
 } from "@/features/boards/key-field";
 import { LabelsEditor, useLabelsDraft } from "@/features/boards/labels-editor";
+import { STATUS_STYLES } from "@/features/card/card-fields";
 import type { BoardDraft, LabelChanges } from "@/lib/actions";
 import { createBoard, deleteBoard, updateBoard } from "@/lib/actions";
-import type { Board, BoardLabel, CardDefaults } from "@/lib/model";
-import { suggestCode } from "@/lib/model";
+import type { Board, BoardLabel, CardDefaults, Status } from "@/lib/model";
+import {
+  DEFAULT_STATUSES,
+  isClosed,
+  STATUSES,
+  suggestCode,
+  workableStatuses,
+} from "@/lib/model";
 import type { Project } from "@/lib/project";
 import { canEdit } from "@/lib/project";
 
@@ -96,6 +105,66 @@ function ProjectField({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+/**
+ * The statuses the board uses, as chips to switch on and off. The last open
+ * status and the last closed one stay on: cards need somewhere to start and
+ * somewhere to finish.
+ */
+function StatusesField({
+  value,
+  onChange,
+}: {
+  value: Status[];
+  onChange: (statuses: Status[]) => void;
+}) {
+  const id = useId();
+  const open = value.filter((status) => !isClosed(status)).length;
+  const closed = value.length - open;
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium select-none" id={id}>
+        Statuses
+      </span>
+      <ToggleGroup
+        aria-labelledby={id}
+        className="flex-wrap gap-1.5"
+        multiple
+        onValueChange={(next) =>
+          onChange(
+            STATUSES.flatMap(({ id: status }) =>
+              next.includes(status) ? [status] : []
+            )
+          )
+        }
+        value={value}
+      >
+        {STATUSES.map(({ id: status, label }) => {
+          const { icon: Icon, className } = STATUS_STYLES[status];
+          const on = value.includes(status);
+          const last = on && (isClosed(status) ? closed : open) === 1;
+          return (
+            <ToggleGroupItem
+              className="text-muted-foreground not-data-disabled:hover:text-foreground data-pressed:bg-card data-pressed:text-foreground data-pressed:shadow-surface not-data-pressed:not-data-disabled:hover:bg-foreground/5 border-foreground/15 flex h-7 items-center gap-1.5 rounded-full border border-dashed pr-2.5 pl-2 text-xs font-medium transition-[background-color,border-color,color,box-shadow,scale] duration-150 ease-out not-data-disabled:active:scale-[0.96] data-disabled:cursor-not-allowed data-pressed:border-transparent"
+              disabled={last}
+              key={status}
+              value={status}
+            >
+              <Icon
+                aria-hidden
+                className={cn(
+                  "size-3.5 shrink-0 transition-colors duration-150",
+                  on ? className : "text-muted-foreground/70"
+                )}
+              />
+              {label}
+            </ToggleGroupItem>
+          );
+        })}
+      </ToggleGroup>
     </div>
   );
 }
@@ -165,6 +234,7 @@ function initialDraft(
     cardDefaults: NO_CARD_DEFAULTS,
     description: "",
     projectId: project?._id ?? choices[0]?._id,
+    statuses: [...DEFAULT_STATUSES],
     title: "",
     usesSprints: false,
   };
@@ -209,6 +279,7 @@ function BoardForm({
   const [description, setDescription] = useState(initial.description);
   const [projectId, setProjectId] = useState(initial.projectId);
   const [usesSprints, setUsesSprints] = useState(initial.usesSprints ?? false);
+  const [statuses, setStatuses] = useState(initial.statuses);
   const labelsDraft = useLabelsDraft(labels);
   const [cardDefaults, setCardDefaults] = useState(initial.cardDefaults);
   const [saving, setSaving] = useState(false);
@@ -221,6 +292,7 @@ function BoardForm({
     code !== "" &&
     !keyError &&
     projectId !== undefined &&
+    workableStatuses(statuses) &&
     !labelsDraft.problem;
 
   const submit = async (event: FormEvent) => {
@@ -232,6 +304,7 @@ function BoardForm({
       code,
       description: description.trim(),
       projectId,
+      statuses,
       title: title.trim(),
       usesSprints,
     };
@@ -318,6 +391,8 @@ function BoardForm({
           onCheckedChange={setUsesSprints}
         />
       </label>
+
+      <StatusesField onChange={setStatuses} value={statuses} />
 
       {labelsDraft.editor && <LabelsEditor {...labelsDraft.editor} />}
 

@@ -110,6 +110,12 @@ export default defineSchema({
     nextCardNumber: v.number(),
     nextSprintNumber: v.number(),
     projectId: v.id("projects"),
+    /**
+     * The statuses it uses, in order. The others stay out of its columns and
+     * pickers, unless a card is in one. Missing on boards from before statuses
+     * could be picked, which use them all.
+     */
+    statuses: v.optional(v.array(vStatus)),
     title: v.string(),
     /** Whether work is planned in sprints, from a backlog. Off when missing. */
     usesSprints: v.optional(v.boolean()),

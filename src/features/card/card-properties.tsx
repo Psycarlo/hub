@@ -30,7 +30,7 @@ import type { Option } from "@/features/card/card-options";
 import {
   PRIORITY_OPTIONS,
   sprintOptions,
-  STATUS_OPTIONS,
+  statusOptions,
   useOptionShortcuts,
 } from "@/features/card/card-options";
 import { LabelChip, Muted, People, Person } from "@/features/card/card-parts";
@@ -275,9 +275,10 @@ function Property({
 function PropertyList({ card, className }: { card: Card; className?: string }) {
   const { board, content } = useBoard();
   const sprints = sprintOptions(sprintChoices(content.sprints, card.sprintId));
+  const statuses = statusOptions(board.statuses, card.status);
   return (
     <dl className={cn(GRID, className)}>
-      <Property label="Status">{labelOf(STATUS_OPTIONS, card.status)}</Property>
+      <Property label="Status">{labelOf(statuses, card.status)}</Property>
       <Property label="Assignees">
         <People people={card.assignees} />
       </Property>
@@ -331,7 +332,7 @@ export function CardProperties({
             save({ status });
           }
         }}
-        options={STATUS_OPTIONS}
+        options={statusOptions(board.statuses, card.status)}
         value={card.status}
       />
       <Assignees

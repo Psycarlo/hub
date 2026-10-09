@@ -13,11 +13,13 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { vBoardLabel, vCardDefaults } from "./lib/validators";
+import { vBoardLabel, vCardDefaults, vStatus } from "./lib/validators";
 import type { BoardLabel, Status } from "./shared/model";
 import {
+  boardStatuses,
   canManageRole,
   codeProblem,
+  inStatusOrder,
   isClosed,
   LABEL_ID,
   labelKey,
@@ -26,6 +28,7 @@ import {
   MAX_LABELS,
   sortLabels,
   STATUSES,
+  workableStatuses,
 } from "./shared/model";
 
 const MAX_TITLE = 80;
@@ -45,7 +48,10 @@ export type BoardView = Pick<
   | "description"
   | "createdBy"
   | "usesSprints"
->;
+> & {
+  /** The statuses the board uses, in order. */
+  statuses: Status[];
+};
 
 function toView(board: Doc<"boards">): BoardView {
   return {
@@ -57,6 +63,7 @@ function toView(board: Doc<"boards">): BoardView {
     description: board.description,
     formerCodes: board.formerCodes,
     projectId: board.projectId,
+    statuses: boardStatuses(board),
     title: board.title,
     usesSprints: board.usesSprints,
   };
@@ -231,6 +238,15 @@ async function freeCode(
   return code;
 }
 
+/** The statuses in order, once each, so long as cards can start and finish in them. */
+function cleanStatuses(statuses: Status[]): Status[] {
+  const ordered = inStatusOrder(statuses);
+  if (!workableStatuses(ordered)) {
+    throw new ConvexError("A board needs an open status and a closed one.");
+  }
+  return ordered;
+}
+
 function cardsOf(
   ctx: QueryCtx,
   boardId: Id<"boards">
@@ -330,7 +346,13 @@ export async function insertBoard(
   ctx: MutationCtx,
   board: Pick<
     Doc<"boards">,
-    "code" | "createdBy" | "description" | "projectId" | "title" | "usesSprints"
+    | "code"
+    | "createdBy"
+    | "description"
+    | "projectId"
+    | "statuses"
+    | "title"
+    | "usesSprints"
   >
 ): Promise<{ _id: Id<"boards">; code: string }> {
   const code = await freeCode(ctx, board.code);
@@ -342,6 +364,7 @@ export async function insertBoard(
     nextCardNumber: 1,
     nextSprintNumber: 1,
     projectId: board.projectId,
+    statuses: board.statuses && cleanStatuses(board.statuses),
     title: cleanTitle(board.title),
     usesSprints: board.usesSprints,
   });
@@ -353,6 +376,8 @@ export const create = mutation({
     code: v.string(),
     description: v.string(),
     projectId: v.id("projects"),
+    /** The statuses it uses; all of them when missing. */
+    statuses: v.optional(v.array(vStatus)),
     title: v.string(),
     usesSprints: v.optional(v.boolean()),
   },
@@ -374,6 +399,7 @@ export const update = mutation({
       v.object({ changed: v.array(vBoardLabel), removed: v.array(v.string()) })
     ),
     projectId: v.optional(v.id("projects")),
+    statuses: v.optional(v.array(vStatus)),
     title: v.optional(v.string()),
     usesSprints: v.optional(v.boolean()),
   },
@@ -400,6 +426,10 @@ export const update = mutation({
     }
     if (changes.description !== undefined) {
       patch.description = changes.description.trim().slice(0, MAX_DESCRIPTION);
+    }
+    // Turning a status off leaves its cards in it, so they still show.
+    if (changes.statuses !== undefined) {
+      patch.statuses = cleanStatuses(changes.statuses);
     }
     // Turning sprints off keeps them, so turning them back on picks up where they were.
     if (changes.usesSprints !== undefined) {

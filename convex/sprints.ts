@@ -5,7 +5,12 @@ import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { requireBoard, requireSprint } from "./lib/access";
 import { patchCard } from "./lib/history";
-import { isClosed, statusKind } from "./shared/model";
+import {
+  boardStatuses,
+  isClosed,
+  startingStatus,
+  statusKind,
+} from "./shared/model";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const SPRINT_DAYS = 15;
@@ -117,8 +122,8 @@ export const start = mutation({
 });
 
 /**
- * Open cards roll over to the next future sprint, those under way back to todo;
- * closed cards stay with the ended one.
+ * Open cards roll over to the next future sprint, those under way back to
+ * where new cards start; closed cards stay with the ended one.
  */
 export const end = mutation({
   args: { sprintId: v.id("sprints") },
@@ -140,10 +145,11 @@ export const end = mutation({
       next = await newSprint(ctx, board);
     }
     const now = Date.now();
+    const restart = startingStatus(boardStatuses(board));
     for (const card of unfinished) {
       await patchCard(ctx, user._id, board, card, {
         sprintId: next,
-        ...(statusKind(card.status) === "started" ? { status: "todo" } : {}),
+        ...(statusKind(card.status) === "started" ? { status: restart } : {}),
         updatedAt: now,
       });
     }

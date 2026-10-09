@@ -11,6 +11,7 @@ import type {
   CardDefaults,
   CardFields,
   Sprint,
+  Status,
 } from "@/lib/model";
 import { sortLabels } from "@/lib/model";
 import type { Project } from "@/lib/project";
@@ -33,6 +34,7 @@ export interface BoardDraft {
   code: string;
   title: string;
   description: string;
+  statuses: Status[];
   usesSprints: boolean;
 }
 

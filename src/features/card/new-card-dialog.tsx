@@ -33,7 +33,7 @@ import {
 import {
   PRIORITY_OPTIONS,
   sprintOptions,
-  STATUS_OPTIONS,
+  statusOptions,
 } from "@/features/card/card-options";
 import { LabelPicker } from "@/features/card/label-picker";
 import {
@@ -289,7 +289,7 @@ function NewCardForm({
               setPlacement((current) => ({ ...current, status }));
             }
           }}
-          options={STATUS_OPTIONS}
+          options={statusOptions(board.statuses, placement.status)}
           value={placement.status}
         />
         <PillSelect

@@ -14,7 +14,7 @@ import {
 import type { Option } from "@/features/card/card-options";
 import {
   PRIORITY_OPTIONS,
-  STATUS_OPTIONS,
+  statusOptions,
   useOptionShortcuts,
 } from "@/features/card/card-options";
 import { AvatarStack, Person } from "@/features/card/card-parts";
@@ -96,7 +96,7 @@ function StatusIcon({ status }: { status: Status }) {
 
 /** The card's status, which those who edit cards change from here. */
 export function CardStatus({ card }: { card: Card }) {
-  const { canEdit } = useBoard();
+  const { board, canEdit } = useBoard();
   const label = `Status: ${statusLabel(card.status)}`;
   if (!canEdit) {
     return (
@@ -110,7 +110,7 @@ export function CardStatus({ card }: { card: Card }) {
     <InlineSelect
       label={label}
       onChange={(status: Status) => updateCard(card, { status })}
-      options={STATUS_OPTIONS}
+      options={statusOptions(board.statuses, card.status)}
       value={card.status}
     >
       <StatusIcon status={card.status} />

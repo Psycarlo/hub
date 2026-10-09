@@ -15,6 +15,8 @@ export type {
 export {
   BURST_MS,
   CODE,
+  DEFAULT_STATUSES,
+  inStatusOrder,
   isClosed,
   labelKey,
   MAX_CARD_FILES,
@@ -27,10 +29,12 @@ export {
   rankBetween,
   RESERVED_CODES,
   sortLabels,
+  startingStatus,
   STATUSES,
   statusKind,
   statusLabel,
   suggestCode,
+  workableStatuses,
 } from "@convex/shared/model";
 
 export type UserId = Id<"users">;
