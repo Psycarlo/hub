@@ -203,7 +203,7 @@ function ProjectTables({
     >
       <div
         aria-busy={!content}
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
         {content
           ? content.tables.map((table) => (
@@ -248,7 +248,7 @@ function ProjectBoards({
       }
       title="Boards"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {boards.map((board) => (
           <BoardCard
             board={board}

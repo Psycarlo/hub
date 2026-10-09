@@ -222,7 +222,7 @@ function Day({
           {/* A narrow day is too small to tap entries in: the whole day opens them. */}
           <Popover>
             <PopoverTrigger
-              aria-label={`${format(date, "MMMM d")}, ${entries.length} entries`}
+              aria-label={`${format(date, "MMMM d")}, ${entries.length === 1 ? "1 entry" : `${entries.length} entries`}`}
               className="focus-visible:ring-ring/50 absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset sm:hidden"
             />
             <PopoverContent align="center" className="w-72 p-2">

@@ -38,6 +38,7 @@ import type { CellContext } from "@/lib/crm-values";
 import { parseCell } from "@/lib/crm-values";
 import { parseCsv } from "@/lib/csv";
 import { COLORS } from "@/lib/palette";
+import { plural } from "@/lib/utils";
 
 const MAX_ROWS = MAX_IMPORT;
 const SKIP = "skip";
@@ -251,7 +252,7 @@ function ImportForm({ onDone }: { onDone: () => void }) {
           </span>
           <span className="text-muted-foreground text-xs">
             {parsed
-              ? `${parsed.rows.length} rows${parsed.rows.length > MAX_ROWS ? `, the first ${MAX_ROWS} are imported` : ""}`
+              ? `${plural(parsed.rows.length, "row")}${parsed.rows.length > MAX_ROWS ? `, the first ${MAX_ROWS} are imported` : ""}`
               : "Exported from a spreadsheet or another CRM"}
           </span>
         </span>

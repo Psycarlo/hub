@@ -140,7 +140,7 @@ function FocusContent({ widgets }: { widgets?: Widget[] }) {
   let content: ReactNode = null;
   if (widgets && widgets.length > 0) {
     content = (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {widgets.map((widget) => (
           <FocusWidget key={widget._id} widget={widget} />
         ))}

@@ -23,6 +23,7 @@ const FILL = "portfolio-chart-fill";
 const LINE = "var(--primary)";
 /** Room above the plot where the tooltip rides, so it never covers the line. */
 const TOOLTIP_BAND = 52;
+const Y_TICKS = 4;
 
 /** What the chart draws at one moment: `value` in the chart's mode. */
 interface Datum extends SeriesPoint {
@@ -50,6 +51,30 @@ function yDomain(points: Datum[]): [number, number] {
   const span = hi - lo;
   const pad = span > 0 ? span * 0.12 : hi * 0.05;
   return [lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi + pad];
+}
+
+/**
+ * Axis money, short like `$1.2M`, with the digits it takes to tell the ticks
+ * apart: a quiet day around $1.2M reads `$1.195M`, `$1.2M`, `$1.205M`.
+ */
+function fiatTickFormat(
+  ticks: number[],
+  fiat: Fiat
+): (value: number) => string {
+  const [first, second] = ticks;
+  if (first === undefined || second === undefined) {
+    return (value) => formatFiat(value, fiat, { compact: true });
+  }
+  const top = Math.max(...ticks.map(Math.abs));
+  const digits =
+    Math.floor(Math.log10(top)) - Math.floor(Math.log10(second - first)) + 1;
+  const money = new Intl.NumberFormat(undefined, {
+    currency: fiat,
+    maximumSignificantDigits: Math.min(21, Math.max(1, digits)),
+    notation: "compact",
+    style: "currency",
+  });
+  return (value) => money.format(value);
 }
 
 /** Axis dates: hours for a day, days for months, months beyond. */
@@ -127,10 +152,12 @@ export function ValueChart({
           : point.sats / SATS_PER_BTC,
     }));
     const [lo, hi] = yDomain(rows);
+    const y = scaleLinear().domain([lo, hi]);
     const pattern = tickFormat(span);
+    const formatFiatTick = fiatTickFormat(y.ticks(Y_TICKS), fiat);
     const formatY = (value: number) =>
       mode === "fiat"
-        ? formatFiat(value, fiat, { compact: true })
+        ? formatFiatTick(value)
         : formatBtc(Math.round(value * SATS_PER_BTC));
     const x = (datum: Datum) => new Date(datum.t);
 
@@ -199,10 +226,10 @@ export function ValueChart({
         y: {
           axis: {
             line: false,
-            ticks: { count: 4, format: formatY, size: 0 },
+            ticks: { count: Y_TICKS, format: formatY, size: 0 },
           },
           grid: { stroke: "var(--border)", strokeWidth: 1 },
-          scale: scaleLinear().domain([lo, hi]),
+          scale: y,
         },
       },
       theme: { grid: "var(--border)", muted: "var(--muted-foreground)" },

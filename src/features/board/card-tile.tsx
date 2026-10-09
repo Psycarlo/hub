@@ -24,7 +24,7 @@ function DueDate({ due, closed }: { due: string; closed: boolean }) {
   return (
     <span
       className={cn(
-        "flex items-center gap-1 text-xs tabular-nums",
+        "flex items-center gap-1 text-xs whitespace-nowrap tabular-nums",
         overdue ? "text-destructive" : "text-muted-foreground"
       )}
     >
@@ -173,12 +173,12 @@ export function CardTile(props: SortableCardProps) {
   return (
     <CardLink card={card} className="flex flex-col gap-2.5 p-3" ref={ref}>
       <CardTitle
-        className="line-clamp-3 text-sm leading-snug"
+        className="line-clamp-3 text-sm leading-snug wrap-break-word"
         title={card.title}
       />
       {labels.length > 0 && <LabelChips labels={labels} />}
-      <span className="flex min-h-5 items-center gap-2">
-        <span className="text-muted-foreground text-xs tabular-nums">
+      <span className="flex min-h-5 flex-wrap items-center gap-2">
+        <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
           {cardKey(board, card)}
         </span>
         <CardStatus card={card} />

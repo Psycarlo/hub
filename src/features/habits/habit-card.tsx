@@ -142,7 +142,7 @@ export function HabitGrid({
   const counts = useHabitCounts(project, addDays(today, -7 * CARD_WEEKS));
   const streaks = useStreaks(project, today);
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {habits.map((habit) => (
         <HabitCard
           counts={counts}

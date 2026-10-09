@@ -58,7 +58,10 @@ export function LabelDot({
 /** A label as a pill: its color, then its name. */
 export function LabelChip({ label }: { label: BoardLabel }) {
   return (
-    <span className="border-border inline-flex h-5 max-w-36 min-w-0 items-center gap-1.5 rounded-full border px-1.5 text-xs">
+    <span
+      className="border-border inline-flex h-5 max-w-36 min-w-0 items-center gap-1.5 rounded-full border px-1.5 text-xs"
+      title={label.name}
+    >
       <LabelDot color={label.color} />
       <span className="truncate">{label.name}</span>
     </span>

@@ -15,6 +15,7 @@ import { OptionChip, Person } from "@/features/crm/values";
 import type { CrmRecord, CrmTable, Field, FieldOption } from "@/lib/crm";
 import { findOption, firstValue, recordTitle, stageField } from "@/lib/crm";
 import { SWATCH_COLORS } from "@/lib/palette";
+import { plural } from "@/lib/utils";
 
 const WEEKS = 12;
 const QUIET_DAYS = 30;
@@ -431,7 +432,7 @@ export function InsightsView() {
               note={
                 averageToWin === undefined
                   ? undefined
-                  : `${averageToWin} days on average`
+                  : `${plural(averageToWin, "day")} on average`
               }
               value={compact.format(won)}
             />
@@ -448,7 +449,7 @@ export function InsightsView() {
           />
         )}
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {stage && stage.options.length > 0 && (
           <Card
             description={`Where every ${table.singular.toLowerCase()} is right now.`}

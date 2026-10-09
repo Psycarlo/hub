@@ -176,7 +176,7 @@ export function AccountGrid({
   const started = new Set(data?.months.map(({ accountId }) => accountId));
   const counted = accounts.filter((account) => !account.excludedFromTotal);
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {withTotal && counted.length > 1 && (
         <AccountCardLink
           description={

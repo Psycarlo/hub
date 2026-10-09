@@ -81,7 +81,9 @@ function SprintHeader({ sprint }: { sprint: Sprint }) {
       <div className="flex min-w-0 flex-col sm:flex-row sm:items-center sm:gap-3">
         <h2 className="truncate font-semibold">{sprint.title}</h2>
         {dates && (
-          <p className="text-muted-foreground text-sm tabular-nums">{dates}</p>
+          <p className="text-muted-foreground shrink-0 text-sm tabular-nums">
+            {dates}
+          </p>
         )}
       </div>
       {canEdit && (
@@ -111,8 +113,11 @@ function NoActiveSprint() {
     <Empty>
       <EmptyTitle>No active sprint</EmptyTitle>
       {canEdit && (
-        <Button onClick={() => startSprint(board, upcomingSprint(content))}>
-          Start {upcomingTitle(content)}
+        <Button
+          className="max-w-full"
+          onClick={() => startSprint(board, upcomingSprint(content))}
+        >
+          <span className="truncate">Start {upcomingTitle(content)}</span>
         </Button>
       )}
     </Empty>

@@ -143,7 +143,7 @@ function CardGrid({
   return (
     <motion.div
       animate="show"
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
       custom={at}
       initial={initial}
       variants={GRID}
@@ -169,7 +169,7 @@ function ProjectCard({
   boards: number;
 }) {
   return (
-    <motion.div className="grid" variants={RISE}>
+    <motion.div className="grid grid-cols-1" variants={RISE}>
       <Link
         className={cn(CARD_SURFACE, "group/card relative isolate")}
         href={projectPath(project)}
@@ -264,7 +264,7 @@ function WidgetGrid({
           widgets already here only do on the page's entrance. */}
       <motion.div
         animate="show"
-        className="grid gap-3 empty:hidden sm:grid-cols-2 lg:grid-cols-3"
+        className="grid grid-cols-1 gap-3 empty:hidden sm:grid-cols-2 lg:grid-cols-3"
         custom={at}
         initial="hidden"
         variants={GRID}

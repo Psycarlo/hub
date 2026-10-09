@@ -9,6 +9,8 @@ import { ensurePersonalProject } from "./projects";
 import { addStarterWidgets } from "./widgets";
 
 const MIN_PASSWORD = 8;
+/** As long as a name can get in settings. */
+const MAX_NAME = 80;
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   callbacks: {
@@ -59,7 +61,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       profile(params) {
         const email = normalizeEmail(String(params.email ?? ""));
         const name =
-          typeof params.name === "string" ? params.name.trim() : undefined;
+          typeof params.name === "string"
+            ? params.name.trim().slice(0, MAX_NAME)
+            : undefined;
         return name ? { email, name } : { email };
       },
       validatePasswordRequirements(password) {

@@ -148,7 +148,10 @@ function HabitRow({
           <span className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs tabular-nums">
             <FlameIcon aria-hidden className="size-3" />
             {streak}
-            <span className="sr-only"> days in a row</span>
+            <span className="sr-only">
+              {" "}
+              {streak === 1 ? "day" : "days"} in a row
+            </span>
           </span>
         )}
       </Link>

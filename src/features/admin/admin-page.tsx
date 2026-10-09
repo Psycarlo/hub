@@ -359,12 +359,12 @@ function PersonRow({ user, you }: { user: User; you: boolean }) {
         <span className="flex items-center gap-2">
           <span className="truncate font-medium">{user.name}</span>
           {you && (
-            <span className="bg-foreground/5 text-muted-foreground rounded-md px-1.5 py-0.5 text-xs">
+            <span className="bg-foreground/5 text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-xs">
               You
             </span>
           )}
           {user.deactivated && (
-            <span className="bg-destructive/10 text-destructive rounded-md px-1.5 py-0.5 text-xs">
+            <span className="bg-destructive/10 text-destructive shrink-0 rounded-md px-1.5 py-0.5 text-xs">
               No access
             </span>
           )}

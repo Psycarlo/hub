@@ -100,7 +100,7 @@ function RecordCard({
     >
       <span
         className={cn(
-          "line-clamp-3 text-sm leading-snug",
+          "line-clamp-3 text-sm leading-snug wrap-break-word",
           !record.title && "text-muted-foreground"
         )}
       >
