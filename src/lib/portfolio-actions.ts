@@ -119,6 +119,22 @@ export function addTransaction(portfolio: Portfolio, draft: TransactionDraft) {
   );
 }
 
+/** One transaction from an import: sends and receives are to and from outside. */
+export type ImportedTransaction = Omit<TransactionDraft, "toPortfolioId">;
+
+/** Adds the transactions, at most `MAX_IMPORT`; resolves with how many. */
+export function importTransactions(
+  portfolio: Portfolio,
+  rows: ImportedTransaction[]
+) {
+  return run(
+    convex.mutation(api.portfolios.importTransactions, {
+      portfolioId: portfolio._id,
+      rows,
+    })
+  );
+}
+
 export function updateTransaction(
   transaction: Transaction,
   changes: Partial<TransactionDraft>
@@ -141,6 +157,33 @@ export function deleteTransaction(transaction: Transaction) {
         optimisticUpdate: (store) =>
           patchTransactions(store, transaction.projectId, (transactions) =>
             transactions.filter((item) => item._id !== transaction._id)
+          ),
+      }
+    )
+  );
+}
+
+/** Deletes the transactions, all of one project's; resolves with how many. */
+export function deleteTransactions(transactions: Transaction[]) {
+  const [first] = transactions;
+  if (!first) {
+    return Promise.resolve(0);
+  }
+  const ids = new Set<string>(transactions.map((item) => item._id));
+  // Sends between portfolios take their other side with them.
+  for (const item of transactions) {
+    if (item.transfer) {
+      ids.add(item.transfer.transactionId);
+    }
+  }
+  return run(
+    convex.mutation(
+      api.portfolios.removeTransactions,
+      { transactionIds: transactions.map((item) => item._id) },
+      {
+        optimisticUpdate: (store) =>
+          patchTransactions(store, first.projectId, (current) =>
+            current.filter((item) => !ids.has(item._id))
           ),
       }
     )

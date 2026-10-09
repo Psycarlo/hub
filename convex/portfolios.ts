@@ -17,7 +17,7 @@ import { releaseBuy } from "./lib/finance";
 import { vFiat, vTransactionKind } from "./lib/validators";
 import { canManageRole } from "./shared/model";
 import type { TransactionKind } from "./shared/portfolio";
-import { MAX_SATS, byTime, signedSats } from "./shared/portfolio";
+import { MAX_IMPORT, MAX_SATS, byTime, signedSats } from "./shared/portfolio";
 
 type Transaction = Doc<"portfolioTransactions">;
 
@@ -468,6 +468,58 @@ export const addTransaction = mutation({
   },
 });
 
+/**
+ * Adds many transactions at once, as from a CSV file. Sends and receives come
+ * in as to and from outside; the holdings are checked once, after them all.
+ */
+export const importTransactions = mutation({
+  args: {
+    portfolioId: v.id("portfolios"),
+    rows: v.array(
+      v.object({
+        at: v.number(),
+        currency: vFiat,
+        fee: v.optional(v.number()),
+        feeSats: v.optional(v.number()),
+        kind: vTransactionKind,
+        note: v.string(),
+        price: v.number(),
+        sats: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, { portfolioId, rows }) => {
+    const { portfolio, user } = await requirePortfolio(
+      ctx,
+      portfolioId,
+      "edit"
+    );
+    if (rows.length > MAX_IMPORT) {
+      throw new ConvexError(
+        `Import at most ${MAX_IMPORT} transactions at once.`
+      );
+    }
+    const now = Date.now();
+    for (const row of rows) {
+      await ctx.db.insert("portfolioTransactions", {
+        at: cleanAt(row.at),
+        createdBy: user._id,
+        currency: row.currency,
+        kind: row.kind,
+        note: row.note.trim().slice(0, MAX_NOTE),
+        portfolioId: portfolio._id,
+        price: cleanPrice(row.price),
+        projectId: portfolio.projectId,
+        sats: cleanSats(row.sats),
+        updatedAt: now,
+        ...feesFor(row.kind, row),
+      });
+    }
+    await settle(ctx, portfolio._id);
+    return rows.length;
+  },
+});
+
 export const updateTransaction = mutation({
   args: {
     at: v.optional(v.number()),
@@ -536,6 +588,40 @@ export const updateTransaction = mutation({
       userId: user._id,
     });
     await settle(ctx, portfolio._id);
+  },
+});
+
+/**
+ * Deletes several transactions at once; sends between portfolios go from
+ * both. The holdings are checked once, after them all.
+ */
+export const removeTransactions = mutation({
+  args: { transactionIds: v.array(v.id("portfolioTransactions")) },
+  handler: async (ctx, { transactionIds }) => {
+    if (transactionIds.length > MAX_IMPORT) {
+      throw new ConvexError(
+        `Delete at most ${MAX_IMPORT} transactions at once.`
+      );
+    }
+    const touched = new Set<Id<"portfolios">>();
+    for (const transactionId of transactionIds) {
+      // Gone already when it was the other side of one deleted before it.
+      if (await ctx.db.get(transactionId)) {
+        const { transaction } = await requireTransaction(
+          ctx,
+          transactionId,
+          "edit"
+        );
+        await ctx.db.delete(transactionId);
+        await releaseBuy(ctx, transaction.projectId, transactionId);
+        await dropTransfer(ctx, transaction);
+        touched.add(transaction.portfolioId);
+      }
+    }
+    for (const portfolioId of touched) {
+      await settle(ctx, portfolioId);
+    }
+    return transactionIds.length;
   },
 });
 

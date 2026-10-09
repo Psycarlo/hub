@@ -7,6 +7,7 @@ import { plural } from "@/lib/utils";
 export {
   DEFAULT_FIAT,
   FIATS,
+  MAX_IMPORT,
   MAX_SATS,
   SATS_PER_BTC,
   TRANSACTION_KINDS,

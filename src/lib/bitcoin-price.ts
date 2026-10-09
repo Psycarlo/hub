@@ -412,14 +412,18 @@ const PRICE_AT_DELAY = 300;
 
 /** What a bitcoin cost at a past minute, by currency and minute; null when Kraken has no trade near it. */
 const pricesAt = new Map<string, Feed<number | null>>();
-const priceAtLoading = new Set<string>();
+/** Lookups under way, so a second ask for the same minute waits on the first. */
+const priceAtLoading = new Map<string, Promise<void>>();
 
-async function loadPriceAt(fiat: Fiat, minute: number): Promise<void> {
-  const key = `${fiat}:${minute}`;
-  if (priceAtLoading.has(key) || pricesAt.get(key)?.data !== undefined) {
-    return;
-  }
-  priceAtLoading.add(key);
+function minuteOf(at: number): number {
+  return Math.floor(at / MINUTE) * MINUTE;
+}
+
+async function askPriceAt(
+  fiat: Fiat,
+  minute: number,
+  key: string
+): Promise<void> {
   try {
     // The first trade from that minute on; Kraken keeps every one.
     const result = await kraken("Trades", {
@@ -447,6 +451,20 @@ async function loadPriceAt(fiat: Fiat, minute: number): Promise<void> {
   }
 }
 
+function loadPriceAt(fiat: Fiat, minute: number): Promise<void> {
+  const key = `${fiat}:${minute}`;
+  const loading = priceAtLoading.get(key);
+  if (loading) {
+    return loading;
+  }
+  if (pricesAt.get(key)?.data !== undefined) {
+    return Promise.resolve();
+  }
+  const promise = askPriceAt(fiat, minute, key);
+  priceAtLoading.set(key, promise);
+  return promise;
+}
+
 const NO_PRICE_AT: Feed<number | null> = { failed: false, fetchedAt: 0 };
 
 /**
@@ -458,8 +476,7 @@ export function useBtcPriceAt(
   fiat: Fiat,
   at: number | undefined
 ): Feed<number | null> {
-  const minute =
-    at === undefined ? undefined : Math.floor(at / MINUTE) * MINUTE;
+  const minute = at === undefined ? undefined : minuteOf(at);
   const snapshot = useSyncExternalStore(subscribe, () =>
     minute === undefined
       ? NO_PRICE_AT
@@ -473,4 +490,67 @@ export function useBtcPriceAt(
     return () => clearTimeout(timer);
   }, [fiat, minute]);
   return snapshot;
+}
+
+/** Kraken lets the public ask about once a second; lookups in a row keep to that. */
+const LOOKUP_GAP = 1100;
+/** How many times a lookup is tried before its moment counts as having no price. */
+const LOOKUP_TRIES = 3;
+
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new -- a timer has no promise of its own
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * What a bitcoin cost in `fiat` at each moment, one lookup at a time so
+ * Kraken doesn't turn them away. Resolves with prices by minute, null where
+ * there's none; `onProgress` hears how many minutes are done of how many.
+ */
+export async function findPricesAt(
+  fiat: Fiat,
+  moments: number[],
+  {
+    onProgress,
+    signal,
+  }: {
+    onProgress?: (done: number, total: number) => void;
+    signal?: AbortSignal;
+  } = {}
+): Promise<Map<number, number | null>> {
+  const minutes = [...new Set(moments.map(minuteOf))];
+  const found = new Map<number, number | null>();
+  for (const [index, minute] of minutes.entries()) {
+    if (signal?.aborted) {
+      break;
+    }
+    const key = `${fiat}:${minute}`;
+    for (let tries = 0; tries < LOOKUP_TRIES; tries += 1) {
+      if (pricesAt.get(key)?.data !== undefined || signal?.aborted) {
+        break;
+      }
+      // One at a time on purpose, so Kraken doesn't turn them away.
+      // oxlint-disable-next-line no-await-in-loop
+      await loadPriceAt(fiat, minute);
+      // oxlint-disable-next-line no-await-in-loop
+      await pause(LOOKUP_GAP * (tries + 1), signal);
+    }
+    found.set(minute, pricesAt.get(key)?.data ?? null);
+    onProgress?.(index + 1, minutes.length);
+  }
+  return found;
+}
+
+/** The price `findPricesAt` found for the minute `at` falls in. */
+export function foundPriceAt(
+  found: ReadonlyMap<number, number | null>,
+  at: number
+): number | null | undefined {
+  return found.get(minuteOf(at));
 }

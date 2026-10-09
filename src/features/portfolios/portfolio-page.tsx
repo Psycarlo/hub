@@ -9,17 +9,32 @@ import {
   ArrowUpRightIcon,
   BitcoinIcon,
   ChartSplineIcon,
+  DownloadIcon,
   PlusIcon,
   Settings2Icon,
+  Trash2Icon,
+  UploadIcon,
   WalletIcon,
+  XIcon,
 } from "lucide-react";
 import type { MouseEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { ProjectAvatar } from "@/components/project-avatar";
 import { TopBar } from "@/components/top-bar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Table,
@@ -36,22 +51,28 @@ import {
 } from "@/components/ui/tooltip";
 import { Discreet } from "@/features/portfolios/discreet";
 import { HoldingsCard } from "@/features/portfolios/holdings-card";
+import { ImportDialog } from "@/features/portfolios/import-dialog";
 import { portfoliosPath } from "@/features/portfolios/portfolio-context";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import { TransactionDialog } from "@/features/portfolios/transaction-dialog";
 import { Section } from "@/features/projects/project-page";
 import { useMe } from "@/hooks/use-users";
+import { downloadFile } from "@/lib/csv";
 import type { Portfolio, Transaction, TransactionKind } from "@/lib/portfolio";
 import {
   KIND_NAMES,
+  MAX_IMPORT,
   formatBtc,
   formatFiat,
   formatSats,
   isIncoming,
   transactionTotal,
 } from "@/lib/portfolio";
+import { deleteTransactions } from "@/lib/portfolio-actions";
+import { exportCsv, exportName } from "@/lib/portfolio-csv";
 import type { Project } from "@/lib/project";
 import { canEdit, canManage, projectPath } from "@/lib/project";
+import { plural } from "@/lib/utils";
 
 const NUMERIC = "text-right tabular-nums";
 /** Rows shown at first, and how many more each "Show more" adds. */
@@ -108,11 +129,18 @@ function usePaidFrom(project: Project): Map<string, string> {
   return paid;
 }
 
+/** Picked rows, by transaction id; changing it needs editing the portfolio. */
+interface Selection {
+  ids: ReadonlySet<string>;
+  onChange: (ids: Set<string>) => void;
+}
+
 function TransactionRows({
   transactions,
   paidFrom,
   portfolioTitles,
   onOpen,
+  selection,
 }: {
   /** Newest first. */
   transactions: Transaction[];
@@ -122,14 +150,59 @@ function TransactionRows({
   portfolioTitles: ReadonlyMap<string, string>;
   /** Opens a transaction to change it; rows stay still without it. */
   onOpen?: (transaction: Transaction) => void;
+  /** Rows picked to act on many at once; no checkboxes without it. */
+  selection?: Selection;
 }) {
   const [shown, setShown] = useState(PAGE);
   const rest = transactions.length - shown;
+  const visible = transactions.slice(0, shown);
+  // Where the last pick was, so a shift-click picks everything between.
+  const anchor = useRef<number | null>(null);
+  const picked = visible.filter((item) => selection?.ids.has(item._id));
+  const allPicked = visible.length > 0 && picked.length === visible.length;
+
+  const pick = (index: number, checked: boolean, range: boolean) => {
+    if (!selection) {
+      return;
+    }
+    const next = new Set(selection.ids);
+    const from = range && anchor.current !== null ? anchor.current : index;
+    const [start, end] = from < index ? [from, index] : [index, from];
+    for (const item of visible.slice(start, end + 1)) {
+      if (checked) {
+        next.add(item._id);
+      } else {
+        next.delete(item._id);
+      }
+    }
+    anchor.current = index;
+    selection.onChange(next);
+  };
+
+  const pickAll = (checked: boolean) => {
+    if (!selection) {
+      return;
+    }
+    const next = new Set(selection.ids);
+    for (const item of visible) {
+      if (checked) {
+        next.add(item._id);
+      } else {
+        next.delete(item._id);
+      }
+    }
+    anchor.current = null;
+    selection.onChange(next);
+  };
+
   const open = (
     event: MouseEvent<HTMLTableRowElement>,
     transaction: Transaction
   ) => {
-    if (!onOpen || (event.target as Element).closest("a, button")) {
+    if (
+      !onOpen ||
+      (event.target as Element).closest("a, button, [role=checkbox]")
+    ) {
       return;
     }
     onOpen(transaction);
@@ -139,6 +212,16 @@ function TransactionRows({
       <Table>
         <TableHeader>
           <TableRow>
+            {selection && (
+              <TableHead className="w-8 pr-0">
+                <Checkbox
+                  aria-label="Select all shown"
+                  checked={allPicked}
+                  indeterminate={picked.length > 0 && !allPicked}
+                  onCheckedChange={pickAll}
+                />
+              </TableHead>
+            )}
             <TableHead>Date</TableHead>
             <TableHead className="max-sm:hidden">Type</TableHead>
             <TableHead className="text-right">Amount</TableHead>
@@ -149,7 +232,8 @@ function TransactionRows({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.slice(0, shown).map((transaction) => {
+          {visible.map((transaction, index) => {
+            const isPicked = selection?.ids.has(transaction._id) ?? false;
             const incoming = isIncoming(transaction.kind);
             const KindIcon = KIND_ICONS[transaction.kind];
             const paid = paidFrom.get(transaction._id);
@@ -169,11 +253,28 @@ function TransactionRows({
             return (
               <TableRow
                 className={cn(
-                  onOpen && "hover:bg-foreground/[0.025] cursor-pointer"
+                  onOpen && "hover:bg-foreground/[0.025] cursor-pointer",
+                  "data-selected:bg-primary/[0.06] data-selected:hover:bg-primary/[0.08]"
                 )}
+                data-selected={isPicked || undefined}
                 key={transaction._id}
                 onClick={(event) => open(event, transaction)}
               >
+                {selection && (
+                  <TableCell className="w-8 pr-0">
+                    <Checkbox
+                      aria-label={`Select ${KIND_NAMES[transaction.kind].toLowerCase()} on ${format(transaction.at, "MMM d, yyyy")}`}
+                      checked={isPicked}
+                      onCheckedChange={(checked, details) =>
+                        pick(
+                          index,
+                          checked,
+                          (details.event as globalThis.MouseEvent).shiftKey
+                        )
+                      }
+                    />
+                  </TableCell>
+                )}
                 <TableCell className="tabular-nums">
                   {onOpen ? (
                     // The row's click, reachable by keyboard too.
@@ -246,6 +347,267 @@ function TransactionRows({
   );
 }
 
+/** Acts on the picked transactions at once, floating above the page. */
+function BulkBar({
+  selected,
+  portfolio,
+  portfolioTitles,
+  onClear,
+}: {
+  /** In the order they happened. */
+  selected: Transaction[];
+  portfolio: Portfolio;
+  portfolioTitles: ReadonlyMap<string, string>;
+  onClear: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const label = plural(selected.length, "transaction");
+  const transfers = selected.some((item) => item.transfer);
+  const tooMany = selected.length > MAX_IMPORT;
+  return (
+    <div className="bg-popover shadow-raised fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-full py-1.5 pr-1.5 pl-4 text-sm">
+      <span className="shrink-0 font-medium tabular-nums">
+        {selected.length} selected
+      </span>
+      <span aria-hidden className="bg-border mx-2 h-5 w-px shrink-0" />
+      <Button
+        onClick={() =>
+          downloadFile(
+            exportName(portfolio),
+            exportCsv(selected, portfolioTitles),
+            "text/csv;charset=utf-8"
+          )
+        }
+        size="sm"
+        variant="ghost"
+      >
+        <DownloadIcon />
+        Export
+      </Button>
+      <Button
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        disabled={tooMany}
+        onClick={() => setConfirming(true)}
+        size="sm"
+        variant="ghost"
+      >
+        <Trash2Icon />
+        Delete
+      </Button>
+      <IconButton label="Clear selection" onClick={onClear}>
+        <XIcon />
+      </IconButton>
+      <AlertDialog onOpenChange={setConfirming} open={confirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {transfers
+                ? "They come off the portfolio for everyone. Sends between portfolios come off both."
+                : "They come off the portfolio for everyone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                deleteTransactions(selected);
+                onClear();
+              }}
+              variant="destructive"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/** Picked transactions, cleared with Escape while any are. */
+function useSelection(): [Set<string>, (ids: Set<string>) => void] {
+  const [ids, setIds] = useState<Set<string>>(() => new Set());
+  const any = ids.size > 0;
+  useEffect(() => {
+    if (!any) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      // A dialog's Escape closes the dialog, not the selection behind it.
+      const dialog = document.querySelector(
+        "[role=dialog], [role=alertdialog]"
+      );
+      if (event.key === "Escape" && !event.defaultPrevented && !dialog) {
+        setIds(new Set());
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [any]);
+  return [ids, setIds];
+}
+
+/** The portfolio's transactions in both orders, and every visible portfolio's name. */
+function usePortfolioTransactions(project: Project, portfolio: Portfolio) {
+  const projectTransactions = useQuery(api.portfolios.transactions, {
+    projectId: project._id,
+  });
+  const transactions = useMemo(
+    () =>
+      projectTransactions?.filter(
+        (transaction) => transaction.portfolioId === portfolio._id
+      ),
+    [projectTransactions, portfolio._id]
+  );
+  const newest = useMemo(() => transactions?.toReversed(), [transactions]);
+  const portfolios = useQuery(api.portfolios.list);
+  const portfolioTitles = useMemo(
+    () => new Map(portfolios?.map((item) => [item._id, item.title])),
+    [portfolios]
+  );
+  return { newest, portfolioTitles, transactions };
+}
+
+/** Where the list goes while it's empty: a way in for whoever can edit. */
+function NoTransactions({
+  onAdd,
+  onImport,
+}: {
+  /** Left out for viewers. */
+  onAdd?: () => void;
+  onImport: () => void;
+}) {
+  if (!onAdd) {
+    return (
+      <p className="text-muted-foreground text-sm">No transactions yet.</p>
+    );
+  }
+  return (
+    <Empty className="bg-muted/60 rounded-2xl py-10">
+      <EmptyDescription className="mt-0 max-w-sm">
+        Add what was bought, sold, sent or received, when, and at what price.
+      </EmptyDescription>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button onClick={onAdd}>
+          <PlusIcon />
+          Add transaction
+        </Button>
+        <Button onClick={onImport} variant="outline">
+          <UploadIcon />
+          Import CSV
+        </Button>
+      </div>
+    </Empty>
+  );
+}
+
+function CsvActions({
+  onExport,
+  onImport,
+}: {
+  onExport: () => void;
+  /** Left out for viewers. */
+  onImport?: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {onImport && (
+        <IconButton label="Import CSV" onClick={onImport}>
+          <UploadIcon />
+        </IconButton>
+      )}
+      <IconButton label="Export CSV" onClick={onExport}>
+        <DownloadIcon />
+      </IconButton>
+    </div>
+  );
+}
+
+/** The portfolio's transactions: the list, picking many to act on, and CSV in and out. */
+function TransactionsSection({
+  project,
+  portfolio,
+  editable,
+  transactions,
+  newest,
+  portfolioTitles,
+  onOpen,
+}: {
+  project: Project;
+  portfolio: Portfolio;
+  editable: boolean;
+  /** In the order they happened. */
+  transactions: Transaction[];
+  /** Newest first. */
+  newest: Transaction[];
+  portfolioTitles: ReadonlyMap<string, string>;
+  /** Opens a transaction to change it, or a new one without. */
+  onOpen: (transaction?: Transaction) => void;
+}) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [picked, setPicked] = useSelection();
+  const paidFrom = usePaidFrom(project);
+  // Only what's still there: picked rows deleted elsewhere drop out.
+  const selected = transactions.filter((item) => picked.has(item._id));
+
+  const exportAll = () =>
+    downloadFile(
+      exportName(portfolio),
+      exportCsv(transactions, portfolioTitles),
+      "text/csv;charset=utf-8"
+    );
+
+  return (
+    <>
+      <Section
+        action={
+          newest.length > 0 && (
+            <CsvActions
+              onExport={exportAll}
+              onImport={editable ? () => setImportOpen(true) : undefined}
+            />
+          )
+        }
+        title="Transactions"
+      >
+        {newest.length === 0 ? (
+          <NoTransactions
+            onAdd={editable ? () => onOpen() : undefined}
+            onImport={() => setImportOpen(true)}
+          />
+        ) : (
+          <TransactionRows
+            onOpen={editable ? onOpen : undefined}
+            paidFrom={paidFrom}
+            portfolioTitles={portfolioTitles}
+            selection={
+              editable ? { ids: picked, onChange: setPicked } : undefined
+            }
+            transactions={newest}
+          />
+        )}
+      </Section>
+      {editable && (
+        <ImportDialog
+          onOpenChange={setImportOpen}
+          open={importOpen}
+          portfolio={portfolio}
+          transactions={transactions}
+        />
+      )}
+      {editable && selected.length > 0 && (
+        <BulkBar
+          onClear={() => setPicked(new Set())}
+          portfolio={portfolio}
+          portfolioTitles={portfolioTitles}
+          selected={selected}
+        />
+      )}
+    </>
+  );
+}
+
 /** One portfolio: what it's worth over time, and the buys and sells behind it. */
 export function PortfolioPage({
   project,
@@ -265,52 +627,15 @@ export function PortfolioPage({
   const [transactionOpen, setTransactionOpen] = useState(false);
   // Kept while the dialog closes, so it doesn't change under its exit.
   const [editing, setEditing] = useState<Transaction>();
-  const projectTransactions = useQuery(api.portfolios.transactions, {
-    projectId: project._id,
-  });
-  const transactions = useMemo(
-    () =>
-      projectTransactions?.filter(
-        (transaction) => transaction.portfolioId === portfolio._id
-      ),
-    [projectTransactions, portfolio._id]
-  );
-  const newest = useMemo(() => transactions?.toReversed(), [transactions]);
-  const paidFrom = usePaidFrom(project);
-  const portfolios = useQuery(api.portfolios.list);
-  const portfolioTitles = useMemo(
-    () => new Map(portfolios?.map((item) => [item._id, item.title])),
-    [portfolios]
+  const { transactions, newest, portfolioTitles } = usePortfolioTransactions(
+    project,
+    portfolio
   );
 
   const openTransaction = (transaction?: Transaction) => {
     setEditing(transaction);
     setTransactionOpen(true);
   };
-
-  let list = (
-    <TransactionRows
-      onOpen={editable ? openTransaction : undefined}
-      paidFrom={paidFrom}
-      portfolioTitles={portfolioTitles}
-      transactions={newest ?? []}
-    />
-  );
-  if (newest?.length === 0) {
-    list = editable ? (
-      <Empty className="bg-muted/60 rounded-2xl py-10">
-        <EmptyDescription className="mt-0 max-w-sm">
-          Add what was bought, sold, sent or received, when, and at what price.
-        </EmptyDescription>
-        <Button onClick={() => openTransaction()}>
-          <PlusIcon />
-          Add transaction
-        </Button>
-      </Empty>
-    ) : (
-      <p className="text-muted-foreground text-sm">No transactions yet.</p>
-    );
-  }
 
   return (
     <>
@@ -376,7 +701,17 @@ export function PortfolioPage({
           />
         </div>
         {/* Nothing to list until they load; the chart above shows it's loading. */}
-        {newest && <Section title="Transactions">{list}</Section>}
+        {transactions && newest && (
+          <TransactionsSection
+            editable={editable}
+            newest={newest}
+            onOpen={openTransaction}
+            portfolio={portfolio}
+            portfolioTitles={portfolioTitles}
+            project={project}
+            transactions={transactions}
+          />
+        )}
       </main>
       {manageable && (
         <PortfolioDialog

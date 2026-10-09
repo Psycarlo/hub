@@ -7,6 +7,9 @@ export const DEFAULT_FIAT: Fiat = "USD";
 
 export const TRANSACTION_KINDS = ["buy", "sell", "send", "receive"] as const;
 
+/** The most transactions one import brings in. */
+export const MAX_IMPORT = 1000;
+
 export const SATS_PER_BTC = 100_000_000;
 /** Every bitcoin there will ever be, in satoshis. */
 export const MAX_SATS = 21_000_000 * SATS_PER_BTC;
