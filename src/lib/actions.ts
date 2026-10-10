@@ -77,17 +77,20 @@ function toChanges(changes: Partial<CardFields>): CardChanges {
   return result as CardChanges;
 }
 
-function sortCards(cards: Card[]): Card[] {
+function sortCards<T extends Card>(cards: T[]): T[] {
   return cards.toSorted(
     (a, b) => a.rank - b.rank || a._creationTime - b._creationTime
   );
 }
 
-/** Shows a change to a board's cards at once, before the server confirms it. */
+/**
+ * Shows a change to a board's cards at once, before the server confirms it.
+ * Cards there may carry fields the app doesn't read, which a patch keeps.
+ */
 function patchCards(
   store: OptimisticLocalStore,
   boardId: Id<"boards">,
-  patch: (cards: Card[]) => Card[]
+  patch: <T extends Card>(cards: T[]) => T[]
 ): void {
   const content = store.getQuery(api.boards.content, { boardId });
   if (content) {
@@ -99,12 +102,12 @@ function patchCards(
   }
 }
 
-function applyChanges(card: Card, changes: CardChanges): Card {
+function applyChanges<T extends Card>(card: T, changes: CardChanges): T {
   const next: Record<string, unknown> = { ...card, updatedAt: Date.now() };
   for (const [key, value] of Object.entries(changes)) {
     next[key] = value ?? undefined;
   }
-  return next as Card;
+  return next as T;
 }
 
 export function createProject(draft: NewProjectDraft) {
@@ -207,16 +210,24 @@ export function updateCard(card: Card, changes: Partial<CardFields>) {
     playSound("complete");
   }
   const args = { cardId: card._id, ...toChanges(changes) };
+  // The board leaves descriptions out; the open card reads its own.
+  const { description, ...fields } = changes;
   return run(
     convex.mutation(api.cards.update, args, {
-      optimisticUpdate: (store) =>
+      optimisticUpdate: (store) => {
         patchCards(store, card.boardId, (cards) =>
           cards.map((item) =>
-            item._id === card._id
-              ? applyChanges(item, toChanges(changes))
-              : item
+            item._id === card._id ? applyChanges(item, toChanges(fields)) : item
           )
-        ),
+        );
+        const query = { cardId: card._id };
+        if (
+          description !== undefined &&
+          store.getQuery(api.cards.description, query) !== undefined
+        ) {
+          store.setQuery(api.cards.description, query, description);
+        }
+      },
     })
   );
 }

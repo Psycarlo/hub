@@ -26,6 +26,7 @@ import { CardActivity } from "@/features/card/card-activity";
 import { STATUS_STYLES } from "@/features/card/card-fields";
 import { CardFiles } from "@/features/card/card-files";
 import { CardProperties } from "@/features/card/card-properties";
+import { useCardDescription } from "@/hooks/use-card-description";
 import { useSaveWhileTyping } from "@/hooks/use-save-while-typing";
 import { deleteCard, updateCard } from "@/lib/actions";
 import type { Card } from "@/lib/model";
@@ -98,7 +99,21 @@ function TitleField({ card }: { card: Card }) {
   );
 }
 
+function DescriptionSkeleton() {
+  return (
+    <div aria-busy className="flex min-h-20 flex-col gap-2.5 py-2.5">
+      <Skeleton className="h-3.5 w-full rounded-full" />
+      <Skeleton className="h-3.5 w-2/3 rounded-full" />
+    </div>
+  );
+}
+
 function DescriptionField({ card }: { card: Card }) {
+  const description = useCardDescription(card);
+  // Typed into before it loads, the editor would keep the typing over it.
+  if (description === undefined) {
+    return <DescriptionSkeleton />;
+  }
   return (
     <MarkdownEditor
       aria-label="Description"
@@ -110,13 +125,13 @@ function DescriptionField({ card }: { card: Card }) {
           event.target.blur();
         }
       }}
-      onValueCommitted={(description) => {
-        if (description !== card.description) {
-          updateCard(card, { description });
+      onValueCommitted={(markdown) => {
+        if (markdown !== description) {
+          updateCard(card, { description: markdown });
         }
       }}
       placeholder="Add a description…"
-      value={card.description}
+      value={description}
     />
   );
 }
@@ -162,6 +177,7 @@ function DeleteCard({
 }
 
 function CardText({ card }: { card: Card }) {
+  const description = useCardDescription(card);
   return (
     <>
       <p
@@ -173,8 +189,9 @@ function CardText({ card }: { card: Card }) {
       >
         {card.title || "Untitled"}
       </p>
-      {card.description && (
-        <MarkdownView className={DESCRIPTION} value={card.description} />
+      {description === undefined && <DescriptionSkeleton />}
+      {description && (
+        <MarkdownView className={DESCRIPTION} value={description} />
       )}
     </>
   );

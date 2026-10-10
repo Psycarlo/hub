@@ -239,6 +239,15 @@ export const history = query({
   },
 });
 
+/** A card's description, or null once it's gone or out of sight. Boards leave it out. */
+export const description = query({
+  args: { cardId: v.id("cards") },
+  handler: async (ctx, { cardId }) => {
+    const access = await ifVisible(requireCard(ctx, cardId, "view"));
+    return access?.card.description ?? null;
+  },
+});
+
 /** A card assigned to someone, with what its key and link need. */
 export type AssignedCard = Pick<
   Doc<"cards">,

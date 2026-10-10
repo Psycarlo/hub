@@ -3,6 +3,7 @@ import { cn } from "cn";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import type { ReactNode, Ref } from "react";
+import { useRef } from "react";
 import { Link } from "wouter";
 
 import { OPENED_FROM_BOARD, useBoard } from "@/features/board/board-context";
@@ -15,6 +16,10 @@ import {
 } from "@/features/board/inline-pickers";
 import { cardLabels } from "@/features/card/card-fields";
 import { LabelChip, LabelDot } from "@/features/card/card-parts";
+import {
+  HOVER_INTENT_MS,
+  prewarmDescription,
+} from "@/hooks/use-card-description";
 import type { BoardLabel, Card } from "@/lib/model";
 import { cardKey, isClosed } from "@/lib/model";
 
@@ -144,6 +149,8 @@ function CardLink({
   ref?: Ref<HTMLAnchorElement>;
 }) {
   const { cardHref } = useBoard();
+  // A pointer resting on the card, or focus on it, starts its description loading.
+  const intent = useRef<ReturnType<typeof setTimeout> | null>(null);
   return (
     <Link
       className={cn(CARD_SURFACE, "select-none", className)}
@@ -152,6 +159,18 @@ function CardLink({
       onClick={(event) => {
         if (isControlClick(event)) {
           event.preventDefault();
+        }
+      }}
+      onFocus={() => prewarmDescription(card)}
+      onPointerEnter={() => {
+        intent.current = setTimeout(
+          () => prewarmDescription(card),
+          HOVER_INTENT_MS
+        );
+      }}
+      onPointerLeave={() => {
+        if (intent.current !== null) {
+          clearTimeout(intent.current);
         }
       }}
       ref={ref}

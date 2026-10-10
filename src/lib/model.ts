@@ -39,7 +39,11 @@ export {
 
 export type UserId = Id<"users">;
 export type Board = BoardView;
-export type Card = Doc<"cards">;
+/**
+ * A card as boards list it, without its description: the open card reads
+ * that on its own, with useCardDescription.
+ */
+export type Card = Omit<Doc<"cards">, "description">;
 export type Sprint = Doc<"sprints">;
 
 export interface BoardContent {
@@ -53,7 +57,7 @@ export interface BoardContent {
 
 /** The fields of a card that people change. */
 export type CardFields = Pick<
-  Card,
+  Doc<"cards">,
   | "title"
   | "description"
   | "status"

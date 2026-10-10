@@ -43,6 +43,7 @@ import { CardPage, CardPageSkeleton } from "@/features/card/card-page";
 import type { NewCardDefaults } from "@/features/card/new-card-dialog";
 import { NewCardDialog } from "@/features/card/new-card-dialog";
 import { useBoardContent } from "@/hooks/use-board-content";
+import { useWarmDescription } from "@/hooks/use-card-description";
 import { useMe } from "@/hooks/use-users";
 import type { Board, Card } from "@/lib/model";
 import type { Project } from "@/lib/project";
@@ -225,6 +226,9 @@ function OpenCard({
   const scope = use(BoardContext);
   const card = scope?.content.cards.find((item) => item.number === number);
   const { previous, next } = useNeighbours(board, tab, card);
+  // Stepping with K and J shows the next description at once.
+  useWarmDescription(previous);
+  useWarmDescription(next);
   if (scope && card) {
     return (
       <CardPage
