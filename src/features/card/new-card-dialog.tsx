@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { format, parseISO } from "date-fns";
 import {
   CalendarIcon,
@@ -30,6 +31,7 @@ import {
   inOfferedOrder,
   sprintChoices,
 } from "@/features/card/card-fields";
+import { AttachButton, DraftChips } from "@/features/card/card-files";
 import {
   PRIORITY_OPTIONS,
   sprintOptions,
@@ -43,11 +45,13 @@ import {
   PillSelect,
   Placeholder,
 } from "@/features/card/property-pills";
+import { useDraftFiles } from "@/features/card/use-draft-files";
+import { DROP_TARGET, useFileDrop } from "@/features/card/use-file-drop";
 import { useStoredDraft } from "@/hooks/use-stored-draft";
 import { createCard } from "@/lib/actions";
 import { readDraft, writeDraft } from "@/lib/drafts";
 import type { CardFields } from "@/lib/model";
-import { cardKey, rankBetween } from "@/lib/model";
+import { cardKey, MAX_CARD_FILES, rankBetween } from "@/lib/model";
 
 export type NewCardDefaults = CardPlacement & Pick<CardFields, "assignees">;
 
@@ -182,7 +186,14 @@ function NewCardForm({
   // Bumped whenever the text is replaced from here, so the editor starts over with it.
   const [fresh, setFresh] = useState(0);
   const [createMore, setCreateMore] = useState(false);
-  const ready = draft.title.trim() !== "";
+  // Files aren't kept with the draft: closing the dialog lets them go.
+  const drafts = useDraftFiles(
+    MAX_CARD_FILES,
+    `A card can have up to ${MAX_CARD_FILES} files.`
+  );
+  const drop = useFileDrop(drafts.add);
+  const uploading = drafts.files.some((file) => !file.upload);
+  const ready = draft.title.trim() !== "" && !uploading;
   const sprints = sprintChoices(content.sprints, placement.sprintId);
 
   // A restored draft picks up where it was left, at the end of the title.
@@ -206,17 +217,25 @@ function NewCardForm({
       return;
     }
     const written = { ...draft, description: text ?? draft.description };
-    // The text leaves the form, and the kept draft, right away. Properties
-    // carry over, so a run of similar cards is quick to enter.
+    const { files } = drafts;
+    // The text and files leave the form, and the kept draft, right away.
+    // Properties carry over, so a run of similar cards is quick to enter.
     change({ description: "", title: "" });
-    const saving = createCard(board, {
-      ...written,
-      ...placement,
-      // A draft can name someone who has since left the project.
-      assignees: written.assignees.filter((person) => people.includes(person)),
-      rank: rankBetween(content.cards.at(-1)?.rank),
-      title: written.title.trim(),
-    });
+    drafts.sent(files.map((file) => file.id));
+    const saving = createCard(
+      board,
+      {
+        ...written,
+        ...placement,
+        // A draft can name someone who has since left the project.
+        assignees: written.assignees.filter((person) =>
+          people.includes(person)
+        ),
+        rank: rankBetween(content.cards.at(-1)?.rank),
+        title: written.title.trim(),
+      },
+      files.flatMap((file) => file.upload ?? [])
+    );
     if (createMore) {
       setFresh((count) => count + 1);
       titleField.current?.focus();
@@ -225,8 +244,9 @@ function NewCardForm({
     }
     const card = await saving;
     if (!card) {
-      // Not created: the text comes back as the draft, to try again.
+      // Not created: the text and files come back as the draft, to try again.
       change(written);
+      drafts.restore(files);
       setFresh((count) => count + 1);
     } else if (createMore) {
       toast.success(`${cardKey(board, card)} created`);
@@ -239,7 +259,14 @@ function NewCardForm({
   };
 
   return (
-    <form className="flex flex-col" onSubmit={submit}>
+    <form
+      className={cn(
+        "flex flex-col rounded-[inherit] transition-[background-color,box-shadow] duration-150 ease-out",
+        drop.over && [DROP_TARGET, "ring-inset"]
+      )}
+      onSubmit={submit}
+      {...drop.handlers}
+    >
       <div className="flex items-center gap-1.5 py-3 pr-3 pl-5">
         <span className="bg-foreground/5 text-muted-foreground flex h-6 items-center rounded-md px-2 text-xs font-medium">
           {board.code}
@@ -280,6 +307,12 @@ function NewCardForm({
           value={draft.description}
         />
       </div>
+      <DraftChips
+        className="px-5 pt-2"
+        files={drafts.files}
+        label="Files to attach"
+        onRemove={(id) => drafts.remove(id)}
+      />
       <div className="flex flex-wrap items-center gap-1.5 px-5 pt-2 pb-4">
         <PillSelect
           icon={CircleDashedIcon}
@@ -327,18 +360,21 @@ function NewCardForm({
           value={draft.labels}
         />
       </div>
-      <div className="flex items-center justify-end gap-4 px-5 pb-4">
-        {restored && !isBlank(draft) && (
-          <Button
-            className="text-muted-foreground mr-auto -ml-3"
-            onClick={startOver}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            Discard draft
-          </Button>
-        )}
+      <div className="flex items-center gap-4 px-5 pb-4">
+        <div className="mr-auto -ml-2 flex items-center gap-1">
+          <AttachButton onFiles={(files) => drafts.add(files)} />
+          {restored && !isBlank(draft) && (
+            <Button
+              className="text-muted-foreground"
+              onClick={startOver}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Discard draft
+            </Button>
+          )}
+        </div>
         {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the switch renders its own input */}
         <label className="text-muted-foreground flex items-center gap-2 text-sm select-none">
           <Switch checked={createMore} onCheckedChange={setCreateMore} />

@@ -29,9 +29,13 @@ export function useFileDrop(onFiles: (files: File[]) => void) {
       }
     },
     onDrop: (event: DragEvent) => {
-      if (draggingFiles(event)) {
+      if (!draggingFiles(event)) {
+        return;
+      }
+      setOver(false);
+      // Taken already by something inside, like a text editor putting images in.
+      if (!event.defaultPrevented) {
         event.preventDefault();
-        setOver(false);
         onFiles([...event.dataTransfer.files]);
       }
     },

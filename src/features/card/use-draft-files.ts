@@ -15,17 +15,22 @@ export interface DraftFile {
 }
 
 /**
- * Files to send with a comment, uploaded as soon as they're picked. Those not
- * sent in the end, taken out or left behind, are deleted again.
+ * Files to send with a comment or a new card, uploaded as soon as they're
+ * picked. Those not sent in the end, taken out or left behind, are deleted
+ * again. Picking more than `limit` says `tooMany`.
  */
-export function useDraftFiles(limit: number) {
+export function useDraftFiles(limit: number, tooMany: string) {
   const [files, setFiles] = useState<DraftFile[]>([]);
   // Uploads not yet sent, by draft: their keys, or undefined while uploading.
   const unsent = useRef(new Map<string, string | undefined>());
+  // Whether the draft is still there to take files back.
+  const live = useRef(true);
 
   useEffect(() => {
     const uploads = unsent.current;
+    live.current = true;
     return () => {
+      live.current = false;
       for (const key of uploads.values()) {
         if (key) {
           discardUpload(key);
@@ -63,7 +68,7 @@ export function useDraftFiles(limit: number) {
     const fitting = uploadable(picked);
     const room = Math.max(0, limit - unsent.current.size);
     if (fitting.length > room) {
-      toast.error(`A comment can carry up to ${limit} files.`);
+      toast.error(tooMany);
     }
     const added = fitting.slice(0, room).map((file) => ({
       file,
@@ -92,7 +97,7 @@ export function useDraftFiles(limit: number) {
     without(new Set([id]));
   };
 
-  /** The files went out with a comment: they're its now, not drafts. */
+  /** The files went out with what they were for: they're its now, not drafts. */
   const sent = (ids: string[]) => {
     for (const id of ids) {
       unsent.current.delete(id);
@@ -100,5 +105,20 @@ export function useDraftFiles(limit: number) {
     without(new Set(ids));
   };
 
-  return { add, files, remove, sent };
+  /** Sent files that didn't arrive: back in the draft, or deleted if it's gone. */
+  const restore = (returned: DraftFile[]) => {
+    const uploaded = returned.filter((file) => file.upload);
+    for (const file of uploaded) {
+      if (file.upload && live.current) {
+        unsent.current.set(file.id, file.upload.key);
+      } else if (file.upload) {
+        discardUpload(file.upload.key);
+      }
+    }
+    if (live.current) {
+      setFiles((current) => [...current, ...uploaded]);
+    }
+  };
+
+  return { add, files, remove, restore, sent };
 }

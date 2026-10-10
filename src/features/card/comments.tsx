@@ -1,8 +1,7 @@
 import { api } from "@convex/_generated/api";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
-import { ArrowUpIcon, Trash2Icon, XIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { ArrowUpIcon, Trash2Icon } from "lucide-react";
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from "react";
 import { useEffect, useState } from "react";
 
@@ -25,11 +24,12 @@ import { UserAvatar } from "@/components/user-avatar";
 import { useBoard } from "@/features/board/board-context";
 import {
   AttachButton,
+  DraftChips,
+  FILE_PILL,
   FileTypeIcon,
   isImageType,
 } from "@/features/card/card-files";
 import { When } from "@/features/card/card-parts";
-import type { DraftFile } from "@/features/card/use-draft-files";
 import { useDraftFiles } from "@/features/card/use-draft-files";
 import { DROP_TARGET, useFileDrop } from "@/features/card/use-file-drop";
 import type { Comment } from "@/hooks/use-comments";
@@ -43,12 +43,8 @@ import type { Card } from "@/lib/model";
 import { MAX_COMMENT_FILES } from "@/lib/model";
 import { formatBytes } from "@/lib/utils";
 
-const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const APPLE = /Mac|iPhone|iPad/u.test(navigator.userAgent);
 
-/** A file as a small pill: its icon, then its name. */
-const PILL =
-  "bg-foreground/5 flex h-7 min-w-0 items-center gap-1.5 rounded-full text-xs font-medium";
 /** A text field without a box of its own, sitting in one that has it. */
 const BARE =
   "rounded-none border-0 bg-transparent focus-visible:ring-0 dark:bg-transparent";
@@ -96,7 +92,7 @@ function FileChip({ file }: { file: CommentFile }) {
   return (
     <a
       className={cn(
-        PILL,
+        FILE_PILL,
         "hover:bg-foreground/10 focus-visible:ring-ring/50 max-w-64 px-2.5 transition-colors duration-150 outline-none focus-visible:ring-3"
       )}
       href={file.url}
@@ -199,80 +195,6 @@ function CommentBody({ comment }: { comment: Comment }) {
   );
 }
 
-function DraftChip({
-  file,
-  locked,
-  onRemove,
-}: {
-  file: DraftFile;
-  /** Sending: the file is on its way with the comment. */
-  locked: boolean;
-  onRemove: () => void;
-}) {
-  return (
-    <motion.li
-      animate={{ opacity: 1, scale: 1 }}
-      aria-busy={!file.upload}
-      className={cn(PILL, "max-w-56 pr-0.5 pl-2.5")}
-      exit={{ opacity: 0, scale: 0.9 }}
-      initial={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.15, ease: EASE_OUT }}
-    >
-      {file.upload ? (
-        <FileTypeIcon
-          className="text-muted-foreground size-3.5 shrink-0"
-          type={file.type}
-        />
-      ) : (
-        <Spinner className="text-muted-foreground size-3.5 shrink-0" />
-      )}
-      <span className="truncate" title={file.name}>
-        {file.name}
-      </span>
-      <IconButton
-        disabled={locked}
-        label={`Remove ${file.name}`}
-        onClick={onRemove}
-        size="icon-xs"
-        tooltip="Remove"
-        type="button"
-      >
-        <XIcon />
-      </IconButton>
-    </motion.li>
-  );
-}
-
-function DraftChips({
-  files,
-  locked,
-  onRemove,
-  className,
-}: {
-  files: DraftFile[];
-  locked: boolean;
-  onRemove: (id: string) => void;
-  className?: string;
-}) {
-  return (
-    <ul
-      aria-label="Files to send"
-      className={cn("flex flex-wrap gap-1.5 empty:hidden", className)}
-    >
-      <AnimatePresence initial={false}>
-        {files.map((file) => (
-          <DraftChip
-            file={file}
-            key={file.id}
-            locked={locked}
-            onRemove={() => onRemove(file.id)}
-          />
-        ))}
-      </AnimatePresence>
-    </ul>
-  );
-}
-
 function SendButton({ ready, sending }: { ready: boolean; sending: boolean }) {
   return (
     <IconButton
@@ -322,7 +244,10 @@ export function Composer({ card, parent }: { card: Card; parent?: Comment }) {
   );
   const { text } = draft;
   const [sending, setSending] = useState(false);
-  const drafts = useDraftFiles(MAX_COMMENT_FILES);
+  const drafts = useDraftFiles(
+    MAX_COMMENT_FILES,
+    `A comment can carry up to ${MAX_COMMENT_FILES} files.`
+  );
   const drop = useFileDrop(drafts.add);
   const uploading = drafts.files.some((file) => !file.upload);
   const ready =
@@ -399,6 +324,7 @@ export function Composer({ card, parent }: { card: Card; parent?: Comment }) {
     <DraftChips
       className={parent ? "pl-9" : "px-3 pt-1"}
       files={drafts.files}
+      label="Files to send"
       locked={sending}
       onRemove={(id) => drafts.remove(id)}
     />

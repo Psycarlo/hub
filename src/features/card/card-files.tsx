@@ -11,7 +11,9 @@ import {
   FileVideoCameraIcon,
   PaperclipIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -29,6 +31,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useBoard } from "@/features/board/board-context";
 import { When } from "@/features/card/card-parts";
+import type { DraftFile } from "@/features/card/use-draft-files";
 import { DROP_TARGET, useFileDrop } from "@/features/card/use-file-drop";
 import type { Attachment } from "@/hooks/use-attachments";
 import { useAttachments } from "@/hooks/use-attachments";
@@ -37,6 +40,12 @@ import type { Card } from "@/lib/model";
 import { MAX_CARD_FILES } from "@/lib/model";
 import { uploadable } from "@/lib/upload";
 import { formatBytes } from "@/lib/utils";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
+/** A file as a small pill: its icon, then its name. */
+export const FILE_PILL =
+  "bg-foreground/5 flex h-7 min-w-0 items-center gap-1.5 rounded-full text-xs font-medium";
 
 const ARCHIVE = /zip|rar|7z|tar|gzip|compressed/u;
 const SHEET = /spreadsheet|excel|csv/u;
@@ -128,6 +137,83 @@ export function AttachButton({
         type="file"
       />
     </>
+  );
+}
+
+function DraftChip({
+  file,
+  locked,
+  onRemove,
+}: {
+  file: DraftFile;
+  /** Sending: the file is on its way. */
+  locked: boolean;
+  onRemove: () => void;
+}) {
+  return (
+    <motion.li
+      animate={{ opacity: 1, scale: 1 }}
+      aria-busy={!file.upload}
+      className={cn(FILE_PILL, "max-w-56 pr-0.5 pl-2.5")}
+      exit={{ opacity: 0, scale: 0.9 }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.15, ease: EASE_OUT }}
+    >
+      {file.upload ? (
+        <FileTypeIcon
+          className="text-muted-foreground size-3.5 shrink-0"
+          type={file.type}
+        />
+      ) : (
+        <Spinner className="text-muted-foreground size-3.5 shrink-0" />
+      )}
+      <span className="truncate" title={file.name}>
+        {file.name}
+      </span>
+      <IconButton
+        disabled={locked}
+        label={`Remove ${file.name}`}
+        onClick={onRemove}
+        size="icon-xs"
+        tooltip="Remove"
+        type="button"
+      >
+        <XIcon />
+      </IconButton>
+    </motion.li>
+  );
+}
+
+/** Files picked to go out with something, each with a way to take it out again. */
+export function DraftChips({
+  files,
+  label,
+  locked = false,
+  onRemove,
+  className,
+}: {
+  files: DraftFile[];
+  label: string;
+  locked?: boolean;
+  onRemove: (id: string) => void;
+  className?: string;
+}) {
+  return (
+    <ul
+      aria-label={label}
+      className={cn("flex flex-wrap gap-1.5 empty:hidden", className)}
+    >
+      <AnimatePresence initial={false}>
+        {files.map((file) => (
+          <DraftChip
+            file={file}
+            key={file.id}
+            locked={locked}
+            onRemove={() => onRemove(file.id)}
+          />
+        ))}
+      </AnimatePresence>
+    </ul>
   );
 }
 

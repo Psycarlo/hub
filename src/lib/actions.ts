@@ -173,7 +173,8 @@ export function deleteBoard(board: Board) {
   return run(convex.mutation(api.boards.remove, { boardId: board._id }));
 }
 
-export function createCard(board: Board, card: NewCard) {
+/** Adds a card, with any files uploaded for it attached. */
+export function createCard(board: Board, card: NewCard, files: Upload[] = []) {
   playSound("pop");
   return run(
     convex.mutation(api.cards.create, {
@@ -181,6 +182,7 @@ export function createCard(board: Board, card: NewCard) {
       boardId: board._id,
       description: card.description ?? "",
       due: card.due,
+      files,
       labels: card.labels ?? [],
       priority: card.priority,
       rank: card.rank,

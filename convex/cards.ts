@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { attachFile } from "./attachments";
 import { deleteCard } from "./cleanup";
 import {
   canSee,
@@ -13,8 +14,8 @@ import {
   visibleProjects,
 } from "./lib/access";
 import { patchCard } from "./lib/history";
-import { vPriority, vStatus } from "./lib/validators";
-import { isClosed, LEGACY_LABELS } from "./shared/model";
+import { vPriority, vStatus, vUpload } from "./lib/validators";
+import { isClosed, LEGACY_LABELS, MAX_CARD_FILES } from "./shared/model";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
 const MAX_TITLE = 300;
@@ -74,12 +75,14 @@ async function checkPeople(
   return unique;
 }
 
+/** Adds a card, with any files uploaded for it attached. */
 export const create = mutation({
   args: {
     assignees: v.array(v.id("users")),
     boardId: v.id("boards"),
     description: v.string(),
     due: v.optional(v.string()),
+    files: v.optional(v.array(vUpload)),
     labels: v.array(v.string()),
     priority: v.optional(vPriority),
     rank: v.number(),
@@ -87,11 +90,14 @@ export const create = mutation({
     status: vStatus,
     title: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { files = [], ...args }) => {
     const { board, user } = await requireBoard(ctx, args.boardId, "edit");
     const title = args.title.trim().slice(0, MAX_TITLE);
     if (!title) {
       throw new ConvexError("Give the card a title.");
+    }
+    if (files.length > MAX_CARD_FILES) {
+      throw new ConvexError(`A card can have up to ${MAX_CARD_FILES} files.`);
     }
     const number = board.nextCardNumber;
     const now = Date.now();
@@ -112,6 +118,10 @@ export const create = mutation({
       title,
       updatedAt: now,
     });
+    // They come with the card, so its creation stands for them in its history.
+    for (const file of files) {
+      await attachFile(ctx, user._id, cardId, file);
+    }
     return { _id: cardId, number };
   },
 });
