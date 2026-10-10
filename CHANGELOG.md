@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-10
+
+### Added
+
+- Make your own 3D character in Settings: body, face, hair, hats, glasses and clothes, with moves to try.
+- An Office page where everyone with Hub open shows up as their character, to walk around, sit, emote and talk in speech bubbles.
+- Everyone gets a desk in the office with their nameplate, and can move to a free one.
+- The office follows your time of day, from a cool morning to a lit-up night.
+- The sidebar shows who else is online.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added
