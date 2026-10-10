@@ -95,7 +95,6 @@ export default defineSchema({
     role: vProjectRole,
     userId: v.id("users"),
   })
-    .index("by_project", ["projectId"])
     .index("by_user", ["userId"])
     .index("by_project_and_user", ["projectId", "userId"]),
 
@@ -154,7 +153,6 @@ export default defineSchema({
     title: v.string(),
     updatedAt: v.number(),
   })
-    .index("by_board", ["boardId"])
     .index("by_board_and_number", ["boardId", "number"])
     .index("by_board_and_status", ["boardId", "status"])
     .index("by_sprint", ["sprintId"]),
@@ -296,7 +294,6 @@ export default defineSchema({
     updatedAt: v.number(),
     updatedBy: v.id("users"),
   })
-    .index("by_project", ["projectId"])
     .index("by_project_and_parent", ["projectId", "parentId"])
     .index("by_parent", ["parentId"]),
 
@@ -332,7 +329,6 @@ export default defineSchema({
     trashedBy: v.optional(v.id("users")),
     updatedAt: v.number(),
   })
-    .index("by_project_and_parent", ["projectId", "parentId"])
     .index("by_parent_and_name", ["projectId", "parentId", "nameKey"])
     .index("by_project_and_trashed", ["projectId", "trashedAt"])
     .index("by_trashed_at", ["trashedAt"]),
@@ -364,7 +360,6 @@ export default defineSchema({
     uploadedBy: v.id("users"),
     width: v.optional(v.number()),
   })
-    .index("by_project_and_folder", ["projectId", "folderId"])
     .index("by_folder_and_name", ["projectId", "folderId", "nameKey"])
     .index("by_project_and_updated", ["projectId", "updatedAt"])
     .index("by_project_and_trashed", ["projectId", "trashedAt"])

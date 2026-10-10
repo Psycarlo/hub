@@ -61,7 +61,9 @@ export const tree = query({
       projects.map(({ project }) =>
         ctx.db
           .query("docPages")
-          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .withIndex("by_project_and_parent", (q) =>
+            q.eq("projectId", project._id)
+          )
           .collect()
       )
     );

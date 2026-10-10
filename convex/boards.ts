@@ -118,7 +118,7 @@ export const content = query({
     const [cards, sprints] = await Promise.all([
       ctx.db
         .query("cards")
-        .withIndex("by_board", (q) => q.eq("boardId", boardId))
+        .withIndex("by_board_and_number", (q) => q.eq("boardId", boardId))
         .collect(),
       ctx.db
         .query("sprints")
@@ -282,7 +282,7 @@ function cardsOf(
 ): Promise<Doc<"cards">[]> {
   return ctx.db
     .query("cards")
-    .withIndex("by_board", (q) => q.eq("boardId", boardId))
+    .withIndex("by_board_and_number", (q) => q.eq("boardId", boardId))
     .collect();
 }
 

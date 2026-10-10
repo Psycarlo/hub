@@ -57,7 +57,7 @@ async function membersOf(
 ): Promise<ProjectMember[]> {
   const rows = await ctx.db
     .query("projectMembers")
-    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .withIndex("by_project_and_user", (q) => q.eq("projectId", projectId))
     .collect();
   return rows
     .toSorted(
@@ -267,7 +267,7 @@ async function setMembers(
   }
   const current = await ctx.db
     .query("projectMembers")
-    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .withIndex("by_project_and_user", (q) => q.eq("projectId", projectId))
     .collect();
   for (const row of current) {
     const role = wanted.get(row.userId);
@@ -389,7 +389,7 @@ export const remove = mutation({
     }
     const members = await ctx.db
       .query("projectMembers")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .withIndex("by_project_and_user", (q) => q.eq("projectId", projectId))
       .collect();
     for (const member of members) {
       await ctx.db.delete(member._id);

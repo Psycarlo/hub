@@ -154,7 +154,7 @@ function cleanIcon(icon: string | undefined): string | undefined {
 function projectFolders(ctx: QueryCtx, projectId: Id<"projects">) {
   return ctx.db
     .query("driveFolders")
-    .withIndex("by_project_and_parent", (q) => q.eq("projectId", projectId))
+    .withIndex("by_parent_and_name", (q) => q.eq("projectId", projectId))
     .collect();
 }
 
@@ -340,7 +340,7 @@ async function allAddedBy(
     const parentId = id;
     const files = await ctx.db
       .query("driveFiles")
-      .withIndex("by_project_and_folder", (q) =>
+      .withIndex("by_folder_and_name", (q) =>
         q.eq("projectId", folder.projectId).eq("folderId", parentId)
       )
       .collect();
@@ -349,7 +349,7 @@ async function allAddedBy(
     }
     const folders = await ctx.db
       .query("driveFolders")
-      .withIndex("by_project_and_parent", (q) =>
+      .withIndex("by_parent_and_name", (q) =>
         q.eq("projectId", folder.projectId).eq("parentId", parentId)
       )
       .collect();
@@ -389,13 +389,13 @@ async function countInside(
 ): Promise<number> {
   const files = await ctx.db
     .query("driveFiles")
-    .withIndex("by_project_and_folder", (q) =>
+    .withIndex("by_folder_and_name", (q) =>
       q.eq("projectId", folder.projectId).eq("folderId", folder._id)
     )
     .take(MAX_COUNTED + 1);
   const folders = await ctx.db
     .query("driveFolders")
-    .withIndex("by_project_and_parent", (q) =>
+    .withIndex("by_parent_and_name", (q) =>
       q.eq("projectId", folder.projectId).eq("parentId", folder._id)
     )
     .take(MAX_COUNTED + 1);
@@ -458,13 +458,13 @@ export const contents = query({
     }
     const files = await ctx.db
       .query("driveFiles")
-      .withIndex("by_project_and_folder", (q) =>
+      .withIndex("by_folder_and_name", (q) =>
         q.eq("projectId", projectId).eq("folderId", folderId)
       )
       .collect();
     const folders = await ctx.db
       .query("driveFolders")
-      .withIndex("by_project_and_parent", (q) =>
+      .withIndex("by_parent_and_name", (q) =>
         q.eq("projectId", projectId).eq("parentId", folderId)
       )
       .collect();

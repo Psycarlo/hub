@@ -185,7 +185,7 @@ export const driveFolder = internalMutation({
     }
     const files = await ctx.db
       .query("driveFiles")
-      .withIndex("by_project_and_folder", (q) =>
+      .withIndex("by_folder_and_name", (q) =>
         q.eq("projectId", folder.projectId).eq("folderId", folderId)
       )
       .take(FILE_BATCH);
@@ -194,7 +194,7 @@ export const driveFolder = internalMutation({
     }
     const folders = await ctx.db
       .query("driveFolders")
-      .withIndex("by_project_and_parent", (q) =>
+      .withIndex("by_parent_and_name", (q) =>
         q.eq("projectId", folder.projectId).eq("parentId", folderId)
       )
       .take(BATCH);
@@ -230,7 +230,7 @@ export const board = internalMutation({
   handler: async (ctx, { boardId }) => {
     const cards = await ctx.db
       .query("cards")
-      .withIndex("by_board", (q) => q.eq("boardId", boardId))
+      .withIndex("by_board_and_number", (q) => q.eq("boardId", boardId))
       .take(BATCH / 4);
     for (const item of cards) {
       await deleteCard(ctx, item._id);
@@ -374,7 +374,7 @@ export const project = internalMutation({
     }
     const pages = await ctx.db
       .query("docPages")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .withIndex("by_project_and_parent", (q) => q.eq("projectId", projectId))
       .take(BATCH / 4);
     for (const page of pages) {
       await deletePage(ctx, page._id);
@@ -419,7 +419,7 @@ export const project = internalMutation({
     // Every file of the Drive goes, wherever it sits, so its folders can go as they are.
     const files = await ctx.db
       .query("driveFiles")
-      .withIndex("by_project_and_folder", (q) => q.eq("projectId", projectId))
+      .withIndex("by_folder_and_name", (q) => q.eq("projectId", projectId))
       .take(FILE_BATCH);
     for (const file of files) {
       await deleteDriveFile(ctx, file);
@@ -429,7 +429,7 @@ export const project = internalMutation({
         ? []
         : await ctx.db
             .query("driveFolders")
-            .withIndex("by_project_and_parent", (q) =>
+            .withIndex("by_parent_and_name", (q) =>
               q.eq("projectId", projectId)
             )
             .take(BATCH);
