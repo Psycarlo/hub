@@ -12,7 +12,7 @@ import {
   seatById,
 } from "../shared/office";
 import { onlineIn } from "./presence";
-import { cleanTimeZone } from "./time-zones";
+import { cleanTimeZone } from "./timezones";
 
 export function avatarOf(
   ctx: QueryCtx,

@@ -14,7 +14,7 @@ import {
   requireAvatar,
 } from "./lib/office";
 import { beat, onlineIn } from "./lib/presence";
-import { cleanTimeZone } from "./lib/time-zones";
+import { cleanTimeZone } from "./lib/timezones";
 import { vEmote, vTile } from "./lib/validators";
 import type { Emote, Facing, Tile } from "./shared/office";
 import {

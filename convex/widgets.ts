@@ -4,7 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/access";
-import { isTimeZone } from "./lib/time-zones";
+import { isTimeZone } from "./lib/timezones";
 import type { WidgetSettings } from "./lib/validators";
 import { vWidgetSettings } from "./lib/validators";
 import { rankBetween } from "./shared/model";
