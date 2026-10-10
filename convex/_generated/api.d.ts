@@ -42,6 +42,7 @@ import type * as portfolios from "../portfolios.js";
 import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
+import type * as reactions from "../reactions.js";
 import type * as shared_character from "../shared/character.js";
 import type * as shared_crm from "../shared/crm.js";
 import type * as shared_docs from "../shared/docs.js";
@@ -101,6 +102,7 @@ declare const fullApi: ApiFromModules<{
   presence: typeof presence;
   projects: typeof projects;
   r2: typeof r2;
+  reactions: typeof reactions;
   "shared/character": typeof shared_character;
   "shared/crm": typeof shared_crm;
   "shared/docs": typeof shared_docs;

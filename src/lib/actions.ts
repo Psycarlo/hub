@@ -1,5 +1,6 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import type { ReactionGroup } from "@convex/reactions";
 import type { OptimisticLocalStore } from "convex/browser";
 import { toast } from "sonner";
 
@@ -12,6 +13,7 @@ import type {
   CardFields,
   Sprint,
   Status,
+  UserId,
 } from "@/lib/model";
 import { sortLabels, statusKind } from "@/lib/model";
 import type { Project } from "@/lib/project";
@@ -349,6 +351,61 @@ export function addComment(card: Card, comment: CommentDraft) {
 
 export function deleteComment(commentId: Id<"comments">) {
   return run(convex.mutation(api.comments.remove, { commentId }));
+}
+
+export interface ReactionChange {
+  emoji: string;
+  /** The comment reacted to; missing for the card itself. */
+  commentId?: Id<"comments">;
+  /** Whether you react with it, or take that back. */
+  reacted: boolean;
+}
+
+/** The reactions with yours added or taken back, as the server will have them. */
+function withReaction(
+  groups: ReactionGroup[],
+  me: UserId,
+  { commentId, emoji, reacted }: ReactionChange
+): ReactionGroup[] {
+  const at = groups.findIndex(
+    (group) => group.commentId === commentId && group.emoji === emoji
+  );
+  const group = groups[at];
+  if (!group) {
+    return reacted ? [...groups, { commentId, emoji, users: [me] }] : groups;
+  }
+  if (reacted) {
+    return group.users.includes(me)
+      ? groups
+      : groups.with(at, { ...group, users: [...group.users, me] });
+  }
+  const users = group.users.filter((user) => user !== me);
+  return users.length > 0
+    ? groups.with(at, { ...group, users })
+    : groups.toSpliced(at, 1);
+}
+
+/** Reacts to a card or one of its comments with an emoji, or takes it back. */
+export function setReaction(card: Card, me: UserId, change: ReactionChange) {
+  const query = { cardId: card._id };
+  return run(
+    convex.mutation(
+      api.reactions.set,
+      { ...query, ...change },
+      {
+        optimisticUpdate: (store) => {
+          const groups = store.getQuery(api.reactions.list, query);
+          if (groups) {
+            store.setQuery(
+              api.reactions.list,
+              query,
+              withReaction(groups, me, change)
+            );
+          }
+        },
+      }
+    )
+  );
 }
 
 /** Deletes an upload that won't be attached after all. */

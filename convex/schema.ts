@@ -238,6 +238,15 @@ export default defineSchema({
     .index("by_card_and_comment", ["cardId", "commentId"])
     .index("by_key", ["key"]),
 
+  /** Someone reacted with an emoji to a card, or to one of its comments. */
+  reactions: defineTable({
+    cardId: v.id("cards"),
+    /** The comment reacted to; missing when it's the card itself. */
+    commentId: v.optional(v.id("comments")),
+    emoji: v.string(),
+    userId: v.id("users"),
+  }).index("by_card_and_comment", ["cardId", "commentId"]),
+
   /** Someone was mentioned in a card comment, or on a doc page. */
   notifications: defineTable(
     v.union(
