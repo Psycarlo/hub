@@ -1,6 +1,7 @@
 import type { Infer, VLiteral, VString, VUnion } from "convex/values";
 import { v } from "convex/values";
 
+import { GLASSES, HAIR_STYLES, HATS, TOPS } from "../shared/character";
 import {
   ACTIVITY_TYPES,
   CURRENCIES,
@@ -56,6 +57,20 @@ export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vTaskSort = oneOf(TASK_SORTS);
+
+/** Someone's character: what they wear, and every color as `#rrggbb`. */
+export const vCharacter = v.object({
+  bottomColor: vHexColor,
+  glasses: oneOf(GLASSES),
+  hair: oneOf(HAIR_STYLES),
+  hairColor: vHexColor,
+  hat: oneOf(HATS),
+  hatColor: vHexColor,
+  shoesColor: vHexColor,
+  skin: vHexColor,
+  top: oneOf(TOPS),
+  topColor: vHexColor,
+});
 
 export const vBoardLabel = v.object({
   color: vColor,

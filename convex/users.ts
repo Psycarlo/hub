@@ -19,7 +19,9 @@ import {
 import { isAdmin, requireAdmin, requireUser } from "./lib/access";
 import { dropFile, ownedFile } from "./lib/files";
 import { mediaUrl } from "./lib/media";
-import { vAppRole, vFiat } from "./lib/validators";
+import { vAppRole, vCharacter, vFiat } from "./lib/validators";
+import type { Character } from "./shared/character";
+import { isCharacter, startingCharacter } from "./shared/character";
 import type { Fiat } from "./shared/portfolio";
 import { DEFAULT_FIAT } from "./shared/portfolio";
 
@@ -35,6 +37,8 @@ export interface UserView {
   deactivated: boolean;
   /** What they see prices in. */
   currency: Fiat;
+  /** The 3D figure they walk around as. */
+  character: Character;
 }
 
 function displayName(user: Doc<"users">): string {
@@ -44,6 +48,7 @@ function displayName(user: Doc<"users">): string {
 export function toUserView(user: Doc<"users">): UserView {
   return {
     _id: user._id,
+    character: user.character ?? startingCharacter(user._id),
     currency: user.currency ?? DEFAULT_FIAT,
     deactivated: user.deactivated ?? false,
     email: user.email ?? "",
@@ -98,6 +103,17 @@ export const setCurrency = mutation({
   handler: async (ctx, { currency }) => {
     const user = await requireUser(ctx);
     await ctx.db.patch(user._id, { currency });
+  },
+});
+
+export const setCharacter = mutation({
+  args: { character: vCharacter },
+  handler: async (ctx, { character }) => {
+    const user = await requireUser(ctx);
+    if (!isCharacter(character)) {
+      throw new ConvexError("Pick each color as #rrggbb.");
+    }
+    await ctx.db.patch(user._id, { character });
   },
 });
 

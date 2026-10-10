@@ -9,6 +9,7 @@ import {
   vBoardLabel,
   vCardChange,
   vCardDefaults,
+  vCharacter,
   vColor,
   vDriveChange,
   vEntryKind,
@@ -36,6 +37,8 @@ export default defineSchema({
   users: defineTable({
     /** R2 key of the profile photo. */
     avatarKey: v.optional(v.string()),
+    /** The 3D figure they walk around as; picked from their id until they make it. */
+    character: v.optional(vCharacter),
     /** What they see prices in; dollars until they pick. */
     currency: v.optional(vFiat),
     /** Set when an admin takes someone's access away. */

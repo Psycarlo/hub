@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UserAvatar } from "@/components/user-avatar";
+import { CharacterEditor } from "@/features/character/character-editor";
 import { useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
@@ -33,6 +34,8 @@ import { setTheme, useTheme } from "@/lib/theme";
 import { checkForUpdate } from "@/lib/updates";
 import { isImage, uploadFile } from "@/lib/upload";
 
+import { CHOICE } from "./choice";
+
 const MIN_PASSWORD = 8;
 
 const THEMES = [
@@ -45,10 +48,6 @@ const CURRENCIES = [
   { label: "US dollar", value: "USD" },
   { label: "Euro", value: "EUR" },
 ] as const satisfies readonly { label: string; value: Fiat }[];
-
-/** One choice in a row of them, like a theme or a currency. */
-const CHOICE =
-  "text-muted-foreground hover:bg-foreground/5 hover:text-foreground data-pressed:bg-primary/12 data-pressed:text-foreground data-pressed:inset-ring-primary/50 flex h-9 items-center gap-2 rounded-lg px-3 text-sm inset-ring inset-ring-transparent transition-[background-color,color,box-shadow] duration-150 [&_svg]:size-4";
 
 function Section({
   title,
@@ -457,6 +456,12 @@ export function SettingsPage() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 pt-4 pb-10 sm:px-6">
         <Section description="How you show up to your team." title="Profile">
           <ProfileForm />
+        </Section>
+        <Section
+          description="The you that walks around with your team, soon."
+          title="Character"
+        >
+          <CharacterEditor />
         </Section>
         <Section title="Password">
           <PasswordForm />
