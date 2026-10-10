@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-10
+
+### Added
+
+- Keep up to five files on a transaction, like its invoice or receipt, shown beside it.
+- Drop an invoice on a transaction and AI fills in who it's from, the amount, the date and the category, pointing out anything it couldn't read.
+- Drop several invoices on an account to read them all at once, then review and add each one from a tray in the corner.
+- Filter an account's month to transactions with files or without.
+- Admins pick the AI model each task runs on, and see what it cost this month.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added
