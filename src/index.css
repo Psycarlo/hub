@@ -849,3 +849,87 @@
     clip-path: inset(0 100% 0 0);
   }
 }
+
+/* A character's outline while it loads, with a sheen sweeping across it. The
+   outline comes as a mask image, set where it's used. */
+@layer components {
+  .character-loading {
+    background: linear-gradient(
+      110deg,
+      color-mix(in oklab, var(--foreground) 6%, transparent) 35%,
+      color-mix(in oklab, var(--foreground) 13%, transparent) 50%,
+      color-mix(in oklab, var(--foreground) 6%, transparent) 65%
+    );
+    background-size: 250% 100%;
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    animation: character-sheen 1.6s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  }
+
+  @keyframes character-sheen {
+    from {
+      background-position: 120% 0;
+    }
+
+    to {
+      background-position: -20% 0;
+    }
+  }
+}
+
+/* Over someone away in the office: z's drifting up off them, one after another. */
+@layer components {
+  .office-zzz > span {
+    opacity: 0;
+    animation: office-zzz 2.4s ease-out infinite;
+
+    &:nth-child(2) {
+      font-size: 0.85em;
+      animation-delay: 0.8s;
+    }
+
+    &:nth-child(3) {
+      font-size: 0.7em;
+      animation-delay: 1.6s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      opacity: 1;
+      animation: none;
+    }
+  }
+
+  @keyframes office-zzz {
+    0% {
+      opacity: 0;
+      transform: translate(0, 4px);
+    }
+
+    30% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translate(6px, -10px);
+    }
+  }
+
+  /* A speech bubble's tail, pointing down at who said it. */
+  .office-bubble::after {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: inherit;
+    content: "";
+    transform: translateX(-50%) rotate(45deg);
+  }
+}

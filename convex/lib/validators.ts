@@ -2,6 +2,18 @@ import type { Infer, VLiteral, VString, VUnion } from "convex/values";
 import { v } from "convex/values";
 
 import {
+  BODIES,
+  BOTTOMS,
+  CHEEKS,
+  EYES,
+  FACIAL_HAIR,
+  GLASSES,
+  HAIR_STYLES,
+  HATS,
+  MOUTHS,
+  TOPS,
+} from "../shared/character";
+import {
   ACTIVITY_TYPES,
   CURRENCIES,
   FIELD_TYPES,
@@ -17,6 +29,7 @@ import {
   SPRINT_STATUSES,
   STATUSES,
 } from "../shared/model";
+import { EMOTES } from "../shared/office";
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
 import { FIATS, TRANSACTION_KINDS } from "../shared/portfolio";
@@ -56,6 +69,34 @@ export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vTaskSort = oneOf(TASK_SORTS);
+export const vEmote = oneOf(EMOTES);
+
+/** A tile in the office, x across and y from the back wall. */
+export const vTile = v.object({ x: v.number(), y: v.number() });
+
+/**
+ * Someone's character: what they wear, and every color as `#rrggbb`. Fields
+ * added since characters were first saved are optional, missing on those.
+ */
+export const vCharacter = v.object({
+  body: v.optional(oneOf(BODIES)),
+  bottom: v.optional(oneOf(BOTTOMS)),
+  bottomColor: vHexColor,
+  cheeks: v.optional(oneOf(CHEEKS)),
+  eyes: v.optional(oneOf(EYES)),
+  facialHair: v.optional(oneOf(FACIAL_HAIR)),
+  glasses: oneOf(GLASSES),
+  glassesColor: v.optional(vHexColor),
+  hair: oneOf(HAIR_STYLES),
+  hairColor: vHexColor,
+  hat: oneOf(HATS),
+  hatColor: vHexColor,
+  mouth: v.optional(oneOf(MOUTHS)),
+  shoesColor: vHexColor,
+  skin: vHexColor,
+  top: oneOf(TOPS),
+  topColor: vHexColor,
+});
 
 export const vBoardLabel = v.object({
   color: vColor,

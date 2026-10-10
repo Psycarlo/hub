@@ -141,6 +141,7 @@ The workflow needs the `CONVEX_DEPLOY_KEY`, `VERCEL_TOKEN`, `VERCEL_ORG_ID` and 
 - [dnd-kit](https://dndkit.com/) — drag and drop
 - [TanStack Table](https://tanstack.com/table) — CRM tables
 - [Tiptap](https://tiptap.dev/) — editor for docs and card descriptions
+- [React Three Fiber](https://r3f.docs.pmnd.rs/) on [three.js](https://threejs.org/) — 3D characters, modeled in code with [Blender](https://www.blender.org/)
 - [wouter](https://github.com/molefrog/wouter) — routing
 - [date-fns](https://date-fns.org/) — dates
 - [Sonner](https://sonner.emilkowal.ski/) — toasts

@@ -9,8 +9,10 @@ import {
   vBoardLabel,
   vCardChange,
   vCardDefaults,
+  vCharacter,
   vColor,
   vDriveChange,
+  vEmote,
   vEntryKind,
   vField,
   vFiat,
@@ -22,6 +24,7 @@ import {
   vStageMove,
   vStatus,
   vTableIcon,
+  vTile,
   vTransactionKind,
   vValues,
   vWidgetSettings,
@@ -36,6 +39,8 @@ export default defineSchema({
   users: defineTable({
     /** R2 key of the profile photo. */
     avatarKey: v.optional(v.string()),
+    /** The 3D figure they walk around as; picked from their id until they make it. */
+    character: v.optional(vCharacter),
     /** What they see prices in; dollars until they pick. */
     currency: v.optional(vFiat),
     /** Set when an admin takes someone's access away. */
@@ -56,6 +61,42 @@ export default defineSchema({
   widgets: defineTable({
     rank: v.number(),
     settings: vWidgetSettings,
+    userId: v.id("users"),
+  }).index("by_user", ["userId"]),
+
+  /** Each person's desk in the office, by its seat's id in convex/shared/office.ts. */
+  officeDesks: defineTable({
+    desk: v.string(),
+    userId: v.id("users"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_desk", ["desk"]),
+
+  /**
+   * Where each person's character is in the office and what it's doing; one
+   * per person. Whether they're on the Office page isn't kept here: it's their
+   * presence in the office's room, which a closed or crashed tab times out of.
+   */
+  officeAvatars: defineTable({
+    /** Hidden from view for a while, in the office or elsewhere. */
+    away: v.boolean(),
+    /** The latest speech bubble and when; older ones just stop showing. */
+    bubble: v.optional(v.object({ at: v.number(), text: v.string() })),
+    /** The latest emote and when; walking or sitting ends it. */
+    emote: v.optional(v.object({ at: v.number(), name: vEmote })),
+    /** 0 to 3: north, east, south, west. */
+    facing: v.number(),
+    /** The tile the latest walk started from. */
+    from: vTile,
+    /** When the latest walk was sent, only to tell it from the one before. */
+    moved: v.number(),
+    /** The tiles the latest walk steps on, in order. */
+    path: v.array(vTile),
+    running: v.boolean(),
+    /** The seat sat on, if any. */
+    seat: v.optional(v.string()),
+    /** For the local time on their card. */
+    timeZone: v.string(),
     userId: v.id("users"),
   }).index("by_user", ["userId"]),
 

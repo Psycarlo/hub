@@ -194,7 +194,6 @@ function InviteForm() {
         className="min-h-20"
         id={id}
         onChange={(event) => setEmails(event.target.value)}
-        placeholder="ana@example.com, rui@example.com"
         value={emails}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">

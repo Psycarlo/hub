@@ -33,6 +33,7 @@ import {
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
 import { LoginPage } from "@/features/login/login-page";
+import { OFFICE_PATH } from "@/features/office/office-item";
 import { ProjectDialog } from "@/features/projects/project-dialog";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useArrivalPing, useInbox } from "@/hooks/use-inbox";
@@ -50,6 +51,7 @@ import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
+import { usePresence } from "@/lib/presence";
 import type { Project } from "@/lib/project";
 
 // regexparam's types misread several optional segments in a row.
@@ -72,6 +74,12 @@ const NO_HABITS: Habit[] = [];
 const ProjectRoute = lazy(async () => {
   const module = await import("@/features/projects/project-route");
   return { default: module.ProjectRoute };
+});
+
+// The office brings three.js and its 3D props, which only its page needs.
+const OfficePage = lazy(async () => {
+  const module = await import("@/features/office/office-page");
+  return { default: module.OfficePage };
 });
 
 function RouteFallback() {
@@ -105,6 +113,8 @@ function useEnsurePersonal(projects: Project[] | undefined) {
 }
 
 function Workspace() {
+  const me = useMe();
+  usePresence(me._id);
   const projectList = useQuery(api.projects.list);
   useEnsurePersonal(projectList);
   const boardList = useQuery(api.boards.list);
@@ -196,6 +206,11 @@ function Workspace() {
                     />
                   </Suspense>
                 )}
+              </Route>
+              <Route path={OFFICE_PATH}>
+                <Suspense fallback={<RouteFallback />}>
+                  <OfficePage />
+                </Suspense>
               </Route>
               <Route path={INBOX_PATH}>
                 <InboxPage inbox={inbox} />
