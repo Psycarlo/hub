@@ -7,6 +7,9 @@ import { readStorage, writeStorage } from "@/lib/utils";
 /** The hub's name, shown in the browser tab, the sidebar and on the sign-in screen. */
 export const APP_NAME: string = import.meta.env.VITE_APP_NAME || "Hub";
 
+/** The hub's version, shown at the foot of the sidebar. See CHANGELOG.md. */
+export const APP_VERSION: string = __APP_VERSION__;
+
 /**
  * The last logo seen, so the next visit shows it before the server answers.
  * index.html reads it too, to set the favicon before the app loads.

@@ -3,5 +3,12 @@ dist
 *.local
 .env
 .convex
+.vercel
 .DS_Store
 *.log
+
+# Claude Code: only skills are shared
+.claude/*
+!.claude/skills/
+
+.env*

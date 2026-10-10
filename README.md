@@ -116,6 +116,18 @@ pnpm fix            # the same, fixing what it can
 pnpm build          # type-check and build to dist/
 ```
 
+## Releasing
+
+Production deploys only from version tags. Pushing to `main` alone deploys nothing.
+
+1. Commit changes.
+2. Run the `/release` skill.
+3. `git push --follow-tags`. The tag runs the Release workflow: Convex, then Vercel.
+
+The version shows at the foot of the sidebar. To roll back, run the Release workflow from an older tag.
+
+The workflow needs the `CONVEX_DEPLOY_KEY`, `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` secrets. The last two are in `.vercel/repo.json` (`orgId` and `id`) after `vercel link`.
+
 ## Tech stack
 
 - [Vite](https://vite.dev/) — build tool and dev server

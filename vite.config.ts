@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import babel from "@rolldown/plugin-babel";
@@ -7,7 +8,14 @@ import { defineConfig } from "vite";
 
 const noYjs = path.resolve(import.meta.dirname, "./src/lib/no-yjs.ts");
 
+const { version } = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, "./package.json"), "utf-8")
+) as { version: string };
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),

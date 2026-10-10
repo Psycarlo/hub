@@ -12,3 +12,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** The hub's version from package.json, put in at build time. */
+declare const __APP_VERSION__: string;

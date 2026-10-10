@@ -54,6 +54,7 @@ import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
+import { APP_VERSION } from "@/lib/brand";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
@@ -468,8 +469,13 @@ export function AppSidebar({
             <UserMenu />
           </SidebarMenuItem>
         </SidebarMenu>
-        {/* Bottom left, folded or not, so it's always where the hand expects. */}
-        {!isMobile && <SidebarTrigger />}
+        <div className="flex items-center">
+          {/* Bottom left, folded or not, so it's always where the hand expects. */}
+          {!isMobile && <SidebarTrigger />}
+          <span className="text-muted-foreground/60 ml-auto px-1.5 text-[10px] whitespace-nowrap tabular-nums transition-opacity duration-200 ease-out group-data-[collapsible=icon]:opacity-0">
+            v{APP_VERSION}
+          </span>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
