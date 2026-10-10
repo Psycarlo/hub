@@ -38,6 +38,7 @@ import type * as migrations from "../migrations.js";
 import type * as portfolios from "../portfolios.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
+import type * as reactions from "../reactions.js";
 import type * as shared_crm from "../shared/crm.js";
 import type * as shared_docs from "../shared/docs.js";
 import type * as shared_drive from "../shared/drive.js";
@@ -91,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   portfolios: typeof portfolios;
   projects: typeof projects;
   r2: typeof r2;
+  reactions: typeof reactions;
   "shared/crm": typeof shared_crm;
   "shared/docs": typeof shared_docs;
   "shared/drive": typeof shared_drive;

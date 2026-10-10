@@ -16,8 +16,9 @@ import { releaseBuy } from "./lib/finance";
 const BATCH = 100;
 
 /**
- * A card with its comments and the notifications pointing at it. Its files
- * and history can be many, so they're cleared afterwards in batches of their own.
+ * A card with its comments and the notifications pointing at it. Its files,
+ * history and reactions can be many, so they're cleared afterwards in batches
+ * of their own.
  */
 export async function deleteCard(
   ctx: MutationCtx,
@@ -112,10 +113,18 @@ export const card = internalMutation({
       .query("cardEvents")
       .withIndex("by_card_and_at", (q) => q.eq("cardId", cardId))
       .take(BATCH);
-    for (const event of events) {
-      await ctx.db.delete(event._id);
+    const reactions = await ctx.db
+      .query("reactions")
+      .withIndex("by_card_and_comment", (q) => q.eq("cardId", cardId))
+      .take(BATCH);
+    for (const row of [...events, ...reactions]) {
+      await ctx.db.delete(row._id);
     }
-    if (files.length === FILE_BATCH || events.length === BATCH) {
+    if (
+      files.length === FILE_BATCH ||
+      events.length === BATCH ||
+      reactions.length === BATCH
+    ) {
       await ctx.scheduler.runAfter(0, internal.cleanup.card, { cardId });
     }
   },

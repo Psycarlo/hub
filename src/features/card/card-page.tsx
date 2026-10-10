@@ -26,6 +26,7 @@ import { CardActivity } from "@/features/card/card-activity";
 import { STATUS_STYLES } from "@/features/card/card-fields";
 import { CardFiles } from "@/features/card/card-files";
 import { CardProperties } from "@/features/card/card-properties";
+import { AddReaction, Reactions } from "@/features/card/reactions";
 import { useCardDescription } from "@/hooks/use-card-description";
 import { useSaveWhileTyping } from "@/hooks/use-save-while-typing";
 import { deleteCard, updateCard } from "@/lib/actions";
@@ -340,7 +341,10 @@ export function CardPage({
           ) : (
             <CardText card={card} />
           )}
-          <CardFiles card={card} />
+          <CardFiles card={card}>
+            <Reactions card={card} />
+            {canEdit && <AddReaction card={card} />}
+          </CardFiles>
         </div>
         <aside aria-labelledby={id} className={ASIDE}>
           <div className="flex flex-col gap-3 lg:sticky lg:top-20">

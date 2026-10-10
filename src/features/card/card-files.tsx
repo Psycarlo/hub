@@ -14,6 +14,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { useBoard } from "@/features/board/board-context";
 import { When } from "@/features/card/card-parts";
@@ -339,9 +341,16 @@ interface Uploading {
 
 /**
  * The files attached to a card. Editors attach more with the paperclip, or by
- * dropping them here.
+ * dropping them here. `children`, like the card's reactions, lead the row the
+ * paperclip is in, and share its tooltips.
  */
-export function CardFiles({ card }: { card: Card }) {
+export function CardFiles({
+  card,
+  children,
+}: {
+  card: Card;
+  children?: ReactNode;
+}) {
   const { canEdit } = useBoard();
   const files = useAttachments(card);
   const [uploading, setUploading] = useState<Uploading[]>([]);
@@ -384,7 +393,12 @@ export function CardFiles({ card }: { card: Card }) {
   );
 
   if (!canEdit) {
-    return list ? <div className="pt-2">{list}</div> : null;
+    return (
+      <div className="flex flex-col gap-2 pt-2 empty:hidden">
+        <FluidTooltip.Group>{children}</FluidTooltip.Group>
+        {list}
+      </div>
+    );
   }
   return (
     <div
@@ -394,7 +408,13 @@ export function CardFiles({ card }: { card: Card }) {
       )}
       {...drop.handlers}
     >
-      <AttachButton className="-ml-2 self-start" onFiles={add} />
+      {/* A button leading the row lines its icon up with the text above. */}
+      <div className="flex flex-wrap items-center gap-1 [&>button:first-child]:-ml-2">
+        <FluidTooltip.Group>
+          {children}
+          <AttachButton onFiles={add} />
+        </FluidTooltip.Group>
+      </div>
       {list}
     </div>
   );

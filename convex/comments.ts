@@ -6,6 +6,7 @@ import { mutation, query } from "./_generated/server";
 import { attachFile, attachmentView, dropCommentFiles } from "./attachments";
 import { canSee, ifVisible, requireCard } from "./lib/access";
 import { vUpload } from "./lib/validators";
+import { dropCommentReactions } from "./reactions";
 import { mentionedUsers } from "./shared/mentions";
 import { MAX_COMMENT_FILES } from "./shared/model";
 
@@ -143,6 +144,7 @@ export const remove = mutation({
       await ctx.db.delete(notification._id);
     }
     await dropCommentFiles(ctx, comment);
+    await dropCommentReactions(ctx, comment);
     if (await hasReplies(ctx, commentId)) {
       await ctx.db.patch(commentId, { content: "", deleted: true });
       return;

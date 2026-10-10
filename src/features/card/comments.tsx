@@ -30,6 +30,7 @@ import {
   isImageType,
 } from "@/features/card/card-files";
 import { When } from "@/features/card/card-parts";
+import { AddReaction, Reactions } from "@/features/card/reactions";
 import { useDraftFiles } from "@/features/card/use-draft-files";
 import { DROP_TARGET, useFileDrop } from "@/features/card/use-file-drop";
 import type { Comment } from "@/hooks/use-comments";
@@ -56,7 +57,6 @@ function DeleteComment({ comment }: { comment: Comment }) {
   return (
     <>
       <IconButton
-        className="ml-auto opacity-0 transition-opacity duration-150 group-hover/comment:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         label="Delete comment"
         onClick={() => setOpen(true)}
         size="icon-xs"
@@ -165,7 +165,7 @@ function CommentFiles({ files }: { files: CommentFile[] }) {
   );
 }
 
-function CommentBody({ comment }: { comment: Comment }) {
+function CommentBody({ card, comment }: { card: Card; comment: Comment }) {
   const { canEdit, me } = useBoard();
   const { name } = useUser(comment.authorId);
   if (comment.deleted) {
@@ -181,8 +181,12 @@ function CommentBody({ comment }: { comment: Comment }) {
         <UserAvatar aria-hidden size="sm" userId={comment.authorId} />
         <span className="truncate text-sm font-medium">{name}</span>
         <When at={comment._creationTime} />
-        {canEdit && comment.authorId === me && (
-          <DeleteComment comment={comment} />
+        {canEdit && (
+          // Shown on hover, and kept while the emoji picker is open.
+          <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/comment:opacity-100 focus-within:opacity-100 has-data-popup-open:opacity-100 pointer-coarse:opacity-100">
+            <AddReaction card={card} commentId={comment._id} size="icon-xs" />
+            {comment.authorId === me && <DeleteComment comment={comment} />}
+          </div>
         )}
       </div>
       {comment.content && (
@@ -191,6 +195,9 @@ function CommentBody({ comment }: { comment: Comment }) {
         </p>
       )}
       <CommentFiles files={comment.attachments} />
+      <FluidTooltip.Group>
+        <Reactions card={card} commentId={comment._id} />
+      </FluidTooltip.Group>
     </div>
   );
 }
@@ -396,12 +403,12 @@ export function CommentThread({
   const { canEdit } = useBoard();
   return (
     <article className="bg-card shadow-surface rounded-xl">
-      <CommentBody comment={comment} />
+      <CommentBody card={card} comment={comment} />
       {replies.length > 0 && (
         <ol aria-label="Replies">
           {replies.map((reply) => (
             <li className="border-t" key={reply._id}>
-              <CommentBody comment={reply} />
+              <CommentBody card={card} comment={reply} />
             </li>
           ))}
         </ol>
