@@ -15,3 +15,5 @@ disable-model-invocation: true
    - One short line per change, written for users, ending in a period. Fixed lines say what works now.
    - Merge related commits. Skip refactors, lint, CI, docs, skills. No hashes or `feat:` prefixes.
 5. **Ship.** Set `"version"` in package.json. Run `pnpm exec oxfmt CHANGELOG.md package.json` (not `pnpm fix`). Then `git commit -m "chore: release vX.Y.Z" -- CHANGELOG.md package.json` and `git tag -a vX.Y.Z -m "vX.Y.Z"`. Don't push; show the entry and mention `git push --follow-tags`, which deploys to production.
+
+IMPORTANT: Everything you commit has only short and concise commit title. No description and no attribution.
