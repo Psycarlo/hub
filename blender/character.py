@@ -28,7 +28,9 @@ with glTF extras that the app reads:
 Materials are named for what they color ("Skin", "Hair", "Top"...), and the
 app recolors them per person; "TopTrim" and the like it works out from those.
 Animations are actions on the armature, one per move: idle, walk, run, jump,
-wave and dance.
+wave, dance and cheer standing; drink, at the office's coffee machine; and
+sit, type and doze, seated on a seat SEAT high, which blender/office.py builds
+every seat to.
 
 Run with Blender 5.2 or later, and Node on the PATH to compress the result:
 
@@ -1720,6 +1722,99 @@ def dance(t):
     }
 
 
+def cheer(t):
+    """Jump's arms, thrown up and held, pumping, with a hop or two."""
+    def up(pump, hop=0.0):
+        return {
+            "root": {"loc": (0, 0, hop)},
+            "spine": {"rot": (-4, 0, 0)},
+            "head": {"rot": (-10, 0, 0)},
+            "arm_L": {"rot": (-10, -150 + pump, 0)},
+            "arm_R": {"rot": (-10, 150 - pump, 0)},
+        }
+
+    crouch = {
+        "root": {"scale": (1.08, 1.08, 0.9)},
+        "spine": {"rot": (8, 0, 0)},
+        "arm_L": {"rot": (25, -20, 0)},
+        "arm_R": {"rot": (25, 20, 0)},
+    }
+    keys = [
+        (0, {}),
+        (5, crouch),
+        (10, up(-8, 0.07)),
+        (15, up(12)),
+        (20, up(-8, 0.06)),
+        (25, up(12)),
+        (30, up(-6, 0.05)),
+        (36, up(10)),
+        (48, {}),
+    ]
+    return blend([(f / 48, p) for f, p in keys], t)
+
+
+def drink(t):
+    """A sip from a cup, at the coffee machine."""
+    cup = {
+        "head": {"rot": (-4, 0, 0)},
+        "arm_R": {"rot": (-118, 0, 30)},
+        "arm_L": {"rot": (0, -4, 0)},
+    }
+    sip = {
+        "spine": {"rot": (-5, 0, 0)},
+        "head": {"rot": (-16, 0, 0)},
+        "arm_R": {"rot": (-132, 0, 34)},
+        "arm_L": {"rot": (0, -6, 0)},
+    }
+    keys = [(0, {}), (12, cup), (20, sip), (40, sip), (48, cup), (60, {})]
+    return blend([(f / 60, p) for f, p in keys], t)
+
+
+# Sitting, legs out in front: the pelvis rests on a seat this high, and the
+# thighs just over it. blender/office.py builds every seat's top to it.
+SEAT = 0.19
+
+
+def seated(t, arms=(-34, 10)):
+    """Sat down, breathing, with the arms forward by `arms`: (swing, in)."""
+    breath = wave_of(t)
+    forward, inward = arms
+    return {
+        "spine": {"scale": (1 + 0.01 * breath, 1 + 0.01 * breath, 1 + 0.02 * breath)},
+        "leg_L": {"rot": (-80, 0, 3)},
+        "leg_R": {"rot": (-80, 0, -3)},
+        "arm_L": {"rot": (forward, 0, -inward)},
+        "arm_R": {"rot": (forward, 0, inward)},
+    }
+
+
+def sit(t):
+    pose = seated(t)
+    pose["spine"]["rot"] = (-3, 1.5 * wave_of(t, 1, 0.25), 0)
+    pose["head"] = {"rot": (2 * wave_of(t, 1, 0.1), 4 * wave_of(t, 1, 0.3), 1.5 * wave_of(t, 1, 0.6))}
+    return pose
+
+
+def typing(t):
+    """At a keyboard: hands forward, tapping in turn, eyes on the screen."""
+    pose = seated(t, arms=(-62, 12))
+    left, right = max(0.0, wave_of(t, 6)), max(0.0, wave_of(t, 6, 0.5))
+    pose["arm_L"]["rot"] = (-62 + 6 * left, 0, -12)
+    pose["arm_R"]["rot"] = (-62 + 6 * right, 0, 12)
+    pose["spine"]["rot"] = (7, 0, 1.5 * wave_of(t))
+    pose["head"] = {"rot": (6 + 2 * wave_of(t, 2, 0.2), 5 * wave_of(t, 1, 0.3), 0)}
+    return pose
+
+
+def doze(t):
+    """Asleep in the chair: the head droops, slowly, then jerks back up."""
+    pose = seated(t, arms=(-22, 6))
+    droop = smoothstep(0.0, 0.8, t) if t < 0.8 else 1 - smoothstep(0.8, 0.9, t)
+    pose["spine"]["rot"] = (9, 0, 2)
+    pose["head"] = {"rot": (8 + 18 * droop, 0, 5 + 4 * droop)}
+    return pose
+
+
 # --- Build --------------------------------------------------------------------
 
 
@@ -1786,6 +1881,11 @@ def build():
     record(rig, "jump", 33, jump, loop=False)
     record(rig, "wave", 48, wave, loop=False)
     record(rig, "dance", 48, dance, loop=True)
+    record(rig, "cheer", 48, cheer, loop=False)
+    record(rig, "drink", 60, drink, loop=False)
+    record(rig, "sit", 72, sit, loop=True)
+    record(rig, "type", 48, typing, loop=True)
+    record(rig, "doze", 90, doze, loop=True)
     return rig
 
 

@@ -18,6 +18,7 @@
     "@aws-sdk/s3-request-presigner": "3.1147.0",
     "@base-ui/react": "^1.8.0",
     "@convex-dev/auth": "^0.0.96",
+    "@convex-dev/presence": "^0.4.0",
     "@convex-dev/r2": "^0.10.3",
     "@dnd-kit/abstract": "^0.5.0",
     "@dnd-kit/helpers": "^0.5.0",

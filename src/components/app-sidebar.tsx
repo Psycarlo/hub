@@ -52,6 +52,7 @@ import { accountPath } from "@/features/finance/finance-context";
 import { FocusButton } from "@/features/focus/focus-mode";
 import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
+import { OFFICE_PATH, OfficeItem } from "@/features/office/office-item";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
 import { APP_VERSION } from "@/lib/brand";
@@ -384,6 +385,7 @@ export function AppSidebar({
                 <span>Home</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <OfficeItem active={location === OFFICE_PATH} />
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location === INBOX_PATH}

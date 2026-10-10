@@ -110,6 +110,7 @@ export const CODE = /^[A-Z][A-Z0-9]{0,6}$/u;
 export const RESERVED_CODES: ReadonlySet<string> = new Set([
   "ADMIN",
   "INBOX",
+  "OFFICE",
   "SETTINGS",
 ]);
 

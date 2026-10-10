@@ -1,4 +1,4 @@
-import type { CueName } from "@foleyjs/core";
+import type { CueName, PlayOptions } from "@foleyjs/core";
 import { play, set } from "@foleyjs/core";
 import { useSyncExternalStore } from "react";
 
@@ -20,9 +20,9 @@ function notify(): void {
 }
 
 /** Plays a cue for something that just happened, if sounds are on on this device. */
-export function playSound(sound: CueName): void {
+export function playSound(sound: CueName, options?: PlayOptions): void {
   if (current) {
-    play(sound);
+    play(sound, options);
   }
 }
 

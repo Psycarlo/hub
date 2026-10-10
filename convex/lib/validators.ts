@@ -29,6 +29,7 @@ import {
   SPRINT_STATUSES,
   STATUSES,
 } from "../shared/model";
+import { EMOTES } from "../shared/office";
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
 import { FIATS, TRANSACTION_KINDS } from "../shared/portfolio";
@@ -68,6 +69,10 @@ export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vTaskSort = oneOf(TASK_SORTS);
+export const vEmote = oneOf(EMOTES);
+
+/** A tile in the office, x across and y from the back wall. */
+export const vTile = v.object({ x: v.number(), y: v.number() });
 
 /**
  * Someone's character: what they wear, and every color as `#rrggbb`. Fields

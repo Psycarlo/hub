@@ -464,7 +464,7 @@ export function SettingsPage() {
           <ProfileForm />
         </Section>
         <Section
-          description="The you that walks around with your team, soon."
+          description="The you that walks around the office with your team."
           title="Character"
         >
           <Suspense fallback={<Skeleton className="h-88 rounded-xl" />}>

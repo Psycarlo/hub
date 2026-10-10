@@ -1,7 +1,24 @@
 /** What a character can do: each one an animation in character.glb. */
-export const MOVES = ["idle", "walk", "run", "jump", "wave", "dance"] as const;
+export const MOVES = [
+  "idle",
+  "walk",
+  "run",
+  "jump",
+  "wave",
+  "dance",
+  "cheer",
+  "drink",
+  "sit",
+  "type",
+  "doze",
+] as const;
 
 export type Move = (typeof MOVES)[number];
 
 /** Moves that play once, then settle back to idle. The rest loop. */
-export const ONCE: ReadonlySet<Move> = new Set<Move>(["jump", "wave"]);
+export const ONCE: ReadonlySet<Move> = new Set<Move>([
+  "jump",
+  "wave",
+  "cheer",
+  "drink",
+]);
