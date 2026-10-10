@@ -127,6 +127,8 @@ function reload(stuck: () => void): void {
 function offer(waiting = false): void {
   toast(`A new version of ${APP_NAME} is ready`, {
     action: { label: "Reload", onClick: () => reload(() => offer(true)) },
+    // It stays until it's acted on, so there's no time left to show.
+    className: "toast-sticky",
     description: waiting
       ? "Waiting for uploads and changes to finish. Try again in a moment."
       : "Reload now, or it loads by itself next time you come back.",

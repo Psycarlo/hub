@@ -636,3 +636,216 @@
   background: color-mix(in oklab, var(--primary) 85%, var(--foreground));
   pointer-events: none;
 }
+
+/*
+ * Toasts: Sonner's, dressed as the hub's floating surfaces. Sonner adds its
+ * styles after these and outside the layers, so these sit outside them too,
+ * a step more specific than the rules they replace.
+ */
+[data-sonner-toaster].toaster {
+  font-family: var(--font-sans);
+}
+
+[data-sonner-toaster] .cn-toast {
+  --toast-accent: var(--primary);
+  --toast-mark: var(--primary-foreground);
+  transition-property: transform, opacity, height, box-shadow, filter;
+  transition-duration: 400ms, 300ms, 400ms, 200ms, 300ms;
+  transition-timing-function:
+    var(--ease-drawer), var(--ease-out), var(--ease-drawer), ease,
+    var(--ease-out);
+
+  &[data-type="error"] {
+    --toast-accent: var(--destructive);
+  }
+
+  &[data-type="warning"] {
+    --toast-accent: oklch(0.769 0.188 70.08);
+    --toast-mark: oklch(0.279 0.077 45.635);
+  }
+
+  /* Arriving: rises from below, coming into focus. */
+  &[data-mounted="false"] {
+    --y: translateY(calc(var(--lift) * -100%)) scale(0.95);
+    filter: blur(4px);
+  }
+
+  /* Leaving, unless swiped: sinks back and blurs away, quicker than it came. */
+  &[data-removed="true"][data-front="true"][data-swipe-out="false"] {
+    --y: translateY(calc(var(--lift) * -40%)) scale(0.95);
+    filter: blur(4px);
+    transition-duration: 200ms;
+    transition-timing-function: var(--ease-out);
+  }
+
+  &[data-styled="true"] {
+    align-items: flex-start;
+    gap: 10px;
+    border: 0;
+    border-radius: var(--radius-xl);
+    background: var(--normal-bg);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-raised);
+
+    &:focus-visible {
+      box-shadow:
+        var(--shadow-raised),
+        0 0 0 2px color-mix(in oklab, var(--ring) 50%, transparent);
+    }
+
+    /* A faint wash of its colour, from where its icon sits. */
+    &[data-type] {
+      background:
+        radial-gradient(
+          9rem circle at 21px 22px,
+          color-mix(in oklab, var(--toast-accent) 7%, transparent),
+          transparent 70%
+        ),
+        var(--normal-bg);
+    }
+
+    /* Centred on the title's line. */
+    & [data-icon] {
+      width: 18px;
+      height: 18px;
+      margin: 1px 0 0;
+
+      & svg {
+        margin: 0;
+      }
+    }
+
+    & [data-title] {
+      line-height: 20px;
+    }
+
+    & [data-description] {
+      color: var(--muted-foreground);
+      line-height: 18px;
+    }
+
+    & [data-button] {
+      align-self: center;
+      height: 26px;
+      border-radius: var(--radius-md);
+      background: color-mix(in oklab, var(--primary) 12%, transparent);
+      padding-inline: 10px;
+      color: var(--primary);
+      transition:
+        background-color 150ms ease,
+        transform 160ms var(--ease-out),
+        box-shadow 150ms ease;
+
+      @media (hover: hover) and (pointer: fine) {
+        &:hover {
+          background: color-mix(in oklab, var(--primary) 18%, transparent);
+        }
+      }
+
+      &:active {
+        transform: scale(0.97);
+      }
+
+      &:focus-visible {
+        box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 50%, transparent);
+      }
+    }
+  }
+}
+
+.toast-icon {
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  color: var(--toast-accent);
+}
+
+.toast-icon-mark {
+  stroke: var(--toast-mark);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The disc pops in a beat after the toast, its mark just behind. */
+  .toast-icon-disc,
+  .toast-icon-mark {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: toast-icon-pop 500ms cubic-bezier(0.34, 1.4, 0.64, 1) 80ms both;
+  }
+
+  .toast-icon-mark {
+    animation-delay: 180ms;
+  }
+
+  .toast-icon-drawn {
+    stroke-dasharray: 1;
+    animation: toast-icon-draw 400ms var(--ease-out) 200ms both;
+  }
+
+  .toast-spinner {
+    animation: toast-spin 700ms linear infinite;
+  }
+
+  /*
+   * The time left before it closes by itself, running out along its bottom
+   * edge and round its corners. A toast given a duration of its own sets
+   * --toast-duration to match; one that stays until it's acted on carries
+   * .toast-sticky and has no line.
+   */
+  [data-sonner-toaster]
+    .cn-toast:not([data-type="loading"], .toast-sticky)
+    [data-content]::after {
+    position: absolute;
+    inset: 0;
+    border-bottom: 2px solid var(--toast-accent);
+    border-radius: var(--radius-xl);
+    content: "";
+    pointer-events: none;
+    animation-name: toast-countdown;
+    animation-duration: var(--toast-duration);
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  /* Stopped whenever Sonner stops its clock: hovered, swiped, tab hidden. */
+  [data-sonner-toaster]
+    .cn-toast:is([data-expanded="true"], [data-swiping="true"])
+    [data-content]::after,
+  [data-sonner-toaster].toaster-paused [data-content]::after {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes toast-icon-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+@keyframes toast-icon-draw {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes toast-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes toast-countdown {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+
+  to {
+    clip-path: inset(0 100% 0 0);
+  }
+}
