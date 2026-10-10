@@ -537,8 +537,8 @@ export function CharacterEditor() {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-5 sm:grid-cols-[15rem_minmax(0,1fr)]">
-        {/* Stays in view while a long panel scrolls past it. */}
-        <div className="flex flex-col gap-3 sm:sticky sm:top-4 sm:self-start">
+        {/* Stays in view while a long panel scrolls past it, clear of the top bar. */}
+        <div className="flex flex-col gap-3 sm:sticky sm:top-18 sm:self-start">
           <div className="relative h-80 sm:aspect-4/5 sm:h-auto">
             <div
               className={cn(
