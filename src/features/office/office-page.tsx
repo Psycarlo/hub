@@ -211,7 +211,7 @@ export function OfficePage() {
           <div
             aria-describedby="office-keys"
             aria-label="The office"
-            className="focus-visible:ring-ring/50 absolute inset-0 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-inset"
+            className="absolute inset-0 rounded-2xl outline-none"
             onPointerDown={focusStage}
             ref={stage}
             role="application"
