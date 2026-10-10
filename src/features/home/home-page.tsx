@@ -399,7 +399,7 @@ export function HomePage({
                   : "Welcome to the hub."}
               </p>
             </div>
-            <AddWidget count={widgets?.length ?? 0} />
+            <AddWidget widgets={widgets} />
           </div>
         </Reveal>
         {widgets && <WidgetGrid at={STEP} initial={intro} widgets={widgets} />}

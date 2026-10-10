@@ -33,7 +33,13 @@ import { EMOTES } from "../shared/office";
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
 import { FIATS, TRANSACTION_KINDS } from "../shared/portfolio";
-import { TASK_SCOPES, TASK_SORTS, TIMEFRAMES } from "../shared/widgets";
+import {
+  CLOCK_LOOKS,
+  HOUR_CYCLES,
+  TASK_SCOPES,
+  TASK_SORTS,
+  TIMEFRAMES,
+} from "../shared/widgets";
 
 type OneOf<T extends string> = VUnion<T, VLiteral<T, "required">[], "required">;
 
@@ -68,6 +74,8 @@ export const vCardNetwork = oneOf(CARD_NETWORKS);
 export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
+export const vClockLook = oneOf(CLOCK_LOOKS);
+export const vHourCycle = oneOf(HOUR_CYCLES);
 export const vTaskSort = oneOf(TASK_SORTS);
 export const vEmote = oneOf(EMOTES);
 
@@ -228,6 +236,17 @@ export const vWidgetSettings = v.union(
     /** One habit to follow; missing lists every habit. */
     habitId: v.optional(v.id("habits")),
     type: v.literal("habits"),
+  }),
+  v.object({
+    /** Missing follows the person's locale. */
+    hours: v.optional(vHourCycle),
+    look: vClockLook,
+    /**
+     * An IANA time zone, like `Europe/Lisbon`; mutations check it's one there
+     * is. Missing follows the device's own.
+     */
+    timeZone: v.optional(v.string()),
+    type: v.literal("clock"),
   })
 );
 

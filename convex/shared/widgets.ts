@@ -28,5 +28,25 @@ export const FINANCE_DEFAULTS = { type: "finance" } as const;
 /** A new Habits widget, listing every habit in the person's own project. */
 export const HABITS_DEFAULTS = { type: "habits" } as const;
 
+/** How a clock shows the time: in numerals, or with hands on a face. */
+export const CLOCK_LOOKS = ["digital", "analog"] as const;
+
+export type ClockLook = (typeof CLOCK_LOOKS)[number];
+
+/** Whether a clock counts the hours to 12 or to 24. */
+export const HOUR_CYCLES = ["12h", "24h"] as const;
+
+export type HourCycle = (typeof HOUR_CYCLES)[number];
+
+/** A new Clock widget, keeping the person's own time until they pick a zone. */
+export const CLOCK_DEFAULTS = { look: "digital", type: "clock" } as const;
+
 /** Widgets one person can keep on their home. */
 export const MAX_WIDGETS = 12;
+
+/** Kinds a home can hold several of, like clocks for different cities; of the rest, one each. */
+const REPEATABLE: ReadonlySet<string> = new Set(["clock"]);
+
+export function isRepeatable(type: string): boolean {
+  return REPEATABLE.has(type);
+}

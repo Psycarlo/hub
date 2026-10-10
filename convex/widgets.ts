@@ -4,9 +4,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/access";
+import { isTimeZone } from "./lib/time-zones";
+import type { WidgetSettings } from "./lib/validators";
 import { vWidgetSettings } from "./lib/validators";
 import { rankBetween } from "./shared/model";
-import { MAX_WIDGETS, MY_TASKS_DEFAULTS } from "./shared/widgets";
+import { isRepeatable, MAX_WIDGETS, MY_TASKS_DEFAULTS } from "./shared/widgets";
 
 /** Puts what every new home starts with on a person's, who has none yet. */
 export async function addStarterWidgets(
@@ -43,6 +45,17 @@ async function ownWidget(
   return widget;
 }
 
+/** Settings fit to keep: a clock's time zone has to be one there is. */
+function checkSettings(settings: WidgetSettings): void {
+  if (
+    settings.type === "clock" &&
+    settings.timeZone !== undefined &&
+    !isTimeZone(settings.timeZone)
+  ) {
+    throw new ConvexError("That time zone doesn’t exist.");
+  }
+}
+
 /** The signed-in person's widgets, in the order they arranged them. */
 export const list = query({
   args: {},
@@ -60,9 +73,16 @@ export const add = mutation({
   args: { settings: vWidgetSettings },
   handler: async (ctx, { settings }) => {
     const user = await requireUser(ctx);
+    checkSettings(settings);
     const widgets = await widgetsOf(ctx, user._id);
     if (widgets.length >= MAX_WIDGETS) {
       throw new ConvexError(`Your home holds up to ${MAX_WIDGETS} widgets.`);
+    }
+    if (
+      !isRepeatable(settings.type) &&
+      widgets.some((widget) => widget.settings.type === settings.type)
+    ) {
+      throw new ConvexError("That widget is already on your home.");
     }
     const last =
       widgets.length > 0
@@ -85,6 +105,7 @@ export const update = mutation({
     if (settings.type !== widget.settings.type) {
       throw new ConvexError("A widget can’t turn into another kind.");
     }
+    checkSettings(settings);
     await ctx.db.patch(widgetId, { settings });
   },
 });

@@ -21,6 +21,7 @@ import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
 import type { User } from "@/hooks/use-users";
+import { localTimeZone, offsetOf } from "@/lib/time-zones";
 
 import silhouette from "../character/icons/silhouette.webp";
 
@@ -97,34 +98,6 @@ export function PersonTag({
   );
 }
 
-const offsetFormat = (timeZone: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    hour: "numeric",
-    hour12: false,
-    minute: "numeric",
-    month: "numeric",
-    timeZone,
-    year: "numeric",
-  });
-
-/** Minutes a time zone is ahead of UTC, now. */
-function offsetOf(timeZone: string, now: number): number {
-  const parts = Object.fromEntries(
-    offsetFormat(timeZone)
-      .formatToParts(now)
-      .map((part) => [part.type, Number(part.value)])
-  );
-  const local = Date.UTC(
-    parts.year ?? 0,
-    (parts.month ?? 1) - 1,
-    parts.day ?? 1,
-    (parts.hour ?? 0) % 24,
-    parts.minute ?? 0
-  );
-  return Math.round((local - now) / 60_000);
-}
-
 function hours(minutes: number): string {
   const value = Math.abs(minutes) / 60;
   const shown = Number.isInteger(value) ? value : value.toFixed(1);
@@ -143,8 +116,7 @@ function localTime(timeZone: string, now: number): string {
   } catch {
     return "";
   }
-  const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const apart = offsetOf(timeZone, now) - offsetOf(mine, now);
+  const apart = offsetOf(timeZone, now) - offsetOf(localTimeZone(), now);
   if (apart === 0) {
     return `${time}, as for you`;
   }

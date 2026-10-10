@@ -3,15 +3,25 @@ import type { WidgetSettings } from "@convex/lib/validators";
 
 export type { WidgetSettings } from "@convex/lib/validators";
 export {
+  CLOCK_DEFAULTS,
+  CLOCK_LOOKS,
   FINANCE_DEFAULTS,
   HABITS_DEFAULTS,
+  HOUR_CYCLES,
+  isRepeatable,
   MAX_WIDGETS,
   MY_TASKS_DEFAULTS,
   TASK_SCOPES,
   TASK_SORTS,
   TIMEFRAMES,
 } from "@convex/shared/widgets";
-export type { TaskScope, TaskSort, Timeframe } from "@convex/shared/widgets";
+export type {
+  ClockLook,
+  HourCycle,
+  TaskScope,
+  TaskSort,
+  Timeframe,
+} from "@convex/shared/widgets";
 
 export type Widget = Doc<"widgets">;
 

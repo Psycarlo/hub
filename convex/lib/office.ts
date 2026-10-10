@@ -12,21 +12,7 @@ import {
   seatById,
 } from "../shared/office";
 import { onlineIn } from "./presence";
-
-const TIME_ZONE = /^[\w+-]+(?:\/[\w+-]+)*$/u;
-
-/** A time zone the server knows, or UTC. */
-export function cleanTimeZone(timeZone: string): string {
-  if (timeZone.length > 64 || !TIME_ZONE.test(timeZone)) {
-    return "UTC";
-  }
-  try {
-    return new Intl.DateTimeFormat("en", { timeZone }).resolvedOptions()
-      .timeZone;
-  } catch {
-    return "UTC";
-  }
-}
+import { cleanTimeZone } from "./time-zones";
 
 export function avatarOf(
   ctx: QueryCtx,

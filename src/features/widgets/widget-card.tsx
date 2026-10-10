@@ -1,9 +1,10 @@
+import type { Id } from "@convex/_generated/dataModel";
 import { KeyboardSensor, PointerSensor } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Settings2Icon, Trash2Icon } from "lucide-react";
 import type { HTMLMotionProps } from "motion/react";
 import { motion } from "motion/react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { kindOf } from "@/features/widgets/kinds";
+import { kindOf, titleOf } from "@/features/widgets/kinds";
 import { WidgetIcon } from "@/features/widgets/widget-parts";
 import { removeWidget, updateWidget } from "@/lib/widget-actions";
 import type { Widget } from "@/lib/widgets";
@@ -41,9 +42,35 @@ const SENSORS = [
   KeyboardSensor,
 ];
 
+/** Each card's way to open its settings, by widget. */
+const openers = new Map<Id<"widgets">, () => void>();
+/** A widget whose settings should open once its card is in. */
+let pending: Id<"widgets"> | undefined;
+
+/** Opens a widget's settings, now or as soon as its card is on the home. */
+export function openWidgetSettings(widgetId: Id<"widgets">): void {
+  const open = openers.get(widgetId);
+  if (open) {
+    open();
+  } else {
+    pending = widgetId;
+  }
+}
+
 /** The widget's settings, from a button in its corner, and removing it. */
 function WidgetSettings({ widget }: { widget: Widget }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const opener = () => setOpen(true);
+    openers.set(widget._id, opener);
+    if (pending === widget._id) {
+      pending = undefined;
+      opener();
+    }
+    return () => {
+      openers.delete(widget._id);
+    };
+  }, [widget._id]);
   const { Settings, name } = kindOf(widget.settings);
   const label = `${name} settings`;
   return (
@@ -110,7 +137,7 @@ export function WidgetCard({ widget, index, exit, variants }: WidgetCardProps) {
     type: "widget",
   });
   const titleId = useId();
-  const { Body, color, icon, name } = kindOf(widget.settings);
+  const { Body, color, icon } = kindOf(widget.settings);
   return (
     <motion.div
       aria-labelledby={titleId}
@@ -125,7 +152,7 @@ export function WidgetCard({ widget, index, exit, variants }: WidgetCardProps) {
       <div className="flex items-center gap-3">
         <WidgetIcon color={color} icon={icon} />
         <h3 className="min-w-0 truncate text-sm font-medium" id={titleId}>
-          {name}
+          {titleOf(widget.settings)}
         </h3>
         <WidgetSettings widget={widget} />
       </div>

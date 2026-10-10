@@ -151,6 +151,15 @@
   background-size: 180px;
 }
 
+/* Fine diagonal lines, like the night side of a map. */
+@utility bg-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--foreground) 16%, transparent) 0 1px,
+    transparent 1px 5px
+  );
+}
+
 @utility image-outline {
   outline: 1px solid oklch(0 0 0 / 0.1);
   outline-offset: -1px;
