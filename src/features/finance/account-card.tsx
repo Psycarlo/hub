@@ -2,6 +2,7 @@ import { api } from "@convex/_generated/api";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { LandmarkIcon, PlusIcon, WalletIcon } from "lucide-react";
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 
@@ -11,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CARD_SURFACE } from "@/features/boards/board-card";
 import { accountPath, financePath } from "@/features/finance/finance-context";
 import { CREDIT_TEXT } from "@/features/finance/finance-parts";
+import { WalletCard } from "@/features/finance/wallet-card";
 import { useToday } from "@/hooks/use-today";
 import type { Account, Entry, MonthTotals } from "@/lib/finance";
 import {
@@ -34,9 +36,21 @@ function waiting(totals: MonthTotals, currency: Fiat): string {
   return parts.length > 0 ? parts.join(" · ") : "Nothing waiting";
 }
 
-function Net({ cents, currency }: { cents: number; currency: Fiat }) {
+function Net({
+  cents,
+  currency,
+  wallet = false,
+}: {
+  cents: number;
+  currency: Fiat;
+  wallet?: boolean;
+}) {
   return (
-    <span className={cn(cents > 0 && CREDIT_TEXT)}>
+    <span
+      className={cn(
+        cents > 0 && (wallet ? "text-(--wallet-credit)" : CREDIT_TEXT)
+      )}
+    >
       {formatMoney(cents, currency, { signed: true })}
     </span>
   );
@@ -82,34 +96,69 @@ function AccountCardLink({
   );
 }
 
-function Figures({
+const EASE = [0.23, 1, 0.32, 1] as const;
+
+/** Brings the figures into a wallet's pocket out of a soft blur, as they load. */
+function Appear({ children }: { children: ReactNode }) {
+  return (
+    <motion.div
+      animate={{ filter: "blur(0px)", opacity: 1 }}
+      className="flex min-w-0 flex-col"
+      initial={{ filter: "blur(4px)", opacity: 0 }}
+      transition={{ duration: 0.45, ease: EASE }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+export function Figures({
   totals,
   currency,
   note,
+  wallet = false,
 }: {
   totals?: MonthTotals;
   currency: Fiat;
   /** Says the month hasn't started, in place of what's waiting. */
   note?: string;
+  /** In a wallet's pocket: larger, in the leather's colors. */
+  wallet?: boolean;
 }) {
   if (!totals) {
-    return (
+    return wallet ? (
+      <>
+        <Skeleton className="my-1.5 h-6 w-36 rounded-md bg-(--wallet-skeleton)" />
+        <Skeleton className="my-1 h-3.5 w-40 rounded-md bg-(--wallet-skeleton)" />
+      </>
+    ) : (
       <>
         <Skeleton className="my-0.5 h-6 w-28 rounded-md" />
         <Skeleton className="my-1 h-3.5 w-36 rounded-md" />
       </>
     );
   }
-  return (
+  const figures = (
     <>
-      <span className="text-lg font-semibold tracking-tight">
-        <Net cents={totals.net} currency={currency} />
+      <span
+        className={cn(
+          "font-semibold tracking-tight",
+          wallet ? "truncate text-[1.75rem] leading-9" : "text-lg"
+        )}
+      >
+        <Net cents={totals.net} currency={currency} wallet={wallet} />
       </span>
-      <span className="text-muted-foreground text-sm">
+      <span
+        className={cn(
+          "text-sm",
+          wallet ? "truncate text-(--wallet-muted)" : "text-muted-foreground"
+        )}
+      >
         {note ?? waiting(totals, currency)}
       </span>
     </>
   );
+  return wallet ? <Appear>{figures}</Appear> : figures;
 }
 
 /**
@@ -207,15 +256,8 @@ export function AccountGrid({
           <TotalFigures accounts={counted} entries={entries} today={today} />
         </AccountCardLink>
       )}
-      {accounts.map((account) => (
-        <AccountCardLink
-          description={account.description}
-          excluded={account.excludedFromTotal}
-          href={accountPath(project, account)}
-          icon={<WalletIcon />}
-          key={account._id}
-          title={account.title}
-        >
+      {accounts.map((account) => {
+        const figures = (
           <Figures
             currency={account.currency}
             note={
@@ -230,9 +272,40 @@ export function AccountGrid({
                 today
               )
             }
+            wallet={account.look !== undefined}
           />
-        </AccountCardLink>
-      ))}
+        );
+        if (account.look) {
+          return (
+            <Link
+              className="focus-visible:ring-ring/50 rounded-[1.375rem] transition-[scale] duration-150 ease-out outline-none focus-visible:ring-3 active:scale-[0.99]"
+              href={accountPath(project, account)}
+              key={account._id}
+            >
+              <WalletCard
+                currency={account.currency}
+                excluded={account.excludedFromTotal}
+                look={account.look}
+                title={account.title}
+              >
+                {figures}
+              </WalletCard>
+            </Link>
+          );
+        }
+        return (
+          <AccountCardLink
+            description={account.description}
+            excluded={account.excludedFromTotal}
+            href={accountPath(project, account)}
+            icon={<WalletIcon />}
+            key={account._id}
+            title={account.title}
+          >
+            {figures}
+          </AccountCardLink>
+        );
+      })}
     </div>
   );
 }

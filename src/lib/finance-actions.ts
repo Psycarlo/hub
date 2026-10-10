@@ -7,6 +7,7 @@ import type { LabelChanges } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import type {
   Account,
+  AccountLook,
   Category,
   Entry,
   EntryKind,
@@ -22,6 +23,8 @@ export interface AccountDraft {
   description: string;
   currency: Fiat;
   excludedFromTotal: boolean;
+  /** Null draws it as the plain tile. */
+  look: AccountLook | null;
 }
 
 /** The bitcoin a debit bought, recorded in a portfolio with it. */
@@ -125,12 +128,20 @@ export function updateAccount(
       api.finance.updateAccount,
       { accountId: account._id, ...changes },
       {
-        optimisticUpdate: (store) =>
+        optimisticUpdate: (store) => {
+          const { look, ...rest } = changes;
           patchAccounts(store, (accounts) =>
             accounts.map((item) =>
-              item._id === account._id ? { ...item, ...changes } : item
+              item._id === account._id
+                ? {
+                    ...item,
+                    ...rest,
+                    ...(look === undefined ? {} : { look: look ?? undefined }),
+                  }
+                : item
             )
-          ),
+          );
+        },
       }
     )
   );

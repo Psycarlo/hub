@@ -15,7 +15,7 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { vBoardLabel, vEntryKind, vFiat } from "./lib/validators";
+import { vAccountLook, vBoardLabel, vEntryKind, vFiat } from "./lib/validators";
 import { insertBuy } from "./portfolios";
 import { shortId } from "./shared/crm";
 import type { Category, EntryKind } from "./shared/finance";
@@ -34,6 +34,7 @@ import {
   nextMonth,
 } from "./shared/finance";
 import { LABEL_ID, canManageRole, labelKey, sortLabels } from "./shared/model";
+import { isHexColor } from "./shared/palette";
 import type { Fiat } from "./shared/portfolio";
 import { SATS_PER_BTC } from "./shared/portfolio";
 
@@ -679,11 +680,29 @@ function canManageAccount(
   );
 }
 
+type AccountLook = NonNullable<Doc<"financeAccounts">["look"]>;
+
+/** The look with its colors as lowercase `#rrggbb`. */
+function cleanLook({ card, network, wallet }: AccountLook): AccountLook {
+  const cardHex = card.toLowerCase();
+  const walletHex = wallet.toLowerCase();
+  if (!(isHexColor(cardHex) && isHexColor(walletHex))) {
+    throw new ConvexError(
+      "Pick the wallet and card colors as hexes, like #2b7fff."
+    );
+  }
+  return { card: cardHex, wallet: walletHex, ...(network ? { network } : {}) };
+}
+
+/** A look for the account's wallet, or null for the plain tile. */
+const vLookChange = v.union(vAccountLook, v.null());
+
 export const createAccount = mutation({
   args: {
     currency: vFiat,
     description: v.string(),
     excludedFromTotal: v.boolean(),
+    look: v.optional(vLookChange),
     projectId: v.id("projects"),
     title: v.string(),
   },
@@ -708,6 +727,7 @@ export const createAccount = mutation({
       currency: args.currency,
       description: args.description.trim().slice(0, MAX_DESCRIPTION),
       excludedFromTotal: args.excludedFromTotal,
+      ...(args.look ? { look: cleanLook(args.look) } : {}),
       projectId: args.projectId,
       title: cleanTitle(args.title),
     });
@@ -720,6 +740,7 @@ export const updateAccount = mutation({
     currency: v.optional(vFiat),
     description: v.optional(v.string()),
     excludedFromTotal: v.optional(v.boolean()),
+    look: v.optional(vLookChange),
     title: v.optional(v.string()),
   },
   handler: async (ctx, { accountId, ...changes }) => {
@@ -741,6 +762,10 @@ export const updateAccount = mutation({
     }
     if (changes.excludedFromTotal !== undefined) {
       patch.excludedFromTotal = changes.excludedFromTotal;
+    }
+    if (changes.look !== undefined) {
+      // Undefined takes the field away, back to the plain tile.
+      patch.look = changes.look ? cleanLook(changes.look) : undefined;
     }
     await ctx.db.patch(accountId, patch);
   },

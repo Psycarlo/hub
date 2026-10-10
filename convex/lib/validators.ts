@@ -8,7 +8,7 @@ import {
   STAGE_KINDS,
   TABLE_ICONS,
 } from "../shared/crm";
-import { ENTRY_KINDS } from "../shared/finance";
+import { CARD_NETWORKS, ENTRY_KINDS } from "../shared/finance";
 import { HABIT_ICONS } from "../shared/habits";
 import {
   APP_ROLES,
@@ -51,6 +51,7 @@ export const vActivityType = oneOf(ACTIVITY_TYPES.map(({ id }) => id));
 export const vFiat = oneOf(FIATS);
 export const vTransactionKind = oneOf(TRANSACTION_KINDS);
 export const vEntryKind = oneOf(ENTRY_KINDS);
+export const vCardNetwork = oneOf(CARD_NETWORKS);
 export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
@@ -60,6 +61,16 @@ export const vBoardLabel = v.object({
   color: vColor,
   id: v.string(),
   name: v.string(),
+});
+
+/** An account drawn as a card in a leather wallet, rather than a plain tile. */
+export const vAccountLook = v.object({
+  /** The card peeking out of the wallet. */
+  card: vHexColor,
+  /** Whose logo the card shows; a chip alone otherwise. */
+  network: v.optional(vCardNetwork),
+  /** The wallet's leather. */
+  wallet: vHexColor,
 });
 
 /** What a board's new cards start with, before anything is picked. */

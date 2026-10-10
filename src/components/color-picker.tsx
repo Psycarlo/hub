@@ -66,11 +66,13 @@ export function ColorPicker({
 export function CustomColorPicker({
   value,
   onChange,
+  custom = isHexColor(value),
 }: {
   value: Color | HexColor;
   onChange: (color: HexColor) => void;
+  /** Whether the value is off the swatches beside it; any hex is, unless said. */
+  custom?: boolean;
 }) {
-  const custom = isHexColor(value);
   return (
     <Popover>
       <PopoverTrigger
@@ -101,9 +103,63 @@ export function CustomColorPicker({
       >
         <HexColorPicker
           onChange={onChange}
-          value={custom ? value : HEX_COLORS[value]}
+          value={isHexColor(value) ? value : HEX_COLORS[value]}
         />
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** A color picked out ahead, with a name to read it by. */
+export interface HexSwatch {
+  name: string;
+  hex: HexColor;
+}
+
+/** Swatches of colors picked out ahead, and the custom one after them for any other. */
+export function HexSwatchPicker({
+  swatches,
+  value,
+  onChange,
+  ...props
+}: {
+  swatches: readonly HexSwatch[];
+  value: HexColor;
+  onChange: (color: HexColor) => void;
+  "aria-labelledby"?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <ToggleGroup
+        className="flex-wrap gap-2"
+        onValueChange={(next) => {
+          const swatch = swatches.find(({ hex }) => hex === next[0]);
+          if (swatch) {
+            onChange(swatch.hex);
+          }
+        }}
+        value={[value]}
+        {...props}
+      >
+        {swatches.map(({ name, hex }) => (
+          <ToggleGroupItem
+            aria-label={name}
+            // Outlined, so the darkest swatches still stand off the popover.
+            className={cn(
+              SWATCH,
+              "shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1)] data-pressed:ring-2 dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.2)]"
+            )}
+            key={hex}
+            style={{ background: hex }}
+            value={hex}
+          />
+        ))}
+      </ToggleGroup>
+      <CustomColorPicker
+        custom={!swatches.some(({ hex }) => hex === value)}
+        onChange={onChange}
+        value={value}
+      />
+    </div>
   );
 }

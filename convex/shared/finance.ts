@@ -19,6 +19,11 @@ export const MAX_CATEGORIES = 100;
 /** A trillion, in cents: far past any one entry, to catch a slipped finger. */
 export const MAX_CENTS = 100_000_000_000_000;
 
+/** Card networks whose logo an account's wallet can show on its card. */
+export const CARD_NETWORKS = ["visa", "mastercard"] as const;
+
+export type CardNetwork = (typeof CARD_NETWORKS)[number];
+
 /** `YYYY-MM-DD`, the way entries are dated. */
 const DATE = /^(?<month>\d{4}-(?:0[1-9]|1[0-2]))-(?<day>0[1-9]|[12]\d|3[01])$/u;
 /** `YYYY-MM`, the way months are named. */

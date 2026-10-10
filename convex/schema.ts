@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import {
+  vAccountLook,
   vActivityType,
   vAppRole,
   vBoardLabel,
@@ -462,6 +463,8 @@ export default defineSchema({
     description: v.string(),
     /** Left out of the project's total, like savings kept apart. */
     excludedFromTotal: v.optional(v.boolean()),
+    /** Drawn as a card in a wallet; a plain tile without. */
+    look: v.optional(vAccountLook),
     projectId: v.id("projects"),
     title: v.string(),
   }).index("by_project", ["projectId"]),

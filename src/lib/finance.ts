@@ -7,6 +7,7 @@ import type { Fiat } from "@/lib/portfolio";
 import { formatFiat, parsePrice } from "@/lib/portfolio";
 
 export {
+  CARD_NETWORKS,
   ENTRY_KINDS,
   MAX_ACCOUNT_TITLE,
   MAX_CATEGORIES,
@@ -19,10 +20,12 @@ export {
   nextMonth,
   signedCents,
 } from "@convex/shared/finance";
-export type { Category, EntryKind } from "@convex/shared/finance";
+export type { CardNetwork, Category, EntryKind } from "@convex/shared/finance";
 export type { BuyLink, FinanceOverview, UnpaidEntry } from "@convex/finance";
 
 export type Account = Doc<"financeAccounts">;
+/** An account drawn as a card in a wallet, in their colors. */
+export type AccountLook = NonNullable<Account["look"]>;
 export type Entry = Doc<"financeEntries">;
 export type Recurring = Doc<"financeRecurring">;
 export type FinanceMonth = Doc<"financeMonths">;

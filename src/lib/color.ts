@@ -68,6 +68,21 @@ export function hexToHsv(hex: HexColor, previous?: Hsv): Hsv {
   return { h, s, v: max };
 }
 
+/** `color` moved toward `other` by `amount`, from 0 to 1, in sRGB. */
+export function mixHex(
+  color: HexColor,
+  other: HexColor,
+  amount: number
+): HexColor {
+  const from = rgb(color);
+  const to = rgb(other);
+  const channel = (index: 0 | 1 | 2) =>
+    Math.round((from[index] + (to[index] - from[index]) * amount) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
 function linear(channel: number): number {
   return channel <= 0.04045
     ? channel / 12.92
