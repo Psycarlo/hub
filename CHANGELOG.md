@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-10
+
+### Added
+
+- Install Hub as an app on your phone or computer, from Settings or your browser.
+- New versions load by themselves while you're away, without losing uploads or unsaved typing.
+- Check for updates from Settings.
+- Phone status bar and the installed app's title bar match your theme.
+
+### Changed
+
+- New logo and app icons.
+- Boards, cards, docs and the inbox load with less data.
+
+### Fixed
+
+- Toasts, sheets and the mobile sidebar sit clear of the home indicator on phones.
+
 ## [0.1.0] - 2026-10-10
 
 ### Added
