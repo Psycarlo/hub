@@ -5,16 +5,17 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { MathUtils, PMREMGenerator, Vector3 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-import type { Character } from "@/lib/character";
+import type { Character, Hat } from "@/lib/character";
 
 import { CharacterModel } from "./character-model";
+import { LIGHTS } from "./model";
 import type { Move } from "./moves";
 
 const FOV = 26;
 
-/** How tall the character stands: to the crown, or to the top of a chef's hat. */
+/** How tall the character stands: to the crown, or to the top of a tall hat. */
 const HEIGHT = 1.28;
-const CHEF_HEIGHT = 1.45;
+const TALL_HATS: Partial<Record<Hat, number>> = { chef: 1.45, party: 1.52 };
 
 /** How high a jump lifts it: moving, the camera backs off to keep it in. */
 const LEAP = 0.42;
@@ -22,15 +23,18 @@ const LEAP = 0.42;
 /** Room kept clear above and below the character. */
 const MARGIN = 0.12;
 
+/** Room below its feet for the shadow it casts, so the frame doesn't cut it. */
+const FLOOR = 0.16;
+
 /** How high the camera starts above what it looks at, as a share of its distance. */
 const LIFT = 0.12;
 
 /** Where the camera looks, and how far back it stands, to fit this tall a figure. */
 function frame(height: number) {
-  const half = height / 2 + MARGIN;
+  const half = (height + FLOOR) / 2 + MARGIN;
   return {
     distance: half / Math.tan(MathUtils.degToRad(FOV / 2)),
-    target: new Vector3(0, height / 2, 0),
+    target: new Vector3(0, (height - FLOOR) / 2, 0),
   };
 }
 
@@ -96,12 +100,15 @@ function Lights() {
   return (
     <>
       <Studio />
-      <hemisphereLight args={["#fffaf2", "#a9b4d0", 0.7]} />
-      <directionalLight intensity={1.45} position={[2.5, 4, 3]} />
+      <hemisphereLight args={[LIGHTS.sky, LIGHTS.ground, LIGHTS.hemisphere]} />
       <directionalLight
-        color="#dfe8ff"
-        intensity={0.45}
-        position={[-3, 2, -2.5]}
+        intensity={LIGHTS.key.intensity}
+        position={LIGHTS.key.position}
+      />
+      <directionalLight
+        color={LIGHTS.rim.color}
+        intensity={LIGHTS.rim.intensity}
+        position={LIGHTS.rim.position}
       />
     </>
   );
@@ -133,15 +140,17 @@ export default function CharacterStage({
   character,
   move,
   onMoveEnd,
+  onReady,
 }: {
   character: Character;
   move?: Move;
   onMoveEnd?: () => void;
+  /** When the character has loaded and shows. */
+  onReady?: () => void;
 }) {
   const [ref, onScreen] = useOnScreen();
   const height =
-    (character.hat === "chef" ? CHEF_HEIGHT : HEIGHT) +
-    (move && move !== "idle" ? LEAP : 0);
+    (TALL_HATS[character.hat] ?? HEIGHT) + (move && move !== "idle" ? LEAP : 0);
   return (
     <div className="size-full" ref={ref}>
       <Canvas
@@ -153,7 +162,7 @@ export default function CharacterStage({
         flat
         frameloop={onScreen ? "always" : "never"}
         gl={{ alpha: true, antialias: true }}
-        scene={{ environmentIntensity: 0.45 }}
+        scene={{ environmentIntensity: LIGHTS.environment }}
       >
         <Lights />
         <Suspense fallback={null}>
@@ -161,6 +170,7 @@ export default function CharacterStage({
             character={character}
             move={move}
             onMoveEnd={onMoveEnd}
+            onReady={onReady}
           />
         </Suspense>
         <ContactShadows

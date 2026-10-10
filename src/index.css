@@ -636,3 +636,35 @@
   background: color-mix(in oklab, var(--primary) 85%, var(--foreground));
   pointer-events: none;
 }
+
+/* A character's outline while it loads, with a sheen sweeping across it. The
+   outline comes as a mask image, set where it's used. */
+@layer components {
+  .character-loading {
+    background: linear-gradient(
+      110deg,
+      color-mix(in oklab, var(--foreground) 6%, transparent) 35%,
+      color-mix(in oklab, var(--foreground) 13%, transparent) 50%,
+      color-mix(in oklab, var(--foreground) 6%, transparent) 65%
+    );
+    background-size: 250% 100%;
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    animation: character-sheen 1.6s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  }
+
+  @keyframes character-sheen {
+    from {
+      background-position: 120% 0;
+    }
+
+    to {
+      background-position: -20% 0;
+    }
+  }
+}

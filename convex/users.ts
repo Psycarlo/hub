@@ -21,7 +21,11 @@ import { dropFile, ownedFile } from "./lib/files";
 import { mediaUrl } from "./lib/media";
 import { vAppRole, vCharacter, vFiat } from "./lib/validators";
 import type { Character } from "./shared/character";
-import { isCharacter, startingCharacter } from "./shared/character";
+import {
+  completeCharacter,
+  isCharacter,
+  startingCharacter,
+} from "./shared/character";
 import type { Fiat } from "./shared/portfolio";
 import { DEFAULT_FIAT } from "./shared/portfolio";
 
@@ -48,7 +52,9 @@ function displayName(user: Doc<"users">): string {
 export function toUserView(user: Doc<"users">): UserView {
   return {
     _id: user._id,
-    character: user.character ?? startingCharacter(user._id),
+    character: user.character
+      ? completeCharacter(user.character)
+      : startingCharacter(user._id),
     currency: user.currency ?? DEFAULT_FIAT,
     deactivated: user.deactivated ?? false,
     email: user.email ?? "",

@@ -8,18 +8,18 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
-import { useId, useRef, useState } from "react";
+import { lazy, Suspense, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UserAvatar } from "@/components/user-avatar";
-import { CharacterEditor } from "@/features/character/character-editor";
 import { useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { APP_NAME, APP_VERSION } from "@/lib/brand";
@@ -37,6 +37,12 @@ import { isImage, uploadFile } from "@/lib/upload";
 import { CHOICE } from "./choice";
 
 const MIN_PASSWORD = 8;
+
+// The character editor brings its wardrobe and icons, which only this page needs.
+const CharacterEditor = lazy(async () => {
+  const module = await import("@/features/character/character-editor");
+  return { default: module.CharacterEditor };
+});
 
 const THEMES = [
   { icon: SunIcon, label: "Light", value: "light" },
@@ -461,7 +467,9 @@ export function SettingsPage() {
           description="The you that walks around with your team, soon."
           title="Character"
         >
-          <CharacterEditor />
+          <Suspense fallback={<Skeleton className="h-88 rounded-xl" />}>
+            <CharacterEditor />
+          </Suspense>
         </Section>
         <Section title="Password">
           <PasswordForm />

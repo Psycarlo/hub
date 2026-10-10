@@ -1,7 +1,18 @@
 import type { Infer, VLiteral, VString, VUnion } from "convex/values";
 import { v } from "convex/values";
 
-import { GLASSES, HAIR_STYLES, HATS, TOPS } from "../shared/character";
+import {
+  BODIES,
+  BOTTOMS,
+  CHEEKS,
+  EYES,
+  FACIAL_HAIR,
+  GLASSES,
+  HAIR_STYLES,
+  HATS,
+  MOUTHS,
+  TOPS,
+} from "../shared/character";
 import {
   ACTIVITY_TYPES,
   CURRENCIES,
@@ -58,14 +69,24 @@ export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vTaskSort = oneOf(TASK_SORTS);
 
-/** Someone's character: what they wear, and every color as `#rrggbb`. */
+/**
+ * Someone's character: what they wear, and every color as `#rrggbb`. Fields
+ * added since characters were first saved are optional, missing on those.
+ */
 export const vCharacter = v.object({
+  body: v.optional(oneOf(BODIES)),
+  bottom: v.optional(oneOf(BOTTOMS)),
   bottomColor: vHexColor,
+  cheeks: v.optional(oneOf(CHEEKS)),
+  eyes: v.optional(oneOf(EYES)),
+  facialHair: v.optional(oneOf(FACIAL_HAIR)),
   glasses: oneOf(GLASSES),
+  glassesColor: v.optional(vHexColor),
   hair: oneOf(HAIR_STYLES),
   hairColor: vHexColor,
   hat: oneOf(HATS),
   hatColor: vHexColor,
+  mouth: v.optional(oneOf(MOUTHS)),
   shoesColor: vHexColor,
   skin: vHexColor,
   top: oneOf(TOPS),

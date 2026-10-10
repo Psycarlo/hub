@@ -8,16 +8,27 @@ Overcooked: a big round head, a small body, short arms ending in mitten hands,
 and stubby legs in round shoes.
 
 Every part is rigid and parented to one bone, so nothing bends and nothing
-needs skin weights. Parts that people pick between (hair, hats, glasses, tops)
-are all in the file, tagged with glTF extras that the app reads:
+needs skin weights. Parts that people pick between are all in the file, tagged
+with glTF extras that the app reads:
 
-  slot     "hair", "hat", "glasses" or "top"
-  variant  the option's id, matching convex/shared/character.ts
-  hat      on hair only: 1 for the version worn under a hat, cut to fit it
+  slot     the field of convex/shared/character.ts it's picked by: "eyes",
+           "mouth", "cheeks", "facialHair", "hair", "hat", "glasses", "top"
+           or "bottom"
+  variant  the option's id there, or several separated by spaces when one
+           part serves more than one option
+  hat      on hair: 1 for the version worn under a hat that covers it, cut
+           and pressed down to fit under it
+  lift     on hair: how far it stands off the crown, as a share of the head's
+           radius, for hats that perch on it rather than cover it
+  perch    on hats: 1 for those that sit on the hair, like a crown
+  top      on overalls: the top they're shaped to fit over
+  body     on parts made for one body, "male" or "female": its tops and its
+           eyes
 
 Materials are named for what they color ("Skin", "Hair", "Top"...), and the
-app recolors them per person. Animations are actions on the armature, one per
-move: idle, walk, run, jump, wave and dance.
+app recolors them per person; "TopTrim" and the like it works out from those.
+Animations are actions on the armature, one per move: idle, walk, run, jump,
+wave and dance.
 
 Run with Blender 5.2 or later, and Node on the PATH to compress the result:
 
@@ -55,18 +66,30 @@ HEAD_RADII = Vector((0.31, 0.29, 0.29))
 MATERIALS = {
     "Bottom": "#3d5a80",
     "Cheek": "#ff9f9f",
+    "Cushion": "#2b2b33",
     "Drawstring": "#f4f1ea",
+    "EarInner": "#ffb3c1",
     "Eye": "#1f1b24",
     "EyeWhite": "#ffffff",
     "Frame": "#2b2b33",
+    "Freckle": "#b5714a",
+    "Gem": "#e5484d",
+    "Gold": "#f2c14e",
     "Hair": "#5a3825",
-    "Hat": "#f4f1ea",
+    "HairTie": "#e5484d",
+    "Hat": "#e05d5d",
+    "HatAccent": "#f4f1ea",
     "Lens": "#20263a",
     "Mouth": "#8a3b3b",
-    "Shoes": "#f4f1ea",
+    "Shoes": "#e5484d",
+    "ShoesTrim": "#f4f1ea",
     "Skin": "#f2c29b",
     "Sole": "#8e7f74",
+    "Teeth": "#ffffff",
+    "Tongue": "#ff8a8a",
     "Top": "#ff7a59",
+    "TopAccent": "#f4f1ea",
+    "TopTrim": "#d9603f",
 }
 
 # Bone name: (head, tail, parent). Arms hang a little out, like an A.
@@ -81,9 +104,49 @@ BONES = {
     "leg_R": ((-0.075, 0, 0.24), (-0.075, 0, 0.05), "hips"),
 }
 
-# Where hats sit on the head, as heights on the unit head (-1 chin, 1 crown)
-# at the front, the sides and the back.
+# Where hats that cover the hair come down to, as heights on the unit head (-1
+# chin, 1 crown) at the front, the sides and the back. Every one of them comes
+# down to here, so one cut of each hairstyle fits under them all.
 HAT_LINE = (0.45, 0.25, 0.05)
+# How thick hair can be under such a hat: they all stand further off than this.
+UNDER_HAT = 0.085
+
+# The torsos every top is turned from, one for each body, as (radius, height)
+# from the neck down, flattened front to back by DEPTH. Tops scale them out to
+# sit over each other. The female one is narrower at the shoulders and waist,
+# and flares a little at the hips.
+BODIES = {
+    "male": [
+        (0.0, 0.63),
+        (0.065, 0.624),
+        (0.105, 0.61),
+        (0.135, 0.588),
+        (0.152, 0.56),
+        (0.162, 0.525),
+        (0.166, 0.48),
+        (0.167, 0.42),
+        (0.165, 0.36),
+        (0.16, 0.3),
+        (0.154, 0.27),
+        (0.15, 0.25),
+    ],
+    "female": [
+        (0.0, 0.63),
+        (0.058, 0.624),
+        (0.094, 0.61),
+        (0.12, 0.588),
+        (0.134, 0.56),
+        (0.142, 0.525),
+        (0.144, 0.48),
+        (0.136, 0.43),
+        (0.14, 0.38),
+        (0.154, 0.32),
+        (0.167, 0.28),
+        (0.171, 0.25),
+    ],
+}
+DEPTH = 0.82
+HEM = 0.258
 
 
 # --- Math ---------------------------------------------------------------------
@@ -172,6 +235,28 @@ def off_head(d, out):
 
 def rise_of(height):
     return math.asin(max(-0.99, min(0.99, height)))
+
+
+def radius_at(profile, z):
+    """A turned shape's radius at height z, between its (radius, height) points."""
+    for (r0, z0), (r1, z1) in zip(profile, profile[1:]):
+        if z1 <= z <= z0:
+            return lerp(r0, r1, (z0 - z) / (z0 - z1)) if z0 != z1 else r1
+    return profile[-1][0] if z < profile[-1][1] else profile[0][0]
+
+
+def on_torso(scale, x, z, back=False, out=0.0, body="male"):
+    """
+    The point on the front (or back) of a top scaled from a body at x and z,
+    and the way it faces.
+    """
+    shape = BODIES[body]
+    r = radius_at(shape, z) * scale
+    x = max(-r * 0.995, min(r * 0.995, x))
+    y = DEPTH * math.sqrt(r * r - x * x) * (1 if back else -1)
+    slope = (radius_at(shape, z + 0.005) - radius_at(shape, z - 0.005)) * scale / 0.01
+    normal = Vector((x / r**2, y / (r * DEPTH) ** 2, -slope / r)).normalized()
+    return Vector((x, y, z)) + normal * out, normal
 
 
 # --- Materials ----------------------------------------------------------------
@@ -301,7 +386,7 @@ class Part:
                 self.sphere(points[i], (r, r, r), mat, seg=sides, rings=7)
         return verts
 
-    def cap(self, start, thick, mat, end=None, segs=64, rings=16):
+    def cap(self, start, thick, mat, end=None, segs=56, rings=14):
         """
         A shell over the head from a line up, like hair or a hat. `start(turn)`
         is the height on the unit head its edge runs at, all the way around;
@@ -348,11 +433,126 @@ class Part:
             verts.append(pole)
         self._paint(verts, mat)
 
+    def lathe(self, profile, mat, segs=40, depth=1.0, wobble=None, base=(0, 0, 0), axis=(0, 0, 1)):
+        """
+        A shape turned around an axis from (radius, height) points in order; a
+        radius of 0 closes it there. `depth` flattens it front to back, and
+        `wobble(turn, height)` scales the radius, for ribs and pleats. Turns
+        start at the front (-Y) and grow toward the left.
+        """
+        rot = Vector((0, 0, 1)).rotation_difference(Vector(axis).normalized()).to_matrix()
+        base = Vector(base)
+        rings = []
+        for r, h in profile:
+            if r <= 0:
+                rings.append([self.bm.verts.new(base + rot @ Vector((0, 0, h)))])
+                continue
+            ring = []
+            for i in range(segs):
+                turn = 2 * math.pi * i / segs
+                k = wobble(turn, h) if wobble else 1.0
+                local = Vector((math.sin(turn) * r * k, -math.cos(turn) * r * k * depth, h))
+                ring.append(self.bm.verts.new(base + rot @ local))
+            rings.append(ring)
+        for a, b in zip(rings, rings[1:]):
+            if len(a) == 1 and len(b) == 1:
+                continue
+            if len(a) == 1 or len(b) == 1:
+                pole, ring = (a[0], b) if len(a) == 1 else (b[0], a)
+                for i in range(len(ring)):
+                    self.bm.faces.new((ring[i], ring[(i + 1) % len(ring)], pole))
+                continue
+            for i in range(len(a)):
+                n = (i + 1) % len(a)
+                self.bm.faces.new((a[i], a[n], b[n], b[i]))
+        verts = [vert for ring in rings for vert in ring]
+        self._paint(verts, mat)
+        return verts
+
+    def cone(self, base, axis, length, r0, r1, mat, sides=12):
+        """A cone standing on a base point along an axis, its tip rounded off."""
+        steps = 6
+        profile = [(0.0, -0.005), (r0, 0.0)]
+        profile += [(lerp(r0, r1, k / steps), length * k / steps) for k in range(1, steps + 1)]
+        self.lathe(profile, mat, segs=sides, base=base, axis=axis)
+        tip = Vector(base) + Vector(axis).normalized() * length
+        self.sphere(tip, (r1, r1, r1), mat, seg=sides, rings=5)
+
+    def patch(self, surface, outline, thick, mat, rings=6):
+        """
+        A raised panel pressed onto a surface, like a pocket or a bib.
+        `surface(x, z)` gives a point on it and the way it faces; `outline` is
+        the panel's edge as (x, z) points around its middle. Its top is flat
+        and its edge rolls down into the surface.
+        """
+        cx = sum(x for x, _ in outline) / len(outline)
+        cz = sum(z for _, z in outline) / len(outline)
+
+        def lifted(x, z, height):
+            point, normal = surface(x, z)
+            return point + normal * height
+
+        steps = [1 - (1 - k / rings) ** 1.7 for k in range(1, rings + 1)]
+        center = self.bm.verts.new(lifted(cx, cz, thick))
+        loops = []
+        for t in steps:
+            height = thick * max(1 - t**8, 0) ** 0.5
+            loops.append(
+                [self.bm.verts.new(lifted(cx + (x - cx) * t, cz + (z - cz) * t, height)) for x, z in outline]
+            )
+        loops.append([self.bm.verts.new(lifted(x, z, -0.004)) for x, z in outline])
+        count = len(outline)
+        for i in range(count):
+            self.bm.faces.new((center, loops[0][i], loops[0][(i + 1) % count]))
+        for a, b in zip(loops, loops[1:]):
+            for i in range(count):
+                n = (i + 1) % count
+                self.bm.faces.new((a[i], b[i], b[n], a[n]))
+        verts = [center] + [vert for loop in loops for vert in loop]
+        self._paint(verts, mat)
+        return verts
+
+    def band(self, turns, low, high, thick, mat, segs=40, rings=12):
+        """
+        A shell on the head between two lines, `low(turn)` and `high(turn)`,
+        over a range of turns, like a beard. It rolls into the head on every
+        side.
+        """
+        roll = [None, 0.5, 0.82, 0.96]
+
+        def rolled(n):
+            return roll[n] if n < len(roll) else 1.0
+
+        columns = []
+        for i in range(segs + 1):
+            turn = lerp(turns[0], turns[1], i / segs)
+            bottom, top = rise_of(low(turn)), rise_of(high(turn))
+            top = max(top, bottom + 0.03)
+            side = rolled(min(i, segs - i))
+            column = [off_head(toward(turn, bottom - 0.02), -0.05)]
+            for k in range(rings + 1):
+                step = 0.5 - 0.5 * math.cos(math.pi * k / rings)
+                d = toward(turn, lerp(bottom, top, step))
+                edge = rolled(min(k, rings - k) + 1)
+                out = -0.05 if side is None else thick(d) * side * edge
+                column.append(off_head(d, out))
+            column.append(off_head(toward(turn, top + 0.02), -0.05))
+            columns.append([self.bm.verts.new(point) for point in column])
+        for a, b in zip(columns, columns[1:]):
+            for k in range(len(a) - 1):
+                self.bm.faces.new((a[k], b[k], b[k + 1], a[k + 1]))
+        verts = [vert for column in columns for vert in column]
+        self._paint(verts, mat)
+        return verts
+
     def finish(self, origin=(0, 0, 0), **extras):
         """
         Makes the object. Parts people pick between take an origin at the
         middle of what they cover, so the app can grow them in from there.
         """
+        # Fresh faces have no normals yet, and the recalculation guesses
+        # inside from outside by them.
+        self.bm.normal_update()
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         origin = Vector(origin)
         bmesh.ops.translate(self.bm, vec=-origin, verts=self.bm.verts)
@@ -369,19 +569,58 @@ class Part:
         return obj
 
 
-# --- Body ---------------------------------------------------------------------
+# --- Shapes -------------------------------------------------------------------
+
+
+def squircle(count, power=4):
+    """A rounded square's outline, from -1 to 1 each way."""
+    points = []
+    for i in range(count):
+        a = 2 * math.pi * i / count
+        c, s = math.cos(a), math.sin(a)
+        points.append(
+            (math.copysign(abs(c) ** (2 / power), c), math.copysign(abs(s) ** (2 / power), s))
+        )
+    return points
+
+
+def standing(up, ahead=Vector((0, -1, 0))):
+    """A rotation standing a part's Z along `up`, its front (-Y) turned ahead."""
+    z = up.normalized()
+    y = -(ahead - z * ahead.dot(z)).normalized()
+    return Matrix((y.cross(z), y, z)).transposed()
+
+
+def ring_points(center, axis, radius, count):
+    """Points in a circle around an axis."""
+    axis = Vector(axis).normalized()
+    rot = Vector((0, 0, 1)).rotation_difference(axis).to_matrix()
+    return [
+        Vector(center) + rot @ Vector((math.cos(a), math.sin(a), 0)) * radius
+        for a in (2 * math.pi * i / count for i in range(count))
+    ]
+
+
+def ribbed(count, radius, ridges, depth=0.12):
+    """Tube radii around a loop, swelling and thinning into knitted ridges."""
+    return [radius * (1 + depth * math.cos(2 * math.pi * ridges * i / count)) for i in range(count)]
+
+
+# --- Face ---------------------------------------------------------------------
+
+EYES = ("round", "happy", "sleepy", "sparkly")
+MOUTHS = ("smile", "grin", "cat", "wow")
+CHEEKS = ("rosy", "freckles")
+FACIAL_HAIR = ("mustache", "beard", "goatee")
 
 
 def build_head():
+    """The head itself: skin, ears, nose and brows. The rest of the face is picked."""
     part = Part("Head")
     part.sphere(HEAD_CENTER, HEAD_RADII, "Skin", seg=40, rings=24)
-
     for side in (1, -1):
         # Ears, half in the head.
         part.sphere((side * 0.305, 0.01, 0.83), (0.036, 0.03, 0.05), "Skin")
-        # Rosy cheeks, pressed flat against it.
-        point, normal = on_head(side * 0.175, 0.775, out=-0.004)
-        part.sphere(point, (0.042, 0.008, 0.026), "Cheek", rot=facing(normal))
         # Brows, a short arch above each eye.
         brow = []
         for i in range(6):
@@ -390,69 +629,163 @@ def build_head():
             z = 0.935 + 0.012 * math.sin(math.pi * t)
             brow.append(on_head(x, z, out=0.006)[0])
         part.tube(brow, [0.008, 0.011, 0.012, 0.012, 0.011, 0.008], "Hair", sides=8)
-
     point, normal = on_head(0, 0.795, out=0.004)
     part.sphere(point, (0.024, 0.018, 0.017), "Skin", rot=facing(normal))
-
-    smile = []
-    for i in range(9):
-        t = i / 8
-        x = lerp(-0.034, 0.034, t)
-        z = 0.765 - 0.014 * math.sin(math.pi * t)
-        smile.append(on_head(x, z, out=0.003)[0])
-    part.tube(smile, 0.0055, "Mouth", sides=8)
     return part.finish()
 
 
-def build_eyes():
-    """Both eyes in one piece, its origin between them so it can blink."""
-    part = Part("Eyes")
-    center = None
-    for side in (1, -1):
-        point, normal = on_head(side * 0.105, 0.835, out=-0.002)
-        rot = facing(normal)
-        part.sphere(point, (0.034, 0.014, 0.05), "Eye", rot=rot)
-        shine = point + rot @ Vector((side * 0.012, -0.012, 0.019))
-        part.sphere(shine, (0.011, 0.006, 0.011), "EyeWhite", rot=rot, seg=12, rings=8)
-        center = point
-    return part.finish(origin=(0, center.y, center.z))
+def lashes(part, side, variant):
+    """Flicks of lashes off the outer corner of an eye, curling up and out."""
+    x = side * 0.105
+    if variant == "happy":
+        roots = [(x + side * 0.032, 0.826, -20), (x + side * 0.03, 0.834, 15)]
+    elif variant == "sleepy":
+        roots = [(x + side * 0.04, 0.828, -15), (x + side * 0.032, 0.831, 15)]
+    else:
+        rx, rz = (0.04, 0.057) if variant == "sparkly" else (0.034, 0.05)
+        roots = []
+        for degrees in (15, 40, 65):
+            a = math.radians(degrees)
+            roots.append((x + side * rx * math.cos(a), 0.835 + rz * math.sin(a), degrees * 0.6 + 10))
+    for px, pz, angle in roots:
+        a = math.radians(angle)
+        tx, tz = px + side * 0.024 * math.cos(a), pz + 0.024 * math.sin(a)
+        path = [
+            on_head(px, pz, out=0.004)[0],
+            on_head(lerp(px, tx, 0.5), lerp(pz, tz, 0.5) + 0.002, out=0.008)[0],
+            on_head(tx, tz, out=0.012)[0],
+        ]
+        part.tube(path, [0.0045, 0.0032, 0.0012], "Eye", sides=6)
 
 
-def build_torso(variant):
-    part = Part(f"Top_{variant}")
-    hoodie = variant == "hoodie"
-    grow = 1.04 if hoodie else 1.0
-
-    def shape(p):
-        # Narrower at the shoulders, flaring a touch at the hem.
-        width = 1 - 0.14 * max(p.z, 0) + 0.06 * max(-p.z, 0)
-        return Vector((p.x * width, p.y * width, p.z))
-
-    part.sphere(
-        (0, 0, 0.43), (0.165 * grow, 0.14 * grow, 0.2), "Top", deform=shape, seg=32, rings=18
-    )
-    if hoodie:
-        hood = []
-        for i in range(13):
-            angle = math.radians(lerp(-110, 110, i / 12))
-            hood.append((math.sin(angle) * 0.15, math.cos(angle) * 0.13 + 0.02, 0.6 + 0.03 * math.cos(angle)))
-        part.tube(hood, 0.05, "Top", sides=12)
-        part.sphere((0, 0.15, 0.55), (0.12, 0.05, 0.09), "Top")
-        part.sphere((0, -0.13, 0.33), (0.1, 0.022, 0.05), "Top")
+def build_eyes(variant, body):
+    """Both eyes in one piece, so they blink together; lashes on the female body."""
+    part = Part(named(f"Eyes_{variant}", body))
+    if body == "female":
         for side in (1, -1):
-            part.tube(
-                [(side * 0.04, -0.14, 0.565), (side * 0.043, -0.152, 0.51), (side * 0.046, -0.158, 0.46)],
-                0.007,
-                "Drawstring",
-                sides=6,
-            )
-    return part.finish((0, 0, 0.43), slot="top", variant=variant)
+            lashes(part, side, variant)
+    for side in (1, -1):
+        x = side * 0.105
+        if variant == "happy":
+            # Shut, and smiling: ^ ^
+            arc = [
+                on_head(x + 0.032 * math.cos(a), 0.826 + 0.024 * math.sin(a), out=0.004)[0]
+                for a in (math.pi * i / 10 for i in range(11))
+            ]
+            part.tube(arc, 0.0095, "Eye", sides=8)
+            continue
+        if variant == "sleepy":
+            # Lids half down: each eye cut flat across the top, under a lid.
+            point, normal = on_head(x, 0.824, out=-0.002)
+
+            def lidded(p):
+                return Vector((p.x, p.y, min(p.z, 0.2)))
+
+            part.sphere(point, (0.034, 0.013, 0.04), "Eye", rot=facing(normal), deform=lidded)
+            lid = [
+                on_head(x + 0.04 * u, 0.832 - 0.004 * u * u, out=0.006)[0]
+                for u in (i / 4 - 1 for i in range(9))
+            ]
+            part.tube(lid, 0.0065, "Eye", sides=8)
+            continue
+        big = variant == "sparkly"
+        point, normal = on_head(x, 0.835, out=-0.002)
+        rot = facing(normal)
+        part.sphere(point, (0.04, 0.015, 0.057) if big else (0.034, 0.014, 0.05), "Eye", rot=rot)
+        shine = 0.014 if big else 0.011
+        spot = point + rot @ Vector((side * 0.013, -0.013, 0.02))
+        part.sphere(spot, (shine, 0.006, shine), "EyeWhite", rot=rot, seg=12, rings=8)
+        if big:
+            spot = point + rot @ Vector((-side * 0.013, -0.014, -0.024))
+            part.sphere(spot, (0.0065, 0.004, 0.0065), "EyeWhite", rot=rot, seg=10, rings=6)
+    return part.finish(slot="eyes", variant=variant, body=body)
 
 
-def build_pelvis():
-    part = Part("Pelvis")
-    part.sphere((0, 0, 0.255), (0.135, 0.115, 0.07), "Bottom")
-    return part.finish()
+def on_face(x, z):
+    return on_head(x, z)
+
+
+def build_mouth(variant):
+    part = Part(f"Mouth_{variant}")
+    if variant == "smile":
+        smile = [
+            on_head(lerp(-0.034, 0.034, t), 0.765 - 0.014 * math.sin(math.pi * t), out=0.003)[0]
+            for t in (i / 8 for i in range(9))
+        ]
+        part.tube(smile, 0.0055, "Mouth", sides=8)
+    elif variant == "grin":
+        # Wide open: a D, teeth along the top and the tongue at the bottom.
+        outline = []
+        for i in range(32):
+            a = 2 * math.pi * i / 32
+            s = math.sin(a)
+            outline.append((0.05 * math.cos(a), 0.775 + (0.004 * s if s > 0 else 0.04 * s)))
+        part.patch(on_face, outline, 0.003, "Mouth", rings=4)
+        teeth = [(x * 0.036, 0.7695 + z * 0.005) for x, z in squircle(24, 4)]
+        part.patch(on_face, teeth, 0.0055, "Teeth", rings=3)
+        tongue = [(x * 0.024, 0.746 + z * 0.01) for x, z in squircle(24, 2.4)]
+        part.patch(on_face, tongue, 0.0055, "Tongue", rings=3)
+    elif variant == "cat":
+        # :3
+        curve = [
+            on_head(0.036 * u, 0.772 - 0.012 * abs(math.sin(math.pi * u)), out=0.003)[0]
+            for u in (i / 8 - 1 for i in range(17))
+        ]
+        part.tube(curve, 0.0055, "Mouth", sides=8)
+    else:
+        # Surprised: a little o.
+        outline = [(x * 0.016, 0.758 + z * 0.02) for x, z in squircle(24, 2)]
+        part.patch(on_face, outline, 0.004, "Mouth", rings=3)
+    return part.finish(slot="mouth", variant=variant)
+
+
+def build_cheeks(variant):
+    part = Part(f"Cheeks_{variant}")
+    for side in (1, -1):
+        # Rosy, pressed flat against the head.
+        point, normal = on_head(side * 0.175, 0.775, out=-0.004)
+        part.sphere(point, (0.042, 0.008, 0.026), "Cheek", rot=facing(normal))
+        if variant == "freckles":
+            for dx, dz in ((-0.03, 0.03), (-0.008, 0.039), (0.014, 0.031), (0.033, 0.04)):
+                spot, normal = on_head(side * (0.175 + dx), 0.775 + dz, out=-0.001)
+                part.sphere(spot, (0.0065, 0.003, 0.0065), "Freckle", rot=facing(normal), seg=8, rings=6)
+    return part.finish(slot="cheeks", variant=variant)
+
+
+def mustache(part, size=1.0):
+    for side in (1, -1):
+        path = [
+            on_head(side * x, z, out=0.006)[0]
+            for x, z in ((0.004, 0.779), (0.026, 0.777), (0.05, 0.773), (0.068, 0.782))
+        ]
+        part.tube(path, [r * size for r in (0.011, 0.015, 0.012, 0.006)], "Hair", sides=10)
+
+
+def build_facial_hair(variant):
+    part = Part(f"FacialHair_{variant}")
+    mustache(part, 0.8 if variant == "goatee" else 1.0)
+    if variant == "beard":
+        # Along the jaw from ear to ear, fuller at the chin.
+        part.band(
+            (-1.75, 1.75),
+            lambda turn: -0.92,
+            lambda turn: lerp(-0.47, 0.0, smoothstep(0.25, 1.5, abs(turn))),
+            lambda d: 0.05 + 0.025 * smoothstep(-0.3, -0.9, d.z) + 0.012 * curls(d),
+            "Hair",
+            segs=44,
+        )
+    if variant == "goatee":
+        # A tuft on the chin, tapering to a point.
+        tuft = []
+        for i in range(32):
+            a = 2 * math.pi * i / 32
+            below = max(-math.sin(a), 0)
+            tuft.append((0.036 * math.cos(a) * (1 - 0.55 * below), 0.712 + 0.03 * math.sin(a) - 0.012 * below**2))
+        part.patch(on_face, tuft, 0.018, "Hair", rings=6)
+    return part.finish(slot="facialHair", variant=variant)
+
+
+# --- Body ---------------------------------------------------------------------
 
 
 def arm_points(side):
@@ -470,39 +803,247 @@ def build_arm(side, name):
     return part.finish()
 
 
-def build_sleeve(side, name, variant):
-    part = Part(f"Sleeve_{variant}_{name}")
-    shoulder, wrist = arm_points(side)
-    if variant == "tee":
-        elbow = shoulder.lerp(wrist, 0.45)
-        part.capsule(shoulder, elbow, 0.05, "Top")
-    else:
-        part.capsule(shoulder, wrist, 0.046, "Top")
-        axis = (wrist - shoulder).normalized()
-        cuff = []
-        for i in range(16):
-            angle = 2 * math.pi * i / 16
-            ring = Vector((math.cos(angle), math.sin(angle), 0)) * 0.044
-            cuff.append(wrist - axis * 0.012 + Vector((0, 0, 1)).rotation_difference(axis).to_matrix() @ ring)
-        part.tube(cuff, 0.013, "Top", closed=True, sides=8, normal=axis)
-    return part.finish(shoulder, slot="top", variant=variant)
+def build_shoe(side, name):
+    """A sneaker, with a collar round the ankle, a toe cap and laces in a trim color."""
+    part = Part(f"Shoe_{name}")
+    x = side * 0.075
+    center, radii = Vector((x, -0.022, 0.05)), Vector((0.063, 0.09, 0.046))
+    part.sphere(center, radii, "Shoes")
+    part.sphere((x, -0.024, 0.018), (0.067, 0.094, 0.018), "Sole")
 
+    def on_top(px, py, out):
+        """The point on top of the shoe over (px, py)."""
+        rest = 1 - ((px - center.x) / radii.x) ** 2 - ((py - center.y) / radii.y) ** 2
+        return Vector((px, py, center.z + radii.z * math.sqrt(max(rest, 0)) + out))
 
-def build_leg(side, name):
-    part = Part(f"Leg_{name}")
-    part.capsule((side * 0.075, 0, 0.25), (side * 0.075, 0, 0.08), 0.05, "Bottom")
+    def on_front(px, pz):
+        rest = 1 - ((px - center.x) / radii.x) ** 2 - ((pz - center.z) / radii.z) ** 2
+        point = Vector((px, center.y - radii.y * math.sqrt(max(rest, 0)), pz))
+        local = point - center
+        return point, Vector((local.x / radii.x**2, local.y / radii.y**2, local.z / radii.z**2)).normalized()
 
-    def toe(p):
-        # Rounder and wider at the toe, like a sneaker.
-        grow = 1 + 0.12 * max(-p.y, 0)
-        return Vector((p.x * grow, p.y, p.z * (1 + 0.08 * max(-p.y, 0))))
-
-    part.sphere((side * 0.075, -0.02, 0.05), (0.062, 0.088, 0.045), "Shoes", deform=toe)
-    part.sphere((side * 0.075, -0.022, 0.018), (0.066, 0.092, 0.018), "Sole")
+    collar = [
+        on_top(x + 0.036 * math.cos(a), 0.006 + 0.032 * math.sin(a), 0.002)
+        for a in (2 * math.pi * i / 20 for i in range(20))
+    ]
+    part.tube(collar, 0.0085, "ShoesTrim", closed=True, sides=8, normal=(0, 0, 1))
+    toe = [(x + 0.05 * math.cos(a), 0.041 + 0.022 * math.sin(a)) for a in (2 * math.pi * i / 24 for i in range(24))]
+    part.patch(on_front, toe, 0.004, "ShoesTrim", rings=4)
+    for py in (-0.042, -0.064):
+        lace = [on_top(x + u * 0.022, py, 0.004) for u in (-1, -0.5, 0, 0.5, 1)]
+        part.tube(lace, 0.0055, "ShoesTrim", sides=6)
     return part.finish()
 
 
+# --- Clothes ------------------------------------------------------------------
+
+# How far each top stands out from the body, so overalls fit over each.
+TOPS = {"tee": 1.0, "hoodie": 1.06, "sweater": 1.04}
+
+
+def torso_profile(scale, hem=HEM, body="male"):
+    """A body scaled out, down to a hem that rolls under."""
+    shape = BODIES[body]
+    rings = [(r * scale, z) for r, z in shape if z > hem]
+    edge = radius_at(shape, hem) * scale
+    return rings + [(edge, hem), (edge * 0.96, hem - 0.008), (edge * 0.75, hem - 0.012), (0.0, hem - 0.012)]
+
+
+def around_top(scale, z, out, count, body="male"):
+    """Points around a top at height z, `out` off it."""
+    r = radius_at(BODIES[body], z) * scale
+    return [
+        Vector((math.sin(a) * (r + out), -math.cos(a) * (r * DEPTH + out), z))
+        for a in (2 * math.pi * i / count for i in range(count))
+    ]
+
+
+def rib(part, scale, z, thick, mat, body="male"):
+    """A knitted band around a top, at its hem or neck."""
+    count = 72
+    part.tube(around_top(scale, z, thick * 0.35, count, body), ribbed(count, thick, 18), mat, closed=True, sides=6, normal=(0, 0, 1))
+
+
+def stripe(part, scale, top, bottom, mat, body="male"):
+    """A band of color around a top, standing just proud of it."""
+    profile = [
+        (radius_at(BODIES[body], z) * scale + out, z)
+        for z, out in ((top + 0.003, -0.004), (top, 0.004), (bottom, 0.004), (bottom - 0.003, -0.004))
+    ]
+    part.lathe(profile, mat, segs=44, depth=DEPTH)
+
+
+def named(base, body):
+    return base if body == "male" else f"{base}_{body}"
+
+
+def build_tee(body):
+    part = Part(named("Top_tee", body))
+    part.lathe(torso_profile(TOPS["tee"], body=body), "Top", segs=40, depth=DEPTH)
+    # A little pocket on the chest.
+    pocket = [(0.072 + x * 0.024, 0.47 + z * 0.026) for x, z in squircle(24, 5)]
+    part.patch(lambda x, z: on_torso(TOPS["tee"], x, z, body=body), pocket, 0.005, "TopTrim", rings=4)
+    return part.finish((0, 0, 0.43), slot="top", variant="tee", body=body)
+
+
+def build_hoodie(body):
+    scale = TOPS["hoodie"]
+    part = Part(named("Top_hoodie", body))
+    part.lathe(torso_profile(scale, HEM + 0.008, body), "Top", segs=44, depth=DEPTH)
+    rib(part, scale, HEM + 0.002, 0.02, "TopTrim", body)
+
+    def front(x, z):
+        return on_torso(scale, x, z, body=body)
+
+    def back(x, z):
+        return on_torso(scale, x, z, back=True, body=body)
+
+    # The kangaroo pocket, wider at the bottom, with a seam across its top.
+    pocket = [
+        (x * 0.105 * lerp(1.0, 0.78, (z + 1) / 2), 0.335 + z * 0.058) for x, z in squircle(40, 5)
+    ]
+    part.patch(front, pocket, 0.01, "Top")
+    seam = []
+    for i in range(9):
+        x = lerp(-0.075, 0.075, i / 8)
+        point, normal = front(x, 0.388)
+        seam.append(point + normal * 0.01)
+    part.tube(seam, 0.0035, "TopTrim", sides=6)
+
+    # The hood, lying down the back from the neck...
+    hood = []
+    for i in range(40):
+        a = 2 * math.pi * i / 40
+        c, s = math.cos(a), math.sin(a)
+        hood.append((0.112 * c * (1 - 0.5 * max(-s, 0)), 0.505 + 0.09 * s))
+    part.patch(back, hood, 0.042, "Top", rings=7)
+    # ...and its rim, around the neck and open at the front.
+    rim, radii = [], []
+    for i in range(25):
+        turn = lerp(0.55, 2 * math.pi - 0.55, i / 24)
+        behind = (1 - math.cos(turn)) / 2
+        z = lerp(0.58, 0.59, behind)
+        thick = lerp(0.02, 0.04, behind)
+        r = radius_at(BODIES[body], z) * scale
+        out = thick * 0.6
+        rim.append(Vector((math.sin(turn) * (r + out), -math.cos(turn) * (r * DEPTH + out), z)))
+        radii.append(thick)
+    part.tube(rim, radii, "Top", sides=12)
+
+    # Drawstrings, tipped at the ends.
+    for side in (1, -1):
+        path = []
+        for i in range(5):
+            t = i / 4
+            point, normal = front(side * lerp(0.048, 0.055, t), lerp(0.575, 0.465, t))
+            path.append(point + normal * 0.013)
+        part.tube(path, 0.0055, "Drawstring", sides=6)
+        tip = path[-1]
+        part.capsule(tip + Vector((0, 0, 0.004)), tip - Vector((0, 0, 0.018)), 0.0085, "Drawstring", seg=10, rings=7)
+    return part.finish((0, 0, 0.43), slot="top", variant="hoodie", body=body)
+
+
+def build_sweater(body):
+    scale = TOPS["sweater"]
+    part = Part(named("Top_sweater", body))
+    part.lathe(torso_profile(scale, HEM + 0.008, body), "Top", segs=44, depth=DEPTH)
+    rib(part, scale, HEM + 0.002, 0.019, "TopTrim", body)
+    # A crew neck, and two stripes across the chest.
+    rib(part, scale, 0.598, 0.016, "TopTrim", body)
+    stripe(part, scale, 0.47, 0.44, "TopAccent", body)
+    stripe(part, scale, 0.41, 0.38, "TopAccent", body)
+    return part.finish((0, 0, 0.43), slot="top", variant="sweater", body=body)
+
+
+def build_sleeve(side, name, long):
+    """Short sleeves for a T-shirt; long ones, cuffed, for a hoodie or a sweater."""
+    variant = "hoodie sweater" if long else "tee"
+    part = Part(f"Sleeve_{'long' if long else 'short'}_{name}")
+    shoulder, wrist = arm_points(side)
+    if not long:
+        part.capsule(shoulder, shoulder.lerp(wrist, 0.45), 0.05, "Top")
+        return part.finish(shoulder, slot="top", variant=variant)
+    part.capsule(shoulder, wrist, 0.047, "Top")
+    axis = (wrist - shoulder).normalized()
+    count = 32
+    cuff = ring_points(wrist - axis * 0.01, axis, 0.045, count)
+    part.tube(cuff, ribbed(count, 0.014, 10, 0.15), "TopTrim", closed=True, sides=8, normal=axis)
+    return part.finish(shoulder, slot="top", variant=variant)
+
+
+def build_pelvis():
+    part = Part("Pelvis")
+    part.sphere((0, 0, 0.255), (0.135, 0.115, 0.07), "Bottom")
+    return part.finish(slot="bottom", variant="pants shorts overalls")
+
+
+def build_legwear(side, name, variant):
+    """What covers a leg from the hip down to the shoe."""
+    x = side * 0.075
+    hip, ankle = Vector((x, 0, 0.25)), Vector((x, 0, 0.08))
+    part = Part(f"Leg_{variant}_{name}")
+    if variant == "pants":
+        part.capsule(hip, ankle, 0.05, "Bottom")
+        return part.finish(slot="bottom", variant="pants overalls")
+    # Bare from the knee, or the hip, down.
+    part.capsule(Vector((x, 0, 0.22)), ankle, 0.04, "Skin")
+    if variant == "shorts":
+        profile = [(0.0, 0.27), (0.052, 0.27), (0.056, 0.24), (0.06, 0.19), (0.06, 0.172), (0.052, 0.166), (0.0, 0.166)]
+        part.lathe(profile, "Bottom", segs=20, base=(x, 0, 0))
+    return part.finish(slot="bottom", variant=variant)
+
+
+def build_skirt():
+    part = Part("Skirt")
+    profile = [
+        (0.0, 0.31),
+        (0.14, 0.31),
+        (0.15, 0.285),
+        (0.163, 0.25),
+        (0.182, 0.21),
+        (0.2, 0.175),
+        (0.212, 0.152),
+        (0.205, 0.142),
+        (0.17, 0.138),
+        (0.0, 0.138),
+    ]
+
+    def pleats(turn, z):
+        return 1 + 0.035 * math.cos(turn * 14) * smoothstep(0.27, 0.16, z)
+
+    part.lathe(profile, "Bottom", segs=56, depth=0.85, wobble=pleats)
+    return part.finish(slot="bottom", variant="skirt")
+
+
+def build_overalls(top, body):
+    """The bib and straps of overalls, shaped over one of the tops."""
+    scale = TOPS[top]
+    part = Part(named(f"Overalls_{top}", body))
+
+    def front(x, z):
+        return on_torso(scale, x, z, body=body)
+
+    bib = [(x * 0.088, 0.352 + z * 0.088) for x, z in squircle(48, 6)]
+    part.patch(front, bib, 0.012, "Bottom")
+    for side in (1, -1):
+        # Up the front, over the shoulder, and down the back to the waist.
+        path = [
+            on_torso(scale, side * 0.068, z, out=0.012, body=body)[0]
+            for z in (0.43, 0.48, 0.53, 0.565, 0.59)
+        ]
+        path += [
+            on_torso(scale, side * 0.062, z, back=True, out=0.012, body=body)[0]
+            for z in (0.59, 0.565, 0.53, 0.48, 0.43, 0.38, 0.33, 0.29)
+        ]
+        part.tube(path, 0.012, "Bottom", sides=8)
+        point, normal = on_torso(scale, side * 0.068, 0.428, out=0.022, body=body)
+        part.sphere(point, (0.013, 0.006, 0.013), "Gold", rot=facing(normal), seg=14, rings=8)
+    return part.finish((0, 0, 0.43), slot="bottom", variant="overalls", top=top, body=body)
+
+
 # --- Hair ---------------------------------------------------------------------
+
+HAIR_STYLES = ("short", "spiky", "long", "ponytail", "pigtails", "bun", "curly")
 
 
 def bangs(turn, depth, count):
@@ -539,11 +1080,24 @@ HAIR = {
         lambda turn: line_at(turn, 0.42, -0.12, -0.5) + bangs(turn, 0.05, 9),
         lambda d: volume(d, 0.06, 0.05),
     ),
+    "spiky": (
+        lambda turn: line_at(turn, 0.46, -0.1, -0.45) + bangs(turn, 0.06, 7),
+        lambda d: volume(d, 0.06, 0.03),
+    ),
     "long": (
         # Parted to one side.
         lambda turn: line_at(turn, 0.4, -0.35, -0.75)
         + 0.08 * smoothstep(-0.3, 0.3, math.sin(turn)) * smoothstep(0.35, 0.85, math.cos(turn)),
         lambda d: volume(d, 0.06, 0.05),
+    ),
+    "ponytail": (
+        # Pulled back off the face.
+        lambda turn: line_at(turn, 0.52, -0.08, -0.4),
+        lambda d: volume(d, 0.05, 0.02),
+    ),
+    "pigtails": (
+        lambda turn: line_at(turn, 0.42, -0.1, -0.45) + bangs(turn, 0.045, 10),
+        lambda d: volume(d, 0.055, 0.03),
     ),
     "bun": (
         lambda turn: line_at(turn, 0.5, -0.1, -0.45),
@@ -561,11 +1115,85 @@ def under_hat(turn):
     return line_at(turn, *HAT_LINE) + 0.07
 
 
+def pressed(thick):
+    """Hair pressed down toward a hat's brim, so it stays under the hat."""
+
+    def under(d):
+        line = line_at(turn_of(d), *HAT_LINE)
+        full = thick(d)
+        return lerp(full, min(full, UNDER_HAT), smoothstep(line - 0.2, line - 0.02, d.z))
+
+    return under
+
+
+def lift_of(thick):
+    """How far hair stands off the top of the head on average: where perched hats sit."""
+    samples = [Vector((0, 0, 1))]
+    for rise in (45, 60, 75):
+        samples += [toward(2 * math.pi * i / 12, math.radians(rise)) for i in range(12)]
+    return sum(thick(d) for d in samples) / len(samples)
+
+
+def spikes(part, thick):
+    """Spikes all over the top and back, swept up and back."""
+    rows = ((80, 4, 0.0, 0.15), (58, 7, 0.4, 0.15), (34, 7, 0.9, 0.13))
+    sweep = Vector((0, 0.25, 0.3))
+    for rise, count, start, length in rows:
+        for i in range(count):
+            turn = math.pi + (i - (count - 1) / 2) * (2 * math.pi - 2 * start) / max(count, 1)
+            if abs(math.cos(turn)) > 0.75 and rise < 70 and math.cos(turn) > 0:
+                continue
+            d = toward(turn, math.radians(rise))
+            base = off_head(d, thick(d) - 0.03)
+            size = length * (0.9 + 0.2 * ((i * 7) % 3) / 2)
+            part.cone(base, d + sweep, size, 0.07, 0.012, "Hair", sides=8)
+    # A couple over the forehead, pointing up and out.
+    for side in (1, -1):
+        d = toward(side * 0.35, math.radians(62))
+        part.cone(off_head(d, thick(d) - 0.03), d + Vector((0, -0.1, 0.5)), 0.12, 0.065, 0.012, "Hair", sides=8)
+
+
+def ponytail(part):
+    d = toward(math.pi, rise_of(-0.05))
+    tie = off_head(d, 0.06)
+    back = Vector((0, 1, -0.55)).normalized()
+    part.tube(ring_points(tie, back, 0.034, 16), 0.013, "HairTie", closed=True, sides=8, normal=back)
+    path = [
+        off_head(d, 0.0),
+        tie,
+        tie + Vector((0, 0.045, -0.03)),
+        tie + Vector((0, 0.095, -0.12)),
+        tie + Vector((0, 0.09, -0.24)),
+        tie + Vector((0, 0.05, -0.3)),
+    ]
+    part.tube(path, [0.045, 0.045, 0.06, 0.07, 0.05, 0.018], "Hair", sides=14)
+
+
+def pigtails(part):
+    for side in (1, -1):
+        d = toward(side * math.radians(118), rise_of(0.05))
+        tie = off_head(d, 0.065)
+        # Splaying out to the side more than back.
+        out = Vector((d.x, d.y * 0.5, 0)).normalized()
+        part.tube(ring_points(tie, out, 0.034, 16), 0.013, "HairTie", closed=True, sides=8, normal=out)
+        down = Vector((0, 0, -1))
+        path = [
+            off_head(d, 0.0),
+            tie,
+            tie + out * 0.06 + down * 0.02,
+            tie + out * 0.11 + down * 0.08,
+            tie + out * 0.12 + down * 0.17,
+            tie + out * 0.1 + down * 0.26,
+            tie + out * 0.07 + down * 0.32,
+        ]
+        part.tube(path, [0.042, 0.042, 0.06, 0.07, 0.065, 0.045, 0.018], "Hair", sides=14)
+
+
 def build_hair(variant, hat):
     name = f"Hair_{variant}{'_hat' if hat else ''}"
     part = Part(name)
     start, thick = HAIR[variant]
-    part.cap(start, thick, "Hair", end=under_hat if hat else None)
+    part.cap(start, pressed(thick) if hat else thick, "Hair", end=under_hat if hat else None)
 
     if variant == "long":
         # Falling behind the head to the shoulders, in soft waves.
@@ -589,6 +1217,12 @@ def build_hair(variant, hat):
                 "Hair",
                 sides=12,
             )
+    if variant == "spiky" and not hat:
+        spikes(part, thick)
+    if variant == "ponytail":
+        ponytail(part)
+    if variant == "pigtails":
+        pigtails(part)
     if variant == "bun" and not hat:
         part.sphere((0, 0.1, 1.17), (0.11, 0.1, 0.1), "Hair", seg=24, rings=14)
         band = [
@@ -596,31 +1230,43 @@ def build_hair(variant, hat):
             for a in (2 * math.pi * i / 16 for i in range(16))
         ]
         part.tube(band, 0.016, "Hair", closed=True, sides=8, normal=(0, 0, 1))
-    return part.finish(HEAD_CENTER, slot="hair", variant=variant, hat=1 if hat else 0)
+    lift = lift_of(thick)
+    if variant == "spiky":
+        # Up among the spikes, rather than lost in them.
+        lift += 0.07
+    return part.finish(HEAD_CENTER, slot="hair", variant=variant, hat=1 if hat else 0, lift=round(lift, 4))
 
 
 # --- Hats ---------------------------------------------------------------------
+#
+# Hats either cover the hair, coming down to HAT_LINE over the cut of it made
+# for them, or perch on it, built to sit on a bald head and lifted by the app
+# to sit on whatever hair is there.
+
+
+def hat_line(turn):
+    return line_at(turn, *HAT_LINE)
 
 
 def build_beanie():
     part = Part("Hat_beanie")
 
     def knit(d):
-        above = d.z - line_at(turn_of(d), *HAT_LINE)
+        above = d.z - hat_line(turn_of(d))
         # A folded cuff at the brim, ribbed above it.
         cuff = 0.035 * (1 - smoothstep(0.2, 0.25, above))
-        rib = 0.006 * math.cos(turn_of(d) * 28) * smoothstep(0.25, 0.32, above)
-        return 0.13 + cuff + rib
+        rib_ = 0.006 * math.cos(turn_of(d) * 28) * smoothstep(0.25, 0.32, above)
+        return 0.13 + cuff + rib_
 
-    part.cap(lambda turn: line_at(turn, *HAT_LINE), knit, "Hat", segs=84, rings=18)
+    part.cap(hat_line, knit, "Hat", segs=84, rings=18)
     part.sphere((0, 0.02, 1.2), (0.075, 0.075, 0.07), "Hat", seg=20, rings=12)
     return part.finish(HEAD_CENTER, slot="hat", variant="beanie")
 
 
 def build_cap():
     part = Part("Hat_cap")
-    part.cap(lambda turn: line_at(turn, 0.38, 0.28, 0.12), lambda d: 0.12, "Hat")
-    part.sphere((0, 0, 1.165), (0.025, 0.025, 0.012), "Hat", seg=12, rings=8)
+    part.cap(hat_line, lambda d: 0.125, "Hat")
+    part.sphere((0, 0, 1.17), (0.025, 0.025, 0.012), "Hat", seg=12, rings=8)
 
     def visor(p):
         # Only the front half, curved down at the sides.
@@ -628,19 +1274,20 @@ def build_cap():
         return Vector((p.x, y, p.z - 0.25 * p.x * p.x))
 
     tilt = Euler((math.radians(-12), 0, 0)).to_matrix()
-    part.sphere((0, -0.27, 1.0), (0.22, 0.22, 0.016), "Hat", rot=tilt, deform=visor, seg=32, rings=10)
+    part.sphere((0, -0.275, 0.995), (0.22, 0.22, 0.016), "Hat", rot=tilt, deform=visor, seg=32, rings=10)
     return part.finish(HEAD_CENTER, slot="hat", variant="cap")
 
 
 def build_chef():
     part = Part("Hat_chef")
-    # The band: from the hat line around the head, straight up to the puff.
+    # The band: from the hat line around the head, straight up to the puff,
+    # closed over the top.
     bm = part.bm
     sides = 48
     columns = []
     for i in range(sides):
         turn = 2 * math.pi * i / sides
-        rise = rise_of(line_at(turn, *HAT_LINE))
+        rise = rise_of(hat_line(turn))
         brim = off_head(toward(turn, rise), 0.12)
         top = Vector((math.sin(turn) * 0.33, -math.cos(turn) * 0.315, 1.14))
         column = [off_head(toward(turn, rise - 0.02), -0.05), off_head(toward(turn, rise), 0.08), brim]
@@ -650,14 +1297,96 @@ def build_chef():
         a, b = columns[i], columns[(i + 1) % sides]
         for k in range(len(a) - 1):
             bm.faces.new((a[k], b[k], b[k + 1], a[k + 1]))
-    part._paint([vert for column in columns for vert in column], "Hat")
-    # The puff: a big soft top and lobes around it.
+    lid = bm.verts.new((0, 0, 1.16))
+    for i in range(sides):
+        bm.faces.new((columns[i][-1], columns[(i + 1) % sides][-1], lid))
+    part._paint([vert for column in columns for vert in column] + [lid], "Hat")
+    # The puff: a big soft top and lobes around it, overhanging the band.
     part.sphere((0, 0, 1.25), (0.33, 0.31, 0.15), "Hat", seg=32, rings=14)
     for i in range(7):
         a = 2 * math.pi * i / 7 + 0.3
-        part.sphere((math.cos(a) * 0.2, math.sin(a) * 0.19, 1.24), (0.15, 0.15, 0.13), "Hat")
+        part.sphere((math.cos(a) * 0.21, math.sin(a) * 0.2, 1.235), (0.155, 0.155, 0.13), "Hat")
     part.sphere((0, 0, 1.33), (0.19, 0.18, 0.1), "Hat")
     return part.finish(HEAD_CENTER, slot="hat", variant="chef")
+
+
+def build_crown():
+    part = Part("Hat_crown")
+    height = 0.72
+    z = HEAD_CENTER.z + height * HEAD_RADII.z
+    r = HEAD_RADII.x * math.sqrt(1 - height**2) + 0.004
+    depth = HEAD_RADII.y / HEAD_RADII.x
+    top = z + 0.07
+    # A gold band, flaring a little toward the top...
+    band = [(r - 0.006, top), (r + 0.022, top), (r + 0.01, z), (r - 0.006, z), (r - 0.006, top)]
+    part.lathe(band, "Gold", segs=40, depth=depth)
+    for i in range(5):
+        turn = 2 * math.pi * i / 5
+        out = Vector((math.sin(turn), -math.cos(turn) * depth, 0))
+        # ...points around the top with a ball on each...
+        base = Vector((out.x * (r + 0.012), out.y * (r + 0.012), top - 0.012))
+        axis = (out * 0.25 + Vector((0, 0, 1))).normalized()
+        part.cone(base, axis, 0.07, 0.034, 0.01, "Gold", sides=8)
+        part.sphere(base + axis * 0.078, (0.016, 0.016, 0.016), "Gold", seg=12, rings=8)
+        # ...and a gem under each point.
+        gem = Vector((out.x * (r + 0.018), out.y * (r + 0.018), z + 0.034))
+        part.sphere(gem, (0.017, 0.008, 0.019), "Gem", rot=facing(out.normalized()), seg=14, rings=8)
+    return part.finish(HEAD_CENTER, slot="hat", variant="crown", perch=1)
+
+
+def build_party():
+    part = Part("Hat_party")
+    # Tipped forward and to one side, at a jaunty angle.
+    axis = Euler((math.radians(10), math.radians(18), 0)).to_matrix() @ Vector((0, 0, 1))
+    base = off_head(axis, -0.06)
+    length, r0, r1 = 0.3, 0.11, 0.012
+    bands = 4
+    for k in range(bands):
+        h0, h1 = length * k / bands, length * (k + 1) / bands
+        profile = [(lerp(r0, r1, h0 / length), h0), (lerp(r0, r1, h1 / length), h1)]
+        if k == 0:
+            profile.insert(0, (0.0, 0.0))
+        part.lathe(profile, "Hat" if k % 2 == 0 else "HatAccent", segs=28, base=base, axis=axis)
+    part.sphere(base + axis * length, (0.035, 0.035, 0.035), "HatAccent", seg=16, rings=10)
+    return part.finish(HEAD_CENTER, slot="hat", variant="party", perch=1)
+
+
+def over_top(angle, ahead=-0.12):
+    """The direction up over the head, from ear to ear, `angle` degrees from the crown."""
+    a = math.radians(angle)
+    return Vector((math.sin(a), ahead, math.cos(a))).normalized()
+
+
+def build_cat_ears():
+    part = Part("Hat_catears")
+    part.tube([off_head(over_top(lerp(-82, 82, i / 16)), 0.045) for i in range(17)], 0.013, "Hat", sides=8)
+
+    def ear(p):
+        # Pinched to a rounded point at the top.
+        return Vector((p.x * (1 - 0.75 * max(p.z, 0)), p.y, p.z))
+
+    for side in (1, -1):
+        d = over_top(side * 36)
+        rot = standing(d + Vector((side * 0.25, 0, 0)))
+        at = off_head(d, 0.06)
+        part.sphere(at + rot @ Vector((0, 0, 0.055)), (0.06, 0.028, 0.075), "Hat", rot=rot, deform=ear)
+        inner = at + rot @ Vector((0, -0.017, 0.05))
+        part.sphere(inner, (0.038, 0.012, 0.05), "EarInner", rot=rot, deform=ear, seg=16, rings=10)
+    return part.finish(HEAD_CENTER, slot="hat", variant="catears", perch=1)
+
+
+def build_headphones():
+    part = Part("Hat_headphones")
+    part.tube([off_head(over_top(lerp(-88, 88, i / 18), -0.05), 0.075) for i in range(19)], 0.021, "Hat", sides=10)
+    for side in (1, -1):
+        axis = Vector((side, 0, 0))
+        center = Vector((side * (HEAD_RADII.x + 0.05), 0, 0.84))
+        cup = [(0.0, 0.0), (0.06, 0.0), (0.07, 0.01), (0.072, 0.028), (0.062, 0.042), (0.0, 0.044)]
+        part.lathe(cup, "Hat", segs=28, base=center, axis=axis)
+        part.tube(ring_points(center, axis, 0.052, 24), 0.02, "Cushion", closed=True, sides=8, normal=axis)
+        end = off_head(over_top(side * 88, -0.05), 0.075)
+        part.capsule(end, center + axis * 0.02 + Vector((0, 0, 0.055)), 0.018, "Hat")
+    return part.finish(HEAD_CENTER, slot="hat", variant="headphones", perch=1)
 
 
 # --- Glasses ------------------------------------------------------------------
@@ -705,20 +1434,34 @@ def aviator(w, h):
     return points
 
 
+def heart(w, h, count=40):
+    points = []
+    for i in range(count):
+        t = 2 * math.pi * i / count
+        x = 16 * math.sin(t) ** 3
+        z = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+        points.append((x / 16 * w, (z + 2.5) / 14.5 * h))
+    return points
+
+
+GLASSES = {
+    "round": (round_outline(0.068, 0.064), False),
+    "square": (rounded_rect(0.072, 0.056, 0.022), False),
+    "shades": (aviator(0.074, 0.058), True),
+    "heart": (heart(0.072, 0.066), True),
+}
+
+
 def build_glasses(variant):
     part = Part(f"Glasses_{variant}")
-    shapes = {
-        "round": round_outline(0.068, 0.064),
-        "square": rounded_rect(0.072, 0.056, 0.022),
-        "shades": aviator(0.074, 0.058),
-    }
+    shape, tinted = GLASSES[variant]
     outer = []
     for side in (1, -1):
-        outline = [(side * x, z) for x, z in shapes[variant]]
+        outline = [(side * x, z) for x, z in shape]
         center, yaw, points = lens_frame(side, outline)
         normal = yaw @ Vector((0, -1, 0))
         part.tube(points, 0.0085, "Frame", closed=True, sides=8, normal=normal)
-        if variant == "shades":
+        if tinted:
             # Dark lenses, filling the frame.
             verts = [part.bm.verts.new(p + normal * -0.002) for p in points]
             face = part.bm.faces.new(verts)
@@ -749,6 +1492,7 @@ def build_glasses(variant):
             path.append(Vector((side * math.sin(angle) * rx, -math.cos(angle) * ry, z)))
         part.tube(path, 0.006, "Frame", sides=6)
     return part.finish(HEAD_CENTER, slot="glasses", variant=variant)
+
 
 
 # --- Rig ----------------------------------------------------------------------
@@ -987,28 +1731,53 @@ def clear():
             block.remove(item)
 
 
+def clear_meshes():
+    """Removes every mesh, keeping the rest of the scene."""
+    for obj in list(bpy.data.objects):
+        if obj.type == "MESH":
+            bpy.data.objects.remove(obj, do_unlink=True)
+    for mesh in list(bpy.data.meshes):
+        bpy.data.meshes.remove(mesh)
+
+
 def build():
     clear()
     bpy.context.scene.render.fps = FPS
     rig = build_armature()
 
     attach(rig, build_head(), "head")
-    attach(rig, build_eyes(), "head")
+    for variant in EYES:
+        for body in BODIES:
+            attach(rig, build_eyes(variant, body), "head")
+    for variant in MOUTHS:
+        attach(rig, build_mouth(variant), "head")
+    for variant in CHEEKS:
+        attach(rig, build_cheeks(variant), "head")
+    for variant in FACIAL_HAIR:
+        attach(rig, build_facial_hair(variant), "head")
+
     attach(rig, build_pelvis(), "hips")
+    attach(rig, build_skirt(), "hips")
     for side, name in ((1, "L"), (-1, "R")):
         attach(rig, build_arm(side, name), f"arm_{name}")
-        attach(rig, build_leg(side, name), f"leg_{name}")
-        for variant in ("tee", "hoodie"):
-            attach(rig, build_sleeve(side, name, variant), f"arm_{name}")
-    for variant in ("tee", "hoodie"):
-        attach(rig, build_torso(variant), "spine")
-    for variant in ("short", "long", "bun", "curly"):
+        attach(rig, build_shoe(side, name), f"leg_{name}")
+        for variant in ("pants", "shorts", "skirt"):
+            attach(rig, build_legwear(side, name, variant), f"leg_{name}")
+        for long in (False, True):
+            attach(rig, build_sleeve(side, name, long), f"arm_{name}")
+    for body in BODIES:
+        attach(rig, build_tee(body), "spine")
+        attach(rig, build_hoodie(body), "spine")
+        attach(rig, build_sweater(body), "spine")
+        for top in TOPS:
+            attach(rig, build_overalls(top, body), "spine")
+
+    for variant in HAIR_STYLES:
         for hat in (False, True):
             attach(rig, build_hair(variant, hat), "head")
-    attach(rig, build_beanie(), "head")
-    attach(rig, build_cap(), "head")
-    attach(rig, build_chef(), "head")
-    for variant in ("round", "square", "shades"):
+    for build_hat in (build_beanie, build_cap, build_chef, build_crown, build_party, build_cat_ears, build_headphones):
+        attach(rig, build_hat(), "head")
+    for variant in GLASSES:
         attach(rig, build_glasses(variant), "head")
 
     record(rig, "idle", 72, idle, loop=True)
