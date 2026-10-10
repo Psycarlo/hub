@@ -408,8 +408,12 @@ export function CardFiles({
       )}
       {...drop.handlers}
     >
-      {/* A button leading the row lines its icon up with the text above. */}
-      <div className="flex flex-wrap items-center gap-1 [&>button:first-child]:-ml-2">
+      {/*
+        Set back so a leading icon lines up with the text above, unless pills
+        lead instead. Not keyed to the first button: an open popover puts a
+        hidden focus guard before its trigger.
+      */}
+      <div className="-ml-2 flex flex-wrap items-center gap-1 has-[>ul:first-child]:ml-0">
         <FluidTooltip.Group>
           {children}
           <AttachButton onFiles={add} />
