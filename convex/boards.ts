@@ -163,6 +163,33 @@ async function sprintUnderWay(
     .at(-1);
 }
 
+/** Statuses that leave a card open. */
+const OPEN_STATUSES = STATUSES.map(({ id }) => id).filter(
+  (id) => !isClosed(id)
+);
+
+/**
+ * A board's cards not closed yet, in the order they were added. Closed cards
+ * pile up over the years, so reading by status leaves them, and changes to
+ * them, out.
+ */
+export async function openCardsOf(
+  ctx: QueryCtx,
+  boardId: Id<"boards">
+): Promise<Doc<"cards">[]> {
+  const byStatus = await Promise.all(
+    OPEN_STATUSES.map((status) =>
+      ctx.db
+        .query("cards")
+        .withIndex("by_board_and_status", (q) =>
+          q.eq("boardId", boardId).eq("status", status)
+        )
+        .collect()
+    )
+  );
+  return byStatus.flat().toSorted((a, b) => a._creationTime - b._creationTime);
+}
+
 /** How each board of a project stands: cards still open, and the sprint under way. */
 export const progress = query({
   args: { projectId: v.id("projects") },
@@ -176,24 +203,26 @@ export const progress = query({
       .collect();
     return await Promise.all(
       boards.map(async (board) => {
-        const [cards, active] = await Promise.all([
-          ctx.db
-            .query("cards")
-            .withIndex("by_board", (q) => q.eq("boardId", board._id))
-            .collect(),
+        const [open, active] = await Promise.all([
+          openCardsOf(ctx, board._id),
           sprintUnderWay(ctx, board),
         ]);
         const counts = Object.fromEntries(
           STATUSES.map(({ id }) => [id, 0])
         ) as Record<Status, number>;
-        for (const card of cards) {
-          if (active && card.sprintId === active._id) {
-            counts[card.status] += 1;
-          }
+        // A sprint only ever holds cards of its own board.
+        const inSprint = active
+          ? await ctx.db
+              .query("cards")
+              .withIndex("by_sprint", (q) => q.eq("sprintId", active._id))
+              .collect()
+          : [];
+        for (const card of inSprint) {
+          counts[card.status] += 1;
         }
         return {
           boardId: board._id,
-          open: cards.filter((card) => !isClosed(card.status)).length,
+          open: open.length,
           sprint: active && { end: active.end, title: active.title, ...counts },
         };
       })

@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { attachFile } from "./attachments";
+import { openCardsOf } from "./boards";
 import { deleteCard } from "./cleanup";
 import {
   canSee,
@@ -263,15 +264,9 @@ export const assigned = query({
           .collect();
         const perBoard = await Promise.all(
           boards.map(async (board) => {
-            const cards = await ctx.db
-              .query("cards")
-              .withIndex("by_board", (q) => q.eq("boardId", board._id))
-              .collect();
+            const cards = await openCardsOf(ctx, board._id);
             return cards
-              .filter(
-                (card) =>
-                  card.assignees.includes(user._id) && !isClosed(card.status)
-              )
+              .filter((card) => card.assignees.includes(user._id))
               .map((card): AssignedCard => ({
                 _id: card._id,
                 code: board.code,

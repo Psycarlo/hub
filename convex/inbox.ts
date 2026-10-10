@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser, roleIn } from "./lib/access";
+import type { ProjectRole } from "./shared/model";
 
 /** Newest notifications shown. */
 const LIMIT = 200;
@@ -49,10 +50,13 @@ export interface FileMention extends Notification {
 
 export type InboxItem = CommentMention | PageMention | FileMention;
 
+/** The person's role on a project, or null when they can't see it. */
+type RoleOf = (project: Doc<"projects">) => Promise<ProjectRole | null>;
+
 /** The card, page or file a notification points at, or null once it's gone or out of sight. */
 async function itemOf(
   ctx: QueryCtx,
-  user: Doc<"users">,
+  roleOf: RoleOf,
   notification: Doc<"notifications">
 ): Promise<InboxItem | null> {
   const common = {
@@ -66,7 +70,7 @@ async function itemOf(
     const page = await ctx.db.get(notification.pageId);
     const project = page ? await ctx.db.get(page.projectId) : null;
     // Pages on projects the person has since left drop out.
-    if (!(page && project && (await roleIn(ctx, user, project)))) {
+    if (!(page && project && (await roleOf(project)))) {
       return null;
     }
     return {
@@ -86,7 +90,7 @@ async function itemOf(
     const project = file ? await ctx.db.get(file.projectId) : null;
     // Trashed files, and files on projects the person has since left, drop out.
     if (
-      !(file && project && (await roleIn(ctx, user, project))) ||
+      !(file && project && (await roleOf(project))) ||
       file.trashedAt !== undefined
     ) {
       return null;
@@ -107,7 +111,7 @@ async function itemOf(
   const board = card ? await ctx.db.get(card.boardId) : null;
   const project = board ? await ctx.db.get(board.projectId) : null;
   // Cards on projects the person has since left drop out.
-  if (!(card && board && project && (await roleIn(ctx, user, project)))) {
+  if (!(card && board && project && (await roleOf(project)))) {
     return null;
   }
   return {
@@ -131,8 +135,19 @@ export const list = query({
       )
       .order("desc")
       .take(LIMIT);
+    // Most notifications share a few projects: each role is looked up once.
+    const roles = new Map<Id<"projects">, Promise<ProjectRole | null>>();
+    const roleOf: RoleOf = (project) => {
+      const known = roles.get(project._id);
+      if (known) {
+        return known;
+      }
+      const role = roleIn(ctx, user, project);
+      roles.set(project._id, role);
+      return role;
+    };
     const items = await Promise.all(
-      notifications.map((notification) => itemOf(ctx, user, notification))
+      notifications.map((notification) => itemOf(ctx, roleOf, notification))
     );
     return items.filter((item) => item !== null);
   },

@@ -129,19 +129,16 @@ async function siblings(
   projectId: Id<"projects">,
   parentId: Id<"docPages"> | undefined
 ): Promise<Doc<"docPages">[]> {
-  let pages: Doc<"docPages">[];
-  if (parentId) {
-    pages = await ctx.db
-      .query("docPages")
-      .withIndex("by_parent", (q) => q.eq("parentId", parentId))
-      .collect();
-  } else {
-    const all = await ctx.db
-      .query("docPages")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
-      .collect();
-    pages = all.filter((item) => item.parentId === undefined);
-  }
+  const pages = await (
+    parentId
+      ? ctx.db
+          .query("docPages")
+          .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+      : ctx.db.query("docPages").withIndex("by_project_and_parent", (q) =>
+          // oxlint-disable-next-line unicorn/no-useless-undefined -- Convex matches a missing field by undefined
+          q.eq("projectId", projectId).eq("parentId", undefined)
+        )
+  ).collect();
   return pages.toSorted(
     (a, b) => a.rank - b.rank || a._creationTime - b._creationTime
   );

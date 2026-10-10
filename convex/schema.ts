@@ -156,6 +156,7 @@ export default defineSchema({
   })
     .index("by_board", ["boardId"])
     .index("by_board_and_number", ["boardId", "number"])
+    .index("by_board_and_status", ["boardId", "status"])
     .index("by_sprint", ["sprintId"]),
 
   /** Who changed what on a card, for its activity. */
@@ -291,6 +292,7 @@ export default defineSchema({
     updatedBy: v.id("users"),
   })
     .index("by_project", ["projectId"])
+    .index("by_project_and_parent", ["projectId", "parentId"])
     .index("by_parent", ["parentId"]),
 
   /** Recent texts of each page, the bases that edits made at once merge from. */

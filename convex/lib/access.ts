@@ -39,6 +39,21 @@ export async function requireAdmin(ctx: QueryCtx): Promise<Doc<"users">> {
   return user;
 }
 
+/** Their own personal project, and for admins every shared one, need no place on it. */
+function ownsByRight(user: Doc<"users">, project: Doc<"projects">): boolean {
+  return (
+    project.personalFor === user._id || (!project.personalFor && isAdmin(user))
+  );
+}
+
+/** What a place on the project lets someone do. */
+function placeRole(
+  project: Doc<"projects">,
+  role: ProjectRole | undefined
+): ProjectRole | null {
+  return project.personalFor && role === "owner" ? "editor" : (role ?? null);
+}
+
 /**
  * The person's role on the project. Admins own every shared project; others
  * need to be on it. A personal project belongs to its owner alone: admins
@@ -49,10 +64,7 @@ export async function roleIn(
   user: Doc<"users">,
   project: Doc<"projects">
 ): Promise<ProjectRole | null> {
-  if (project.personalFor === user._id) {
-    return "owner";
-  }
-  if (!project.personalFor && isAdmin(user)) {
+  if (ownsByRight(user, project)) {
     return "owner";
   }
   const membership = await ctx.db
@@ -61,8 +73,7 @@ export async function roleIn(
       q.eq("projectId", project._id).eq("userId", user._id)
     )
     .unique();
-  const role = membership?.role ?? null;
-  return project.personalFor && role === "owner" ? "editor" : role;
+  return placeRole(project, membership?.role);
 }
 
 export function allows(role: ProjectRole | null, need: Need): boolean {
@@ -141,9 +152,15 @@ export async function visibleProjects(
       }
     }
   }
+  // The places were read above, so roles need no lookup of their own.
+  const places = new Map(
+    memberships.map((membership) => [membership.projectId, membership.role])
+  );
   const visible: { project: Doc<"projects">; role: ProjectRole }[] = [];
   for (const project of candidates.values()) {
-    const role = await roleIn(ctx, user, project);
+    const role = ownsByRight(user, project)
+      ? "owner"
+      : placeRole(project, places.get(project._id));
     if (role) {
       visible.push({ project, role });
     }
