@@ -110,7 +110,8 @@ function useAccountMonth(
   project: Project,
   account: Account,
   portfolios: Portfolio[],
-  month: string
+  month: string,
+  today: string
 ) {
   const projectId = project._id;
   const data = useQuery(api.finance.inMonth, { month, projectId });
@@ -131,12 +132,20 @@ function useAccountMonth(
     hasBuys ? { projectId } : "skip"
   );
   const started = data?.months.find((item) => item.accountId === account._id);
+  const totals = entries && monthTotals(entries, today);
+  const carried = data?.carried.find(
+    (item) => item.accountId === account._id
+  )?.cents;
   return {
+    // What it carried into the month, and the month's entries on top.
+    balance:
+      carried === undefined || !totals ? undefined : carried + totals.net,
     buys: describeBuys(entries, transactions, portfolios),
     categories,
     entries,
     recurring,
     started,
+    totals,
   };
 }
 
@@ -761,12 +770,8 @@ export function AccountPage({
   const editable = canEdit(project);
   const manageable =
     editable && (canManage(project) || account.createdBy === me._id);
-  const { entries, started, recurring, categories, buys } = useAccountMonth(
-    project,
-    account,
-    portfolios,
-    month
-  );
+  const { entries, balance, totals, started, recurring, categories, buys } =
+    useAccountMonth(project, account, portfolios, month, today);
   const accounts = useQuery(api.finance.accounts);
   const accountTitles = useMemo(
     () => new Map(accounts?.map((item) => [item._id, item.title])),
@@ -872,6 +877,7 @@ export function AccountPage({
           recurring={recurring.length}
         />
         <MonthSummary
+          balance={balance}
           currency={account.currency}
           current={current}
           month={month}
@@ -880,7 +886,7 @@ export function AccountPage({
           }
           onViewChange={setView}
           started={started !== undefined}
-          totals={entries && monthTotals(entries, today)}
+          totals={totals}
           view={view}
         />
         {body}

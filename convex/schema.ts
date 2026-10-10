@@ -533,6 +533,11 @@ export default defineSchema({
 
   /** Money a project follows month by month: a bank account, a card, cash. */
   financeAccounts: defineTable({
+    /**
+     * What it holds, in cents: the opening and every paid or received entry,
+     * on any day. Kept by `settle`; left out until it first runs.
+     */
+    balanceCents: v.optional(v.number()),
     createdBy: v.id("users"),
     /** What its amounts are in. */
     currency: vFiat,
@@ -541,6 +546,11 @@ export default defineSchema({
     excludedFromTotal: v.optional(v.boolean()),
     /** Drawn as a card in a wallet; a plain tile without. */
     look: v.optional(vAccountLook),
+    /**
+     * What it held before its first entry, in cents; below zero for money
+     * owed. Spares entering every transaction it ever had.
+     */
+    openingCents: v.optional(v.number()),
     projectId: v.id("projects"),
     title: v.string(),
   }).index("by_project", ["projectId"]),

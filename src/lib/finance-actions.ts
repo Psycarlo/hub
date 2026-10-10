@@ -26,6 +26,8 @@ export interface AccountDraft {
   excludedFromTotal: boolean;
   /** Null draws it as the plain tile. */
   look: AccountLook | null;
+  /** What it held before its first entry, in cents; below zero for money owed. */
+  openingCents: number;
 }
 
 /** The bitcoin a debit bought, recorded in a portfolio with it. */
@@ -98,6 +100,26 @@ function patchMonth(
   }
 }
 
+/** Moves what the account held as each loaded month began by `cents`. */
+function shiftCarried(
+  store: OptimisticLocalStore,
+  accountId: Id<"financeAccounts">,
+  cents: number
+): void {
+  for (const { args, value } of store.getAllQueries(api.finance.inMonth)) {
+    if (value) {
+      store.setQuery(api.finance.inMonth, args, {
+        ...value,
+        carried: value.carried.map((item) =>
+          item.accountId === accountId
+            ? { ...item, cents: item.cents + cents }
+            : item
+        ),
+      });
+    }
+  }
+}
+
 function patchAccounts(
   store: OptimisticLocalStore,
   patch: (accounts: Account[]) => Account[]
@@ -137,6 +159,13 @@ export function updateAccount(
       {
         optimisticUpdate: (store) => {
           const { look, ...rest } = changes;
+          const shift =
+            changes.openingCents === undefined
+              ? 0
+              : changes.openingCents - (account.openingCents ?? 0);
+          if (shift !== 0) {
+            shiftCarried(store, account._id, shift);
+          }
           patchAccounts(store, (accounts) =>
             accounts.map((item) =>
               item._id === account._id

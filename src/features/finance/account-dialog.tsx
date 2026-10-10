@@ -29,7 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Figures } from "@/features/finance/account-card";
-import { SwitchRow } from "@/features/finance/entry-fields";
+import { MoneyField, SwitchRow } from "@/features/finance/entry-fields";
 import { accountPath, financePath } from "@/features/finance/finance-context";
 import {
   CARD_COLORS,
@@ -45,7 +45,13 @@ import type {
   CardNetwork,
   MonthTotals,
 } from "@/lib/finance";
-import { CARD_NETWORKS, MAX_ACCOUNT_TITLE } from "@/lib/finance";
+import {
+  CARD_NETWORKS,
+  MAX_ACCOUNT_TITLE,
+  moneyText,
+  parseMoney,
+} from "@/lib/finance";
+import type { AccountDraft } from "@/lib/finance-actions";
 import {
   createAccount,
   deleteAccount,
@@ -100,6 +106,76 @@ function DeleteAccount({
   );
 }
 
+/** A starting balance as it's typed: an amount, held or owed. */
+interface Opening {
+  text: string;
+  owed: boolean;
+  /** Below zero when owed; undefined while the text isn't an amount. */
+  cents?: number;
+}
+
+/** The starting balance as typed: nothing typed is none. */
+function typedOpening(text: string, owed: boolean): Opening {
+  const held = /^[\s0.,]*$/u.test(text) ? 0 : parseMoney(text);
+  return { cents: held && owed ? -held : held, owed, text };
+}
+
+/** The account's starting balance, as the field shows it. */
+function openingOf(account?: Account): Opening {
+  const cents = account?.openingCents ?? 0;
+  return typedOpening(cents ? moneyText(Math.abs(cents)) : "", cents < 0);
+}
+
+/** What the account holds starting from `opening`: its entries stay as they are. */
+function balanceFrom(account: Account | undefined, opening: Opening): number {
+  const start = opening.cents ?? 0;
+  if (account?.balanceCents === undefined) {
+    return start;
+  }
+  return account.balanceCents - (account.openingCents ?? 0) + start;
+}
+
+/** What the account starts from, held or owed, so its past needn't be entered. */
+function OpeningField({
+  id,
+  currency,
+  value,
+  onChange,
+}: {
+  id: string;
+  currency: Fiat;
+  value: Opening;
+  onChange: (value: Opening) => void;
+}) {
+  return (
+    <MoneyField
+      aside={
+        <Tabs
+          className="shrink-0"
+          onValueChange={(next: "held" | "owed") =>
+            onChange(typedOpening(value.text, next === "owed"))
+          }
+          value={value.owed ? "owed" : "held"}
+        >
+          <TabsList aria-label="Held or owed">
+            <TabsTrigger value="held">Held</TabsTrigger>
+            <TabsTrigger value="owed">Owed</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      }
+      currency={currency}
+      error={
+        value.cents === undefined ? "Enter an amount, like 1250.00." : undefined
+      }
+      hint="What it held or owed before its first entry."
+      id={id}
+      label="Starting balance"
+      onChange={(text) => onChange(typedOpening(text, value.owed))}
+      value={value.text}
+    />
+  );
+}
+
 /** Nothing in or out yet, for the wallet's preview. */
 const NO_TOTALS: MonthTotals = {
   credits: 0,
@@ -125,7 +201,12 @@ function LookFields({
   look: AccountLook;
   onLookChange: (look: AccountLook) => void;
   /** What the preview shows, so picking shows the wallet as it would be. */
-  account: { title: string; currency: Fiat; excluded: boolean };
+  account: {
+    title: string;
+    currency: Fiat;
+    excluded: boolean;
+    balance: number;
+  };
 }) {
   const id = useId();
   return (
@@ -151,8 +232,9 @@ function LookFields({
             title={account.title.trim() || "Checking"}
           >
             <Figures
+              balance={account.balance}
               currency={account.currency}
-              note="This month’s net shows here"
+              note="This month shows here"
               totals={NO_TOTALS}
               wallet
             />
@@ -208,6 +290,30 @@ function LookFields({
   );
 }
 
+/** The form as it'd be saved, or undefined while it can't be. */
+function accountDraft(form: {
+  title: string;
+  description: string;
+  currency: Fiat;
+  excludedFromTotal: boolean;
+  style: Style;
+  look: AccountLook;
+  opening: Opening;
+}): AccountDraft | undefined {
+  const title = form.title.trim();
+  if (!title || form.opening.cents === undefined) {
+    return undefined;
+  }
+  return {
+    currency: form.currency,
+    description: form.description.trim(),
+    excludedFromTotal: form.excludedFromTotal,
+    look: form.style === "wallet" ? form.look : null,
+    openingCents: form.opening.cents,
+    title,
+  };
+}
+
 interface AccountFormProps {
   project: Project;
   /** The account to change; a new one starts otherwise. */
@@ -232,21 +338,23 @@ function AccountForm({ project, account, onDone }: AccountFormProps) {
     account && !account.look ? "simple" : "wallet"
   );
   const [look, setLook] = useState<AccountLook>(account?.look ?? DEFAULT_LOOK);
+  const [opening, setOpening] = useState(() => openingOf(account));
   const [saving, setSaving] = useState(false);
-  const valid = title.trim() !== "";
+  const draft = accountDraft({
+    currency,
+    description,
+    excludedFromTotal,
+    look,
+    opening,
+    style,
+    title,
+  });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!valid) {
+    if (!draft) {
       return;
     }
-    const draft = {
-      currency,
-      description: description.trim(),
-      excludedFromTotal,
-      look: style === "wallet" ? look : null,
-      title: title.trim(),
-    };
     if (account) {
       updateAccount(account, draft);
       onDone();
@@ -314,8 +422,20 @@ function AccountForm({ project, account, onDone }: AccountFormProps) {
         )}
       </div>
 
+      <OpeningField
+        currency={currency}
+        id={`${id}-opening`}
+        onChange={setOpening}
+        value={opening}
+      />
+
       <LookFields
-        account={{ currency, excluded: excludedFromTotal, title }}
+        account={{
+          balance: balanceFrom(account, opening),
+          currency,
+          excluded: excludedFromTotal,
+          title,
+        }}
         look={look}
         onLookChange={setLook}
         onStyleChange={setStyle}
@@ -329,7 +449,7 @@ function AccountForm({ project, account, onDone }: AccountFormProps) {
 
       <SwitchRow
         checked={excludedFromTotal}
-        hint="Its months don’t count toward the project’s accounts together."
+        hint="Its money doesn’t count toward the project’s total."
         id={`${id}-excluded`}
         label="Leave out of total"
         onChange={setExcludedFromTotal}
@@ -346,7 +466,7 @@ function AccountForm({ project, account, onDone }: AccountFormProps) {
         <DialogClose render={<Button type="button" variant="ghost" />}>
           Cancel
         </DialogClose>
-        <Button disabled={!valid || saving} type="submit">
+        <Button disabled={!draft || saving} type="submit">
           {saving && <Spinner />}
           {account ? "Save" : "Create account"}
         </Button>

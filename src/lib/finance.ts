@@ -22,7 +22,12 @@ export {
   signedCents,
 } from "@convex/shared/finance";
 export type { CardNetwork, Category, EntryKind } from "@convex/shared/finance";
-export type { BuyLink, FinanceOverview, UnpaidEntry } from "@convex/finance";
+export type {
+  BuyLink,
+  Carried,
+  FinanceOverview,
+  UnpaidEntry,
+} from "@convex/finance";
 
 export type Account = Doc<"financeAccounts">;
 /** An account drawn as a card in a wallet, in their colors. */

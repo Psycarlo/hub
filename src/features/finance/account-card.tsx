@@ -14,7 +14,7 @@ import { accountPath, financePath } from "@/features/finance/finance-context";
 import { CREDIT_TEXT } from "@/features/finance/finance-parts";
 import { WalletCard } from "@/features/finance/wallet-card";
 import { useToday } from "@/hooks/use-today";
-import type { Account, Entry, MonthTotals } from "@/lib/finance";
+import type { Account, Carried, Entry, MonthTotals } from "@/lib/finance";
 import {
   formatMoney,
   isInternalTransfer,
@@ -26,14 +26,15 @@ import type { Fiat } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
 import { plural } from "@/lib/utils";
 
-/** What's still waiting, in a line under the net. */
+/** What's still waiting this month, or empty once nothing is. */
 function waiting(totals: MonthTotals, currency: Fiat): string {
-  const parts = [
+  return [
     totals.toPay > 0 && `${formatMoney(totals.toPay, currency)} to pay`,
     totals.toReceive > 0 &&
       `${formatMoney(totals.toReceive, currency)} to receive`,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : "Nothing waiting";
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function Net({
@@ -53,6 +54,28 @@ function Net({
     >
       {formatMoney(cents, currency, { signed: true })}
     </span>
+  );
+}
+
+/** This month, in a line under the balance: what it came to, and what's still waiting. */
+function MonthLine({
+  totals,
+  currency,
+  wallet = false,
+}: {
+  totals: MonthTotals;
+  currency: Fiat;
+  wallet?: boolean;
+}) {
+  const rest = waiting(totals, currency);
+  if (totals.net === 0) {
+    return rest || "Nothing waiting";
+  }
+  return (
+    <>
+      <Net cents={totals.net} currency={currency} wallet={wallet} /> this month
+      {rest && ` · ${rest}`}
+    </>
   );
 }
 
@@ -112,20 +135,47 @@ function Appear({ children }: { children: ReactNode }) {
   );
 }
 
+/** What an account comes to in a month: its entries' sums, and what it holds at the end. */
+interface AccountMonth {
+  totals: MonthTotals;
+  balance: number;
+}
+
+/** Each account's month, by id: what it carried in, and its entries on top. */
+function accountMonths(
+  entries: Entry[],
+  carried: Carried[],
+  today: string
+): Map<string, AccountMonth> {
+  return new Map(
+    carried.map(({ accountId, cents }) => {
+      const totals = monthTotals(
+        entries.filter((entry) => entry.accountId === accountId),
+        today
+      );
+      return [accountId, { balance: cents + totals.net, totals }];
+    })
+  );
+}
+
 export function Figures({
+  balance,
   totals,
   currency,
   note,
   wallet = false,
 }: {
+  /** What the account holds; undefined while it loads. */
+  balance?: number;
+  /** This month's sums, under the balance. */
   totals?: MonthTotals;
   currency: Fiat;
-  /** Says the month hasn't started, in place of what's waiting. */
+  /** Says the month hasn't started, in place of its sums. */
   note?: string;
   /** In a wallet's pocket: larger, in the leather's colors. */
   wallet?: boolean;
 }) {
-  if (!totals) {
+  if (balance === undefined || !totals) {
     return wallet ? (
       <>
         <Skeleton className="my-1.5 h-6 w-36 rounded-md bg-(--wallet-skeleton)" />
@@ -146,7 +196,7 @@ export function Figures({
           wallet ? "truncate text-[1.75rem] leading-9" : "text-lg"
         )}
       >
-        <Net cents={totals.net} currency={currency} wallet={wallet} />
+        {formatMoney(balance, currency)}
       </span>
       <span
         className={cn(
@@ -154,7 +204,9 @@ export function Figures({
           wallet ? "truncate text-(--wallet-muted)" : "text-muted-foreground"
         )}
       >
-        {note ?? waiting(totals, currency)}
+        {note ?? (
+          <MonthLine currency={currency} totals={totals} wallet={wallet} />
+        )}
       </span>
     </>
   );
@@ -162,32 +214,40 @@ export function Figures({
 }
 
 /**
- * Nets of the counted accounts, one per currency they're in. Transfers
- * between two of them in one currency only moved money, so stay out.
+ * What the counted accounts hold together, one balance per currency they're
+ * in. This month's net leaves out transfers between two of them in one
+ * currency, which only moved money.
  */
 function TotalFigures({
   accounts,
   entries,
+  months,
   today,
 }: {
   accounts: Account[];
   entries?: Entry[];
+  months?: Map<string, AccountMonth>;
   today: string;
 }) {
-  if (!entries) {
+  if (!(entries && months)) {
     return <Figures currency="USD" />;
   }
   const currencies = [...new Set(accounts.map(({ currency }) => currency))];
   const counted = new Map<string, Fiat>(
     accounts.map((account) => [account._id, account.currency])
   );
-  const nets = currencies.map((currency) => {
+  const sums = currencies.map((currency) => {
     const ids = new Set(
       accounts
         .filter((account) => account.currency === currency)
         .map(({ _id }) => _id)
     );
+    let balance = 0;
+    for (const id of ids) {
+      balance += months.get(id)?.balance ?? 0;
+    }
     return {
+      balance,
       currency,
       totals: monthTotals(
         entries.filter(
@@ -199,31 +259,32 @@ function TotalFigures({
       ),
     };
   });
-  const [first, ...rest] = nets;
+  const [first, ...rest] = sums;
   if (!first) {
     return null;
   }
   return (
     <>
       <span className="text-lg font-semibold tracking-tight">
-        <Net cents={first.totals.net} currency={first.currency} />
+        {formatMoney(first.balance, first.currency)}
       </span>
       <span className="text-muted-foreground text-sm">
-        {rest.length > 0
-          ? rest
-              .map(({ currency, totals }) =>
-                formatMoney(totals.net, currency, { signed: true })
-              )
-              .join(" · ")
-          : waiting(first.totals, first.currency)}
+        {rest.length > 0 ? (
+          rest
+            .map(({ balance, currency }) => formatMoney(balance, currency))
+            .join(" · ")
+        ) : (
+          <MonthLine currency={first.currency} totals={first.totals} />
+        )}
       </span>
     </>
   );
 }
 
 /**
- * The project's accounts as cards, with this month's net; `withTotal` leads
- * with one for all of them together, once there's more than one.
+ * The project's accounts as cards, with what each holds and its month;
+ * `withTotal` leads with one for all of them together, once there's more
+ * than one.
  */
 export function AccountGrid({
   project,
@@ -237,7 +298,9 @@ export function AccountGrid({
   const today = useToday();
   const month = monthOf(today);
   const data = useQuery(api.finance.inMonth, { month, projectId: project._id });
-  const entries = data?.entries;
+  const months = data
+    ? accountMonths(data.entries, data.carried, today)
+    : undefined;
   const started = new Set(data?.months.map(({ accountId }) => accountId));
   const counted = accounts.filter((account) => !account.excludedFromTotal);
   return (
@@ -251,27 +314,28 @@ export function AccountGrid({
           }
           href={financePath(project)}
           icon={<LandmarkIcon />}
-          title={`Total in ${monthName(month)}`}
+          title="Total"
         >
-          <TotalFigures accounts={counted} entries={entries} today={today} />
+          <TotalFigures
+            accounts={counted}
+            entries={data?.entries}
+            months={months}
+            today={today}
+          />
         </AccountCardLink>
       )}
       {accounts.map((account) => {
+        const own = months?.get(account._id);
         const figures = (
           <Figures
+            balance={own?.balance}
             currency={account.currency}
             note={
               data && !started.has(account._id)
                 ? `${monthName(month)} not started`
                 : undefined
             }
-            totals={
-              entries &&
-              monthTotals(
-                entries.filter((entry) => entry.accountId === account._id),
-                today
-              )
-            }
+            totals={own?.totals}
             wallet={account.look !== undefined}
           />
         );

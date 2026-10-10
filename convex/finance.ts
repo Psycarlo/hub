@@ -22,6 +22,7 @@ import {
   ownedFile,
   signedLink,
 } from "./lib/files";
+import { balanceOf, paidSince, settle } from "./lib/finance";
 import { mediaUrl } from "./lib/media";
 import type { Upload } from "./lib/validators";
 import {
@@ -108,9 +109,16 @@ function byDate(a: Doc<"financeEntries">, b: Doc<"financeEntries">): number {
   return a.date.localeCompare(b.date) || a._creationTime - b._creationTime;
 }
 
+/** What an account held as a month began, in its cents. */
+export interface Carried {
+  accountId: Id<"financeAccounts">;
+  cents: number;
+}
+
 /**
- * Every entry in the project's accounts dated in `month`, and which accounts
- * have started it; null once the project is gone or no longer shared.
+ * Every entry in the project's accounts dated in `month`, which accounts have
+ * started it, and what each held as it began, so its entries add up to what
+ * it holds at the end; null once the project is gone or no longer shared.
  */
 export const inMonth = query({
   args: { month: v.string(), projectId: v.id("projects") },
@@ -120,6 +128,7 @@ export const inMonth = query({
   ): Promise<{
     entries: Doc<"financeEntries">[];
     months: Doc<"financeMonths">[];
+    carried: Carried[];
   } | null> => {
     const access = await ifVisible(requireProject(ctx, projectId, "view"));
     if (!(access && isMonth(month))) {
@@ -140,7 +149,20 @@ export const inMonth = query({
         q.eq("projectId", projectId).eq("month", month)
       )
       .collect();
-    return { entries: entries.toSorted(byDate), months };
+    const owned = await ctx.db
+      .query("financeAccounts")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    // The balance less what's been paid since the month began, this month's and any later.
+    const carried = await Promise.all(
+      owned.map(async (account) => ({
+        accountId: account._id,
+        cents:
+          (await balanceOf(ctx, account)) -
+          (await paidSince(ctx, account._id, month)),
+      }))
+    );
+    return { carried, entries: entries.toSorted(byDate), months };
   },
 });
 
@@ -360,6 +382,17 @@ function cleanCents(cents: number): number {
   }
   if (cents > MAX_CENTS) {
     throw new ConvexError("That amount is too large.");
+  }
+  return cents;
+}
+
+/** A starting balance in cents, which can be below zero or none at all. */
+function cleanOpening(cents: number): number {
+  if (!Number.isSafeInteger(cents)) {
+    throw new ConvexError("Enter the starting balance as an amount.");
+  }
+  if (Math.abs(cents) > MAX_CENTS) {
+    throw new ConvexError("That starting balance is too large.");
   }
   return cents;
 }
@@ -738,11 +771,14 @@ export const createAccount = mutation({
     description: v.string(),
     excludedFromTotal: v.boolean(),
     look: v.optional(vLookChange),
+    /** What it held before its first entry. */
+    openingCents: v.optional(v.number()),
     projectId: v.id("projects"),
     title: v.string(),
   },
   handler: async (ctx, args) => {
     const { user } = await requireProject(ctx, args.projectId, "edit");
+    const openingCents = cleanOpening(args.openingCents ?? 0);
     const settings = await ctx.db
       .query("financeSettings")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -758,11 +794,14 @@ export const createAccount = mutation({
       });
     }
     return await ctx.db.insert("financeAccounts", {
+      // No entries yet, so it holds what it started with.
+      balanceCents: openingCents,
       createdBy: user._id,
       currency: args.currency,
       description: args.description.trim().slice(0, MAX_DESCRIPTION),
       excludedFromTotal: args.excludedFromTotal,
       ...(args.look ? { look: cleanLook(args.look) } : {}),
+      ...(openingCents === 0 ? {} : { openingCents }),
       projectId: args.projectId,
       title: cleanTitle(args.title),
     });
@@ -776,6 +815,7 @@ export const updateAccount = mutation({
     description: v.optional(v.string()),
     excludedFromTotal: v.optional(v.boolean()),
     look: v.optional(vLookChange),
+    openingCents: v.optional(v.number()),
     title: v.optional(v.string()),
   },
   handler: async (ctx, { accountId, ...changes }) => {
@@ -802,7 +842,17 @@ export const updateAccount = mutation({
       // Undefined takes the field away, back to the plain tile.
       patch.look = changes.look ? cleanLook(changes.look) : undefined;
     }
+    if (changes.openingCents !== undefined) {
+      const opening = cleanOpening(changes.openingCents);
+      patch.openingCents = opening === 0 ? undefined : opening;
+    }
     await ctx.db.patch(accountId, patch);
+    if (
+      "openingCents" in patch &&
+      patch.openingCents !== access.account.openingCents
+    ) {
+      await settle(ctx, accountId);
+    }
   },
 });
 
@@ -1160,6 +1210,20 @@ export const invoiceSource = internalMutation({
   },
 });
 
+/**
+ * Settles each account a change to the entry reached: its own, and where its
+ * transfer went before and goes now, as it may have followed, gone or moved.
+ */
+async function settleEntry(ctx: MutationCtx, before: Entry): Promise<void> {
+  const after = await ctx.db.get(before._id);
+  await settle(
+    ctx,
+    before.accountId,
+    before.transfer?.accountId,
+    after?.transfer?.accountId
+  );
+}
+
 export const addEntry = mutation({
   args: {
     accountId: v.id("financeAccounts"),
@@ -1233,6 +1297,7 @@ export const addEntry = mutation({
         userId: user._id,
       });
     }
+    await settle(ctx, account._id, args.toAccountId);
     return entryId;
   },
 });
@@ -1329,6 +1394,7 @@ export const updateEntry = mutation({
       to: toAccountId,
       userId: user._id,
     });
+    await settleEntry(ctx, entry);
   },
 });
 
@@ -1343,6 +1409,7 @@ export const removeEntry = mutation({
     await ctx.db.delete(entryId);
     await dropFiles(ctx, entryId);
     await dropTransfer(ctx, entry);
+    await settleEntry(ctx, entry);
   },
 });
 

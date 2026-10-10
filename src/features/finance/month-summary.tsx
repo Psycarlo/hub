@@ -52,10 +52,13 @@ function useArrowMonths(onStep: (by: number) => void): void {
 function Stat({
   label,
   children,
+  detail,
   large = false,
 }: {
   label: string;
   children: ReactNode;
+  /** A quieter line under the figure. */
+  detail?: ReactNode;
   large?: boolean;
 }) {
   return (
@@ -74,6 +77,11 @@ function Stat({
       >
         {children}
       </dd>
+      {detail && (
+        <dd className="text-muted-foreground truncate text-sm tabular-nums">
+          {detail}
+        </dd>
+      )}
     </div>
   );
 }
@@ -141,6 +149,8 @@ interface MonthSummaryProps {
   view: FinanceView;
   onViewChange: (view: FinanceView) => void;
   currency: Fiat;
+  /** What the account holds at the month's end; undefined while loading. */
+  balance?: number;
   /** The month's figures; undefined while loading. */
   totals?: MonthTotals;
   started: boolean;
@@ -154,12 +164,14 @@ export function MonthSummary({
   view,
   onViewChange,
   currency,
+  balance,
   totals,
   started,
 }: MonthSummaryProps) {
   const step = (by: number) => onMonthChange(shiftMonth(month, by));
   useArrowMonths(step);
   const start = monthStart(month);
+  const name = start.toLocaleString("en", { month: "long" });
 
   return (
     <section
@@ -168,7 +180,7 @@ export function MonthSummary({
     >
       <div className="flex items-center gap-2">
         <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
-          {start.toLocaleString("en", { month: "long" })}{" "}
+          {name}{" "}
           <span className="text-muted-foreground font-normal">
             {start.getFullYear()}
           </span>
@@ -196,19 +208,28 @@ export function MonthSummary({
         </FluidTooltip.Group>
       </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-        {totals ? (
+        {balance !== undefined && totals ? (
           <>
-            <Stat label="Net" large>
-              <span className={cn(totals.net > 0 && CREDIT_TEXT)}>
-                {formatMoney(totals.net, currency, { signed: true })}
-              </span>
+            <Stat
+              detail={
+                <>
+                  <span className={cn(totals.net > 0 && CREDIT_TEXT)}>
+                    {formatMoney(totals.net, currency, { signed: true })}
+                  </span>{" "}
+                  in {name}
+                </>
+              }
+              label="Balance"
+              large
+            >
+              {formatMoney(balance, currency)}
             </Stat>
             <Stat label="Credits">{formatMoney(totals.credits, currency)}</Stat>
             <Stat label="Debits">{formatMoney(totals.debits, currency)}</Stat>
           </>
         ) : (
           <>
-            <Skeleton className="col-span-2 h-16 rounded-lg sm:col-span-1" />
+            <Skeleton className="col-span-2 h-20 rounded-lg sm:col-span-1 sm:h-21" />
             <Skeleton className="h-14 rounded-lg" />
             <Skeleton className="h-14 rounded-lg" />
           </>

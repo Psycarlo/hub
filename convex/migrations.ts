@@ -4,10 +4,13 @@ import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
+import { settle } from "./lib/finance";
 
 const BATCH = 100;
 /** A page and its text can each run to half a megabyte: a few per batch. */
 const PAGE_BATCH = 5;
+/** Each account reads every entry it was paid or received: a few per batch. */
+const ACCOUNT_BATCH = 10;
 
 /** When the card's history last saw it move to done, or its last change should it never have. */
 async function lastDone(ctx: QueryCtx, card: Doc<"cards">): Promise<number> {
@@ -91,6 +94,27 @@ export const movePageText = internalMutation({
     }
     if (!isDone) {
       await ctx.scheduler.runAfter(0, internal.migrations.movePageText, {
+        cursor: continueCursor,
+      });
+    }
+  },
+});
+
+/**
+ * Keeps `balanceCents` on finance accounts made before it was, so months
+ * read it instead of adding up every entry. Run once per deployment with
+ * `pnpm convex run migrations:settleAccounts`; it works through every account
+ * by itself.
+ */
+export const settleAccounts = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, { cursor }): Promise<void> => {
+    const { page, isDone, continueCursor } = await ctx.db
+      .query("financeAccounts")
+      .paginate({ cursor: cursor ?? null, numItems: ACCOUNT_BATCH });
+    await settle(ctx, ...page.map(({ _id }) => _id));
+    if (!isDone) {
+      await ctx.scheduler.runAfter(0, internal.migrations.settleAccounts, {
         cursor: continueCursor,
       });
     }

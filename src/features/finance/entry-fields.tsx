@@ -72,6 +72,7 @@ export function MoneyField({
   error,
   hint,
   pending = false,
+  aside,
   onChange,
 }: {
   id: string;
@@ -82,30 +83,48 @@ export function MoneyField({
   hint?: ReactNode;
   /** Waiting on an invoice being read, which may fill it in. */
   pending?: boolean;
+  /** Beside the field, on its line. */
+  aside?: ReactNode;
   onChange: (value: string) => void;
 }) {
+  const field = (
+    <div
+      className={cn(
+        "relative",
+        pending && "invoice-pending",
+        aside !== undefined && "min-w-0 flex-1"
+      )}
+    >
+      <span
+        aria-hidden
+        className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
+      >
+        {fiatSymbol(currency)}
+      </span>
+      <Input
+        aria-describedby={error || hint ? `${id}-hint` : undefined}
+        aria-invalid={error ? true : undefined}
+        autoComplete="off"
+        className="pl-7 tabular-nums"
+        id={id}
+        inputMode="decimal"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="0.00"
+        value={value}
+      />
+    </div>
+  );
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className={cn("relative", pending && "invoice-pending")}>
-        <span
-          aria-hidden
-          className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
-        >
-          {fiatSymbol(currency)}
-        </span>
-        <Input
-          aria-describedby={error || hint ? `${id}-hint` : undefined}
-          aria-invalid={error ? true : undefined}
-          autoComplete="off"
-          className="pl-7 tabular-nums"
-          id={id}
-          inputMode="decimal"
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="0.00"
-          value={value}
-        />
-      </div>
+      {aside === undefined ? (
+        field
+      ) : (
+        <div className="flex items-center gap-2">
+          {field}
+          {aside}
+        </div>
+      )}
       {(error || hint) && (
         <p
           className={cn(
