@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { APP_NAME } from "@/lib/brand";
 import { convex } from "@/lib/convex";
 import { uploadingToDrive } from "@/lib/drive-upload";
+import { holdingInvoices } from "@/lib/invoice-jobs";
 import { saveAll } from "@/lib/leaving";
 import { sendingUploads } from "@/lib/upload";
 
@@ -74,9 +75,9 @@ async function refreshWorker(): Promise<void> {
   }
 }
 
-/** Whether a file is on its way up, which a reload would drop. */
+/** Whether a file is on its way up, or invoices wait to be reviewed, which a reload would drop. */
 function uploading(): boolean {
-  return uploadingToDrive() || sendingUploads();
+  return uploadingToDrive() || sendingUploads() || holdingInvoices();
 }
 
 /** Whether something typed sits in a field that only it holds. */

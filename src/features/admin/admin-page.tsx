@@ -62,6 +62,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
+import { AiSettings } from "@/features/admin/ai-settings";
 import type { User } from "@/hooks/use-users";
 import { useMe, useUserList } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
@@ -703,6 +704,12 @@ export function AdminPage() {
           title="Logo"
         >
           <LogoField />
+        </Section>
+        <Section
+          description="Models on OpenRouter do work for the team, like reading invoices. Pick the one each task runs on."
+          title="AI"
+        >
+          <AiSettings />
         </Section>
       </main>
     </>

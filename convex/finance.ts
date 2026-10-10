@@ -3,7 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { ProjectAccess } from "./lib/access";
 import {
   ifVisible,
@@ -15,8 +15,24 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { vAccountLook, vBoardLabel, vEntryKind, vFiat } from "./lib/validators";
+import {
+  attachedFile,
+  dropFile,
+  isAttached,
+  ownedFile,
+  signedLink,
+} from "./lib/files";
+import { mediaUrl } from "./lib/media";
+import type { Upload } from "./lib/validators";
+import {
+  vAccountLook,
+  vBoardLabel,
+  vEntryKind,
+  vFiat,
+  vUpload,
+} from "./lib/validators";
 import { insertBuy } from "./portfolios";
+import { r2 } from "./r2";
 import { shortId } from "./shared/crm";
 import type { Category, EntryKind } from "./shared/finance";
 import {
@@ -24,6 +40,7 @@ import {
   MAX_CATEGORIES,
   MAX_CATEGORY_NAME,
   MAX_CENTS,
+  MAX_ENTRY_FILES,
   MAX_ENTRY_NAME,
   MAX_ENTRY_NOTE,
   STARTER_CATEGORIES,
@@ -501,6 +518,21 @@ async function linkCredit(
   });
 }
 
+function filesOf(ctx: QueryCtx, entryId: Id<"financeEntries">) {
+  return ctx.db
+    .query("financeFiles")
+    .withIndex("by_entry", (q) => q.eq("entryId", entryId));
+}
+
+/** Deletes the files an entry keeps, along with it. */
+async function dropFiles(ctx: MutationCtx, entryId: Id<"financeEntries">) {
+  const files = await filesOf(ctx, entryId).collect();
+  for (const file of files) {
+    await ctx.db.delete(file._id);
+    await dropFile(ctx, file.key);
+  }
+}
+
 /**
  * Takes away the other side of a transfer. One the person can't edit is
  * only unlinked, left as money out or in for whoever can.
@@ -516,9 +548,12 @@ async function dropTransfer(ctx: MutationCtx, entry: Entry): Promise<void> {
   const editable = await ifVisible(
     requireAccount(ctx, other.accountId, "edit")
   );
-  await (editable
-    ? ctx.db.delete(other._id)
-    : ctx.db.patch(other._id, { transfer: undefined }));
+  if (!editable) {
+    await ctx.db.patch(other._id, { transfer: undefined });
+    return;
+  }
+  await ctx.db.delete(other._id);
+  await dropFiles(ctx, other._id);
 }
 
 /**
@@ -1000,6 +1035,131 @@ export const addToMonth = mutation({
   },
 });
 
+/** A file an entry keeps, as the app shows it. */
+function entryFileView(file: Doc<"financeFiles">) {
+  return {
+    _creationTime: file._creationTime,
+    _id: file._id,
+    key: file.key,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    uploadedBy: file.uploadedBy,
+    url: mediaUrl(file.key),
+  };
+}
+
+export type EntryFile = ReturnType<typeof entryFileView>;
+
+/** The files an entry keeps, oldest first; null once it's out of reach. */
+export const entryFiles = query({
+  args: { entryId: v.id("financeEntries") },
+  handler: async (ctx, { entryId }): Promise<EntryFile[] | null> => {
+    if (!(await ifVisible(requireEntry(ctx, entryId, "view")))) {
+      return null;
+    }
+    const files = await filesOf(ctx, entryId).collect();
+    return files.map(entryFileView);
+  },
+});
+
+/** A short-lived link to a file an entry keeps, to show it in place or download it. */
+export const fileLink = mutation({
+  args: { download: v.boolean(), fileId: v.id("financeFiles") },
+  handler: async (ctx, { download, fileId }) => {
+    const file = await ctx.db.get(fileId);
+    if (!file) {
+      throw new ConvexError("That file doesn’t exist anymore.");
+    }
+    await requireEntry(ctx, file.entryId, "view");
+    return await signedLink(file, download);
+  },
+});
+
+/**
+ * Takes files off an entry and deletes them, then keeps someone's uploads
+ * with it, up to `MAX_ENTRY_FILES`, and counts what it keeps.
+ */
+async function changeFiles(
+  ctx: MutationCtx,
+  entry: Entry,
+  userId: Id<"users">,
+  { add, remove }: { add: Upload[]; remove: Id<"financeFiles">[] }
+): Promise<void> {
+  if (add.length === 0 && remove.length === 0) {
+    return;
+  }
+  for (const fileId of remove) {
+    const file = await ctx.db.get(fileId);
+    if (file?.entryId === entry._id) {
+      await ctx.db.delete(file._id);
+      await dropFile(ctx, file.key);
+    }
+  }
+  const kept = await filesOf(ctx, entry._id).collect();
+  if (kept.length + add.length > MAX_ENTRY_FILES) {
+    throw new ConvexError(
+      `A transaction can keep up to ${MAX_ENTRY_FILES} files.`
+    );
+  }
+  for (const upload of add) {
+    await ownedFile(ctx, upload.key, userId, "attachment");
+    if (await isAttached(ctx, upload.key)) {
+      throw new ConvexError("That file is attached already.");
+    }
+    await ctx.db.insert("financeFiles", {
+      accountId: entry.accountId,
+      entryId: entry._id,
+      key: upload.key,
+      projectId: entry.projectId,
+      uploadedBy: userId,
+      ...attachedFile(upload),
+    });
+  }
+  const count = kept.length + add.length;
+  await ctx.db.patch(entry._id, { fileCount: count > 0 ? count : undefined });
+}
+
+/**
+ * What reading an invoice for the account needs: a short-lived link to the
+ * file, and the project's categories to file it under. The file must be the
+ * person's own upload, or one an entry in the account keeps.
+ */
+export const invoiceSource = internalMutation({
+  args: { accountId: v.id("financeAccounts"), key: v.string() },
+  handler: async (ctx, { accountId, key }) => {
+    const { account, user } = await requireAccount(ctx, accountId, "edit");
+    const kept = await ctx.db
+      .query("financeFiles")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .first();
+    let file: { key: string; name: string; type: string };
+    if (kept) {
+      if (kept.accountId !== account._id) {
+        throw new ConvexError("That file couldn’t be found.");
+      }
+      file = kept;
+    } else {
+      await ownedFile(ctx, key, user._id, "attachment");
+      const metadata = await r2.getMetadata(ctx, key);
+      // The key ends in the file's name, which its type is told by when R2 didn't keep one.
+      file = {
+        key,
+        name: key.slice(key.indexOf("/") + 1),
+        type: metadata?.contentType ?? "",
+      };
+    }
+    const filedUnder = await categoriesOf(ctx, account.projectId);
+    return {
+      categories: filedUnder.map(({ id, name }) => ({ id, name })),
+      name: file.name,
+      type: file.type,
+      url: await signedLink(file, false),
+      userId: user._id,
+    };
+  },
+});
+
 export const addEntry = mutation({
   args: {
     accountId: v.id("financeAccounts"),
@@ -1010,6 +1170,8 @@ export const addEntry = mutation({
     category: v.optional(v.string()),
     cents: v.number(),
     date: v.string(),
+    /** Uploads to keep with it, like its invoice. */
+    files: v.optional(v.array(vUpload)),
     kind: vEntryKind,
     name: v.string(),
     note: v.string(),
@@ -1054,6 +1216,10 @@ export const addEntry = mutation({
       updatedAt: Date.now(),
       ...entry,
     });
+    const added = await ctx.db.get(entryId);
+    if (added && args.files) {
+      await changeFiles(ctx, added, user._id, { add: args.files, remove: [] });
+    }
     const debit = args.toAccountId && (await ctx.db.get(entryId));
     if (args.toAccountId && debit) {
       const destination = await requireDestination(
@@ -1073,6 +1239,8 @@ export const addEntry = mutation({
 
 export const updateEntry = mutation({
   args: {
+    /** Uploads to keep with it as well. */
+    addFiles: v.optional(v.array(vUpload)),
     buy: v.optional(vNewBuy),
     /** Null lets go of the buy it paid for; the buy stays in its portfolio. */
     buyId: v.optional(v.union(v.id("portfolioTransactions"), v.null())),
@@ -1087,12 +1255,21 @@ export const updateEntry = mutation({
     paid: v.optional(v.boolean()),
     /** What arrives where it transfers to, in its cents, when its currency differs. */
     receivedCents: v.optional(v.number()),
+    /** Files it keeps to delete. */
+    removeFiles: v.optional(v.array(v.id("financeFiles"))),
     /** Where a debit transfers to: another account, null for none, or left out to keep it. */
     toAccountId: v.optional(v.union(v.id("financeAccounts"), v.null())),
   },
-  handler: async (ctx, { entryId, receivedCents, toAccountId, ...changes }) => {
+  handler: async (
+    ctx,
+    { entryId, receivedCents, toAccountId, addFiles, removeFiles, ...changes }
+  ) => {
     const access = await requireEntry(ctx, entryId, "edit");
     const { account, entry, user } = access;
+    await changeFiles(ctx, entry, user._id, {
+      add: addFiles ?? [],
+      remove: removeFiles ?? [],
+    });
     const patch: Partial<Doc<"financeEntries">> = { updatedAt: Date.now() };
     if (changes.name !== undefined) {
       patch.name = cleanName(changes.name);
@@ -1164,6 +1341,7 @@ export const removeEntry = mutation({
   handler: async (ctx, { entryId }) => {
     const { entry } = await requireEntry(ctx, entryId, "edit");
     await ctx.db.delete(entryId);
+    await dropFiles(ctx, entryId);
     await dropTransfer(ctx, entry);
   },
 });

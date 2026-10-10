@@ -12,6 +12,7 @@ export {
   MAX_ACCOUNT_TITLE,
   MAX_CATEGORIES,
   MAX_CATEGORY_NAME,
+  MAX_ENTRY_FILES,
   MAX_ENTRY_NAME,
   dayIn,
   isInternalTransfer,
@@ -40,6 +41,9 @@ export function entryKind(type: EntryType): EntryKind {
 
 /** Whether an entry is settled yet, the way filters ask it. */
 export type EntryStatus = "paid" | "unpaid";
+
+/** Whether an entry keeps files, like its invoice, the way filters ask it. */
+export type EntryFileFilter = "with" | "without";
 
 const ordinals = new Intl.PluralRules("en", { type: "ordinal" });
 const SUFFIXES: Record<Intl.LDMLPluralRule, string> = {
@@ -186,10 +190,12 @@ export interface EntryFilters {
   statuses: EntryStatus[];
   /** Category ids, and `NO_CATEGORY` for none. */
   categories: string[];
+  files: EntryFileFilter[];
 }
 
 export const NO_FILTERS: EntryFilters = {
   categories: [],
+  files: [],
   kinds: [],
   search: "",
   statuses: [],
@@ -198,7 +204,10 @@ export const NO_FILTERS: EntryFilters = {
 /** How many filters narrow the entries, the search aside. */
 export function filterCount(filters: EntryFilters): number {
   return (
-    filters.kinds.length + filters.statuses.length + filters.categories.length
+    filters.kinds.length +
+    filters.statuses.length +
+    filters.categories.length +
+    filters.files.length
   );
 }
 
@@ -220,6 +229,12 @@ export function matchesFilters(
   if (
     filters.categories.length > 0 &&
     !filters.categories.includes(category?.id ?? NO_CATEGORY)
+  ) {
+    return false;
+  }
+  if (
+    filters.files.length > 0 &&
+    !filters.files.includes(entry.fileCount ? "with" : "without")
   ) {
     return false;
   }

@@ -4,6 +4,7 @@ import {
   BitcoinIcon,
   CalendarDaysIcon,
   CheckIcon,
+  PaperclipIcon,
   TableIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -100,6 +101,25 @@ export function BuyBadge({ children }: { children: ReactNode }) {
         <span className="sr-only">Paid for bitcoin</span>
       </TooltipTrigger>
       <TooltipContent>{children}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Marks an entry that keeps files, like its invoice, saying how many on hover. */
+export function FilesBadge({ count }: { count: number }) {
+  const label = count === 1 ? "1 file" : `${count} files`;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="text-muted-foreground inline-flex h-5 shrink-0 items-center gap-0.5 text-xs tabular-nums" />
+        }
+      >
+        <PaperclipIcon aria-hidden className="size-3.5" />
+        {count > 1 && <span aria-hidden>{count}</span>}
+        <span className="sr-only">{label}</span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
 }

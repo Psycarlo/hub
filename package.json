@@ -28,6 +28,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@kitlangton/rolling-number": "^0.4.1",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "@tanstack/charts": "^1.0.0",
@@ -46,6 +47,7 @@
     "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",
     "@tiptap/suggestion": "^3.31.4",
+    "ai": "^7.0.137",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "convex": "^1.46.0",
@@ -63,7 +65,8 @@
     "shaders": "^4.0.1",
     "sonner": "^2.0.8",
     "three": "^0.186.1",
-    "wouter": "^3.13.0"
+    "wouter": "^3.13.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@babel/core": "^8.0.6",

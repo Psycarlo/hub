@@ -3,31 +3,38 @@ import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   CalendarPlusIcon,
+  FileUpIcon,
   LandmarkIcon,
   PlusIcon,
   RepeatIcon,
   Settings2Icon,
+  SparklesIcon,
   TagsIcon,
   WalletIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
 import { ProjectAvatar } from "@/components/project-avatar";
+import { SplitButton } from "@/components/split-button";
 import type { Crumb } from "@/components/top-bar";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { useFileDrop } from "@/features/card/use-file-drop";
 import { AccountDialog } from "@/features/finance/account-dialog";
 import { CategoriesDialog } from "@/features/finance/categories-dialog";
 import { EntriesCalendar } from "@/features/finance/entries-calendar";
 import { EntriesTable } from "@/features/finance/entries-table";
+import type { Review } from "@/features/finance/entry-dialog";
 import { EntryDialog } from "@/features/finance/entry-dialog";
+import { INVOICE_TYPES } from "@/features/finance/entry-files";
 import {
   ActiveFilters,
   EntrySearch,
@@ -36,8 +43,10 @@ import {
 import { financePath } from "@/features/finance/finance-context";
 import type { FinanceView } from "@/features/finance/finance-parts";
 import { useFinanceView } from "@/features/finance/finance-parts";
+import { InvoiceTray, toReview } from "@/features/finance/invoice-tray";
 import { MonthSummary } from "@/features/finance/month-summary";
 import { RecurringDialog } from "@/features/finance/recurring-dialog";
+import { useAiReady } from "@/hooks/use-ai-ready";
 import { useToday } from "@/hooks/use-today";
 import { useMe } from "@/hooks/use-users";
 import type {
@@ -59,6 +68,8 @@ import {
   parseMonth,
 } from "@/lib/finance";
 import { addToMonth, startMonth } from "@/lib/finance-actions";
+import type { InvoiceJob } from "@/lib/invoice-jobs";
+import { addJobs, skipJob, useInvoiceJobs } from "@/lib/invoice-jobs";
 import type { Portfolio, Transaction } from "@/lib/portfolio";
 import { formatBtc, formatFiat } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -518,6 +529,210 @@ function accountCrumbs(
   ];
 }
 
+const NO_JOBS: string[] = [];
+
+/** Over the page while files are dragged onto it: where they'll go, and what becomes of them. */
+function DropOverlay({ account, reads }: { account: Account; reads: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className="animate-in fade-in zoom-in-98 border-primary/40 bg-primary/4 pointer-events-none absolute inset-2 z-30 grid place-items-center rounded-3xl border-2 border-dashed backdrop-blur-[2px] duration-150 sm:inset-4"
+    >
+      <div className="bg-popover shadow-raised flex max-w-sm flex-col items-center gap-3 rounded-2xl px-6 py-5 text-center">
+        <span className="bg-primary/10 text-primary grid size-10 place-items-center rounded-xl">
+          {reads ? (
+            <SparklesIcon className="size-5" />
+          ) : (
+            <FileUpIcon className="size-5" />
+          )}
+        </span>
+        <div className="flex flex-col gap-1">
+          <p className="font-semibold text-balance">
+            Drop invoices on {account.title}
+          </p>
+          <p className="text-muted-foreground text-sm text-pretty">
+            {reads
+              ? "Each one is read and becomes a transaction for you to check."
+              : "Each one becomes a transaction, with the file kept on it."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Takes invoices dropped anywhere on the page, saying where they'll go while they're over it. */
+function InvoiceDrop({
+  account,
+  reads,
+  enabled,
+  onInvoices,
+  children,
+}: {
+  account: Account;
+  reads: boolean;
+  enabled: boolean;
+  onInvoices: (files: File[]) => void;
+  children: ReactNode;
+}) {
+  const drop = useFileDrop(onInvoices);
+  return (
+    <div
+      className="relative flex flex-1 flex-col"
+      {...(enabled ? drop.handlers : {})}
+    >
+      {drop.over && <DropOverlay account={account} reads={reads} />}
+      {children}
+    </div>
+  );
+}
+
+/** Whether a batch job can be gone back to: uploaded and not added, skipped or not. */
+function visitable(job: InvoiceJob): boolean {
+  return job.status !== "failed" && job.outcome !== "added";
+}
+
+/**
+ * Invoices dropped on the account together, and moving through them to
+ * review each: the next waiting after one's added or skipped, around to the
+ * start, till none are left.
+ */
+function useReview(account: Account) {
+  const all = useInvoiceJobs();
+  const batch = useMemo(
+    () => all.filter((job) => job.batch && job.accountId === account._id),
+    [all, account._id]
+  );
+  const [reviewing, setReviewing] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const current = batch.find((job) => job.id === reviewing);
+  const index = current ? batch.indexOf(current) : -1;
+  const previous = batch.slice(0, Math.max(0, index)).findLast(visitable);
+  const next = batch.slice(index + 1).find(visitable);
+
+  const start = (id?: string) => {
+    const first =
+      batch.find((job) => job.id === id) ??
+      batch.find(toReview) ??
+      batch.find(visitable);
+    if (first) {
+      setReviewing(first.id);
+      setOpen(true);
+    }
+  };
+  /** On to the next one waiting after this one, around to the start; done once there's none. */
+  const advance = () => {
+    const around = [...batch.slice(index + 1), ...batch.slice(0, index)];
+    const waiting = around.find(toReview);
+    if (waiting) {
+      setReviewing(waiting.id);
+    } else {
+      setOpen(false);
+    }
+  };
+
+  const props: Review | undefined = current && {
+    onAdded: advance,
+    onNext: next && (() => setReviewing(next.id)),
+    onPrevious: previous && (() => setReviewing(previous.id)),
+    onSkip: () => {
+      skipJob(current.id);
+      advance();
+    },
+    position: index + 1,
+    remaining: batch.filter((job) => job !== current && toReview(job)).length,
+    total: batch.length,
+  };
+  return {
+    batch,
+    close: () => setOpen(false),
+    current,
+    open: open && current !== undefined,
+    props,
+    start,
+  };
+}
+
+/** The account's batch of invoices: the tray in the corner, and the dialog to review each one. */
+function InvoiceReview({
+  account,
+  categories,
+  portfolios,
+  defaultDate,
+}: {
+  account: Account;
+  categories: Category[];
+  portfolios: Portfolio[];
+  defaultDate: string;
+}) {
+  const { batch, close, current, open, props, start } = useReview(account);
+  return (
+    <>
+      <EntryDialog
+        account={account}
+        categories={categories}
+        defaultDate={defaultDate}
+        formKey={current?.id}
+        jobs={current ? [current.id] : NO_JOBS}
+        onOpenChange={(next) => {
+          if (!next) {
+            close();
+          }
+        }}
+        open={open}
+        portfolios={portfolios}
+        review={props}
+      />
+      <InvoiceTray account={account} jobs={batch} onReview={start} />
+    </>
+  );
+}
+
+/** Adds a transaction, or several from invoices picked. */
+function AddTransaction({
+  reads,
+  onAdd,
+  onInvoices,
+}: {
+  reads: boolean;
+  onAdd: () => void;
+  onInvoices: (files: File[]) => void;
+}) {
+  const picker = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <SplitButton
+        menu={
+          <DropdownMenuItem onClick={() => picker.current?.click()}>
+            {reads ? <SparklesIcon /> : <FileUpIcon />}
+            {reads ? "Add from invoices…" : "Add with invoices…"}
+          </DropdownMenuItem>
+        }
+        menuLabel="More ways to add"
+        onClick={onAdd}
+        size="sm"
+      >
+        <PlusIcon />
+        <span className="max-sm:sr-only">Add transaction</span>
+      </SplitButton>
+      <input
+        accept={INVOICE_TYPES}
+        aria-label="Invoices"
+        className="sr-only"
+        multiple
+        onChange={(event) => {
+          const files = [...(event.target.files ?? [])];
+          event.target.value = "";
+          onInvoices(files);
+        }}
+        ref={picker}
+        tabIndex={-1}
+        type="file"
+      />
+    </>
+  );
+}
+
 /** One account's month: what it adds up to, then every entry in it. */
 export function AccountPage({
   project,
@@ -558,10 +773,29 @@ export function AccountPage({
     [accounts]
   );
 
+  const reads = useAiReady();
+  // An invoice dropped or picked on its own, which a new entry starts with.
+  const [dropped, setDropped] = useState(NO_JOBS);
+
   const openEntry = (entry?: Entry, date?: string) => {
     setEditing(entry);
     setNewDate(date);
+    setDropped(NO_JOBS);
     setDialog("entry");
+  };
+  /** One invoice opens a new entry with it; several queue up in the tray, to review one by one. */
+  const takeInvoices = (files: File[]) => {
+    if (files.length === 1) {
+      const ids = addJobs(account._id, files, { batch: false, read: reads });
+      if (ids.length > 0) {
+        setEditing(undefined);
+        setNewDate(undefined);
+        setDropped(ids);
+        setDialog("entry");
+      }
+    } else if (files.length > 1) {
+      addJobs(account._id, files, { batch: true, read: reads });
+    }
   };
   const dialogProps = (name: Dialog) => ({
     onOpenChange: (open: boolean) => setDialog(open ? name : undefined),
@@ -614,13 +848,19 @@ export function AccountPage({
   }
 
   return (
-    <>
+    <InvoiceDrop
+      account={account}
+      enabled={editable}
+      onInvoices={takeInvoices}
+      reads={reads}
+    >
       <TopBar crumbs={accountCrumbs(project, account, alone)}>
         {editable && (
-          <Button onClick={() => openEntry()} size="sm">
-            <PlusIcon />
-            <span className="max-sm:sr-only">Add transaction</span>
-          </Button>
+          <AddTransaction
+            onAdd={() => openEntry()}
+            onInvoices={takeInvoices}
+            reads={reads}
+          />
         )}
       </TopBar>
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pt-4 pb-10 sm:px-6">
@@ -653,15 +893,24 @@ export function AccountPage({
         />
       )}
       {editable && (
-        <EntryDialog
-          {...dialogProps("entry")}
-          account={account}
-          categories={categories}
-          defaultDate={newDate ?? startDay(month, today)}
-          entry={editing}
-          key={editing?._id ?? `new-${newDate ?? month}`}
-          portfolios={portfolios}
-        />
+        <>
+          <EntryDialog
+            {...dialogProps("entry")}
+            account={account}
+            categories={categories}
+            defaultDate={newDate ?? startDay(month, today)}
+            entry={editing}
+            jobs={dropped}
+            key={editing?._id ?? `new-${newDate ?? month}-${dropped.join(",")}`}
+            portfolios={portfolios}
+          />
+          <InvoiceReview
+            account={account}
+            categories={categories}
+            defaultDate={startDay(month, today)}
+            portfolios={portfolios}
+          />
+        </>
       )}
       <RecurringDialog
         {...dialogProps("recurring")}
@@ -677,6 +926,6 @@ export function AccountPage({
           projectId={project._id}
         />
       )}
-    </>
+    </InvoiceDrop>
   );
 }

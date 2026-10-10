@@ -1,5 +1,3 @@
-import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
@@ -18,7 +16,7 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { dropFile, keyName, ownedFile } from "./lib/files";
+import { dropFile, keyName, ownedFile, signedLink } from "./lib/files";
 import { mediaUrl } from "./lib/media";
 import type { DriveChange } from "./lib/validators";
 import { vColor, vUpload } from "./lib/validators";
@@ -54,8 +52,6 @@ const KEEP_OPENS = 50;
 const SEARCH_RESULTS = 50;
 /** Opening the same file again this soon doesn't count as another open. */
 const REOPEN_MS = 60_000;
-/** Links to download or read a file last long enough to start, not to share. */
-const LINK_SECONDS = 10 * 60;
 /** An upload not filed in a day was left behind, by a closed tab or a lost connection. */
 const LEFT_BEHIND_MS = 24 * 60 * 60 * 1000;
 /** Deleting a file also deletes it from R2: a few per batch. */
@@ -403,20 +399,6 @@ async function countInside(
     files.filter((file) => file.trashedAt === undefined).length +
     folders.filter((item) => !isGone(item)).length
   );
-}
-
-/** RFC 6266 wants these escaped too, though encodeURIComponent leaves them. */
-const UNRESERVED = /['()*]/gu;
-/** Left out of the plain filename that old browsers read: anything but printable ASCII, quotes and backslashes. */
-const NOT_PLAIN = /[^\u0020-\u007E]|["\\]/gu;
-
-/** Tells the browser to show or save the file, under the name it has now. */
-function disposition(kind: "inline" | "attachment", name: string): string {
-  const encoded = encodeURIComponent(name).replaceAll(
-    UNRESERVED,
-    (char) => `%${char.codePointAt(0)?.toString(16).toUpperCase()}`
-  );
-  return `${kind}; filename="${name.replaceAll(NOT_PLAIN, "_")}"; filename*=UTF-8''${encoded}`;
 }
 
 // ———————————————————————————————————————— Queries
@@ -1388,20 +1370,7 @@ export const link = mutation({
   args: { download: v.boolean(), fileId: v.id("driveFiles") },
   handler: async (ctx, { download, fileId }) => {
     const { file: item } = await requireDriveFile(ctx, fileId, "view");
-    return await getSignedUrl(
-      r2.client,
-      new GetObjectCommand({
-        Bucket: r2.config.bucket,
-        Key: item.key,
-        ResponseContentDisposition: disposition(
-          download ? "attachment" : "inline",
-          item.name
-        ),
-        // Shown in place, it's read as what it is, whatever R2 kept it as.
-        ResponseContentType: download ? undefined : item.type || undefined,
-      }),
-      { expiresIn: LINK_SECONDS }
-    );
+    return await signedLink(item, download);
   },
 });
 

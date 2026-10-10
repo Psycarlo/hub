@@ -71,20 +71,23 @@ export function MoneyField({
   value,
   error,
   hint,
+  pending = false,
   onChange,
 }: {
   id: string;
-  label?: string;
+  label?: ReactNode;
   currency: Fiat;
   value: string;
   error?: string;
   hint?: ReactNode;
+  /** Waiting on an invoice being read, which may fill it in. */
+  pending?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
+      <div className={cn("relative", pending && "invoice-pending")}>
         <span
           aria-hidden
           className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
@@ -121,23 +124,29 @@ export function MoneyField({
 /** A day from a calendar, as `YYYY-MM-DD`. */
 export function DayField({
   id,
+  label = "Date",
   value,
+  pending = false,
   onChange,
 }: {
   id: string;
+  label?: ReactNode;
   value: string;
+  /** Waiting on an invoice being read, which may fill it in. */
+  pending?: boolean;
   onChange: (date: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const day = parseISO(value);
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>Date</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverTrigger
           className={cn(
             FIELD,
-            "flex h-9 items-center justify-between gap-2 text-left select-none"
+            "flex h-9 items-center justify-between gap-2 text-left select-none",
+            pending && "invoice-pending"
           )}
           id={id}
         >

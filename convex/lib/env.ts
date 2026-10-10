@@ -6,3 +6,8 @@ declare const process: { env: Record<string, string | undefined> };
 export function env(name: string): string | undefined {
   return process.env[name];
 }
+
+/** The OpenRouter key AI tasks run with, when the deployment has one. */
+export function aiKey(): string | undefined {
+  return env("OPENROUTER_API_KEY") || undefined;
+}

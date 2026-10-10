@@ -330,10 +330,19 @@ export const financeAccount = internalMutation({
     for (const month of months) {
       await ctx.db.delete(month._id);
     }
+    const files = await ctx.db
+      .query("financeFiles")
+      .withIndex("by_account", (q) => q.eq("accountId", accountId))
+      .take(FILE_BATCH);
+    for (const file of files) {
+      await ctx.db.delete(file._id);
+      await dropFile(ctx, file.key);
+    }
     if (
       entries.length === BATCH ||
       recurring.length === BATCH ||
-      months.length === BATCH
+      months.length === BATCH ||
+      files.length === FILE_BATCH
     ) {
       await ctx.scheduler.runAfter(0, internal.cleanup.financeAccount, {
         accountId,

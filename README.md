@@ -44,6 +44,7 @@ Hub is the team workspace that grew out of [Freehub](../freehub): the same scree
 - [pnpm](https://pnpm.io/installation)
 - A [Convex](https://convex.dev) project
 - A [Cloudflare R2](https://developers.cloudflare.com/r2/) bucket, for photos, images in docs and Drive files
+- Optionally, an [OpenRouter](https://openrouter.ai) key, for AI features like reading invoices
 
 ### 1. Install
 
@@ -99,7 +100,15 @@ It sets `JWT_PRIVATE_KEY`, `JWKS` and `SITE_URL` on the deployment. Use `http://
 
 Everything but uploads works without R2.
 
-### 5. Run
+### 5. Set up AI (optional)
+
+```bash
+npx convex env set OPENROUTER_API_KEY sk-or-xxxxx
+```
+
+Admins pick the model for each task in **Admin**. Without a key, files still attach to transactions, but nothing reads them.
+
+### 6. Run
 
 ```bash
 pnpm dev            # vite on http://localhost:5173
@@ -135,6 +144,7 @@ The workflow needs the `CONVEX_DEPLOY_KEY`, `VERCEL_TOKEN`, `VERCEL_ORG_ID` and 
 - [Convex](https://convex.dev) — database, server functions and live queries
 - [Convex Auth](https://labs.convex.dev/auth) — email and password accounts
 - [Convex R2 component](https://www.convex.dev/components/cloudflare-r2) — uploads to Cloudflare R2
+- [AI SDK](https://ai-sdk.dev/) on [OpenRouter](https://openrouter.ai/) — models, with [Zod](https://zod.dev/) for what they return
 - [Tailwind CSS](https://tailwindcss.com/) — styling
 - [shadcn/ui](https://ui.shadcn.com/) on [Base UI](https://base-ui.com/) — component library
 - [Motion](https://motion.dev/) — animation

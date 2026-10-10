@@ -18,6 +18,43 @@ export const MAX_CATEGORY_NAME = 40;
 export const MAX_CATEGORIES = 100;
 /** A trillion, in cents: far past any one entry, to catch a slipped finger. */
 export const MAX_CENTS = 100_000_000_000_000;
+/** Files an entry keeps, like its invoice, a receipt and the proof it was paid. */
+export const MAX_ENTRY_FILES = 5;
+
+/** What a model read off an invoice or receipt; whatever it couldn't is left out. */
+export interface InvoiceReading {
+  /** Who it's from: the shop, company or person it pays. */
+  name?: string;
+  /** The total to pay, in cents of `currency`. */
+  cents?: number;
+  /** ISO 4217, like EUR. */
+  currency?: string;
+  /** `YYYY-MM-DD` it was issued. */
+  issued?: string;
+  /** `YYYY-MM-DD` it's due, when it says. */
+  due?: string;
+  /** Its number, like FT 2026/142. */
+  number?: string;
+  /** Whether it says it's paid already, as a receipt does. */
+  paid?: boolean;
+  /** Id of the project's category it fits best, if any does. */
+  category?: string;
+}
+
+/**
+ * Why an invoice wasn't read: reading is off, the file isn't one a model can
+ * read, it isn't an invoice, the person read too many lately, or it failed.
+ */
+export type InvoiceFailure =
+  | "off"
+  | "unsupported"
+  | "not-invoice"
+  | "limit"
+  | "failed";
+
+export type InvoiceResult =
+  | { ok: true; reading: InvoiceReading }
+  | { ok: false; reason: InvoiceFailure };
 
 /** Card networks whose logo an account's wallet can show on its card. */
 export const CARD_NETWORKS = ["visa", "mastercard"] as const;

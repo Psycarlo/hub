@@ -106,6 +106,27 @@ export default defineSchema({
     logoKey: v.optional(v.string()),
   }),
 
+  /** The model an admin picked for an AI task, in place of its default. */
+  aiModels: defineTable({
+    /** A model id on OpenRouter, like `google/gemini-3.1-flash-lite`. */
+    model: v.string(),
+    /** A key of AI_TASKS in convex/shared/ai.ts. */
+    task: v.string(),
+    updatedBy: v.id("users"),
+  }).index("by_task", ["task"]),
+
+  /** One run of a model, to keep an eye on what it costs and to limit runs per person. */
+  aiRuns: defineTable({
+    /** USD, as OpenRouter charged it; missing when it didn't say. */
+    cost: v.optional(v.number()),
+    inputTokens: v.optional(v.number()),
+    model: v.string(),
+    ok: v.boolean(),
+    outputTokens: v.optional(v.number()),
+    task: v.string(),
+    userId: v.id("users"),
+  }).index("by_user", ["userId"]),
+
   /** Emails that may create an account, and the role they start with. */
   invites: defineTable({
     email: v.string(),
@@ -585,6 +606,8 @@ export default defineSchema({
     createdBy: v.id("users"),
     /** `YYYY-MM-DD`. */
     date: v.string(),
+    /** How many files it keeps, so lists can show it without reading them. */
+    fileCount: v.optional(v.number()),
     kind: vEntryKind,
     name: v.string(),
     note: v.string(),
@@ -610,6 +633,25 @@ export default defineSchema({
     .index("by_account_and_paid_and_date", ["accountId", "paid", "date"])
     .index("by_project_and_date", ["projectId", "date"])
     .index("by_project_and_buy", ["projectId", "buyId"]),
+
+  /** Files an entry keeps, like its invoice or receipt. */
+  financeFiles: defineTable({
+    accountId: v.id("financeAccounts"),
+    entryId: v.id("financeEntries"),
+    /** R2 key of the upload. */
+    key: v.string(),
+    /** The file's name, as it was uploaded. */
+    name: v.string(),
+    projectId: v.id("projects"),
+    /** In bytes. */
+    size: v.number(),
+    /** MIME type, or empty when the browser didn't know it. */
+    type: v.string(),
+    uploadedBy: v.id("users"),
+  })
+    .index("by_entry", ["entryId"])
+    .index("by_account", ["accountId"])
+    .index("by_key", ["key"]),
 
   /** Something someone means to do on certain days; only in personal projects. */
   habits: defineTable({

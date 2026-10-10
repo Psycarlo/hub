@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { ListFilterIcon, SearchIcon, XIcon } from "lucide-react";
+import { ListFilterIcon, PaperclipIcon, SearchIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { LabelDot } from "@/features/card/card-parts";
 import type {
   Category,
   Entry,
+  EntryFileFilter,
   EntryFilters,
   EntryKind,
   EntryStatus,
@@ -56,6 +57,30 @@ function statusOptions(entries: Entry[]): Option<EntryStatus>[] {
     count: entries.filter((entry) => entry.paid === (value === "paid")).length,
     label: STATUS_NAMES[value],
     name: STATUS_NAMES[value],
+    value,
+  }));
+}
+
+const FILE_NAMES: Record<EntryFileFilter, string> = {
+  with: "With files",
+  without: "Without files",
+};
+
+/** With files or without, offered once the month has both, to find what's missing its invoice. */
+function fileOptions(entries: Entry[]): Option<EntryFileFilter>[] {
+  const kept = entries.filter((entry) => entry.fileCount).length;
+  if (kept === 0 || kept === entries.length) {
+    return [];
+  }
+  return (["with", "without"] as const).map((value) => ({
+    count: value === "with" ? kept : entries.length - kept,
+    label: (
+      <span className="flex items-center gap-1.5">
+        {value === "with" && <PaperclipIcon aria-hidden className="size-3" />}
+        {FILE_NAMES[value]}
+      </span>
+    ),
+    name: FILE_NAMES[value],
     value,
   }));
 }
@@ -170,7 +195,7 @@ export function EntrySearch({
   );
 }
 
-/** Narrows the month to some kinds, statuses or categories. */
+/** Narrows the month to some kinds, statuses, categories, or entries with files or without. */
 export function FilterButton({
   entries,
   categories,
@@ -210,6 +235,12 @@ export function FilterButton({
           options={categoryOptions(entries, categories)}
           title="Category"
           value={filters.categories}
+        />
+        <FilterGroup
+          onChange={(files) => onChange({ ...filters, files })}
+          options={fileOptions(entries)}
+          title="Files"
+          value={filters.files}
         />
         {active > 0 && (
           <Button
@@ -296,6 +327,13 @@ export function ActiveFilters({
           names={categoryNames}
           onRemove={() => onChange({ ...filters, categories: [] })}
           title="Category"
+        />
+      )}
+      {filters.files.length > 0 && (
+        <ActiveChip
+          names={filters.files.map((value) => FILE_NAMES[value])}
+          onRemove={() => onChange({ ...filters, files: [] })}
+          title="Files"
         />
       )}
     </ul>

@@ -4,7 +4,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { ifVisible, requireCard, requireUser } from "./lib/access";
-import { dropFile, keyName, ownedFile } from "./lib/files";
+import {
+  attachedFile,
+  dropFile,
+  isAttached,
+  keyName,
+  ownedFile,
+} from "./lib/files";
 import { recordChange } from "./lib/history";
 import { mediaUrl } from "./lib/media";
 import type { Upload } from "./lib/validators";
@@ -12,9 +18,6 @@ import { vUpload } from "./lib/validators";
 import { r2 } from "./r2";
 import { keyKind } from "./shared/drive";
 import { MAX_CARD_FILES } from "./shared/model";
-
-const MAX_NAME = 200;
-const MAX_TYPE = 100;
 
 /** Keys of uploads made to attach hold a slash, and aren't the Drive's. */
 function isAttachmentKey(key: string): boolean {
@@ -49,26 +52,18 @@ export async function attachFile(
     throw new ConvexError("That upload couldn’t be found.");
   }
   await ownedFile(ctx, upload.key, uploadedBy, "attachment");
-  const attached = await ctx.db
-    .query("attachments")
-    .withIndex("by_key", (q) => q.eq("key", upload.key))
-    .first();
-  if (attached) {
+  if (await isAttached(ctx, upload.key)) {
     throw new ConvexError("That file is attached already.");
   }
-  const name = upload.name.trim().slice(0, MAX_NAME) || "Untitled file";
+  const file = attachedFile(upload);
   await ctx.db.insert("attachments", {
     cardId,
     commentId,
     key: upload.key,
-    name,
-    size: Number.isFinite(upload.size)
-      ? Math.max(0, Math.round(upload.size))
-      : 0,
-    type: upload.type.slice(0, MAX_TYPE),
     uploadedBy,
+    ...file,
   });
-  return name;
+  return file.name;
 }
 
 /** Files attached to the card itself, not to a comment on it. */
@@ -161,7 +156,7 @@ export const remove = mutation({
   },
 });
 
-/** Deletes an upload that was never attached, like one taken out of a comment before sending. */
+/** Deletes an upload that was never attached, like one taken out of a comment or an entry before saving. */
 export const discard = mutation({
   args: { key: v.string() },
   handler: async (ctx, { key }) => {
@@ -170,11 +165,11 @@ export const discard = mutation({
       .query("files")
       .withIndex("by_key", (q) => q.eq("key", key))
       .unique();
-    const attached = await ctx.db
-      .query("attachments")
-      .withIndex("by_key", (q) => q.eq("key", key))
-      .first();
-    if (isAttachmentKey(key) && file?.ownerId === user._id && !attached) {
+    if (
+      isAttachmentKey(key) &&
+      file?.ownerId === user._id &&
+      !(await isAttached(ctx, key))
+    ) {
       await dropFile(ctx, key);
     }
   },

@@ -17,6 +17,7 @@ import { monthOf } from "@/lib/finance";
 import { sortLabels } from "@/lib/model";
 import type { Fiat } from "@/lib/portfolio";
 import { playSound } from "@/lib/sounds";
+import type { Upload } from "@/lib/upload";
 
 export interface AccountDraft {
   title: string;
@@ -50,6 +51,12 @@ export type BuyChange =
   | { buyId: Id<"portfolioTransactions"> }
   | { buy: NewBuy }
   | { buyId: null };
+
+/** Files an entry keeps that change on saving: uploads to add, and ones to delete. */
+export interface FileChanges {
+  add: Upload[];
+  remove: Id<"financeFiles">[];
+}
 
 /** Where a debit transfers to, and what arrives there in another currency. */
 export interface TransferDraft {
@@ -219,13 +226,15 @@ export function addEntry(
   account: Account,
   draft: EntryDraft,
   buy?: BuyChange,
-  transfer?: TransferDraft
+  transfer?: TransferDraft,
+  files: Upload[] = []
 ) {
   playSound("success");
   return run(
     convex.mutation(api.finance.addEntry, {
       accountId: account._id,
       ...draft,
+      ...(files.length > 0 ? { files } : {}),
       ...(buy && "buy" in buy ? { buy: buy.buy } : {}),
       ...(buy && "buyId" in buy && buy.buyId ? { buyId: buy.buyId } : {}),
       ...(transfer?.toAccountId
@@ -246,10 +255,15 @@ export function updateEntry(
   entry: Entry,
   changes: Partial<EntryDraft>,
   buy?: BuyChange,
-  transfer?: TransferDraft
+  transfer?: TransferDraft,
+  files?: FileChanges
 ) {
   const { category, ...rest } = changes;
   const other = entry.transfer?.entryId;
+  const fileCount =
+    (entry.fileCount ?? 0) +
+    (files?.add.length ?? 0) -
+    (files?.remove.length ?? 0);
   return run(
     convex.mutation(
       api.finance.updateEntry,
@@ -259,10 +273,17 @@ export function updateEntry(
         ...("category" in changes ? { category: category ?? null } : {}),
         ...buy,
         ...transfer,
+        ...(files?.add.length ? { addFiles: files.add } : {}),
+        ...(files?.remove.length ? { removeFiles: files.remove } : {}),
       },
       {
         optimisticUpdate: (store) => {
-          const next: Entry = { ...entry, ...changes, updatedAt: Date.now() };
+          const next: Entry = {
+            ...entry,
+            ...changes,
+            fileCount: fileCount > 0 ? fileCount : undefined,
+            updatedAt: Date.now(),
+          };
           if (buy && "buyId" in buy) {
             next.buyId = buy.buyId ?? undefined;
           }

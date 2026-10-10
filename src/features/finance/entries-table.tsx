@@ -11,7 +11,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LabelChip, LabelDot } from "@/features/card/card-parts";
-import { Amount, BuyBadge, PaidToggle } from "@/features/finance/finance-parts";
+import {
+  Amount,
+  BuyBadge,
+  FilesBadge,
+  PaidToggle,
+} from "@/features/finance/finance-parts";
 import type { Account, Category, Entry } from "@/lib/finance";
 import { categoryOf, isOverdue } from "@/lib/finance";
 
@@ -127,6 +132,9 @@ export function EntriesTable({
                     </span>
                   )}
                   {bought && <BuyBadge>{bought}</BuyBadge>}
+                  {entry.fileCount ? (
+                    <FilesBadge count={entry.fileCount} />
+                  ) : null}
                 </span>
               </TableCell>
               <TableCell className="max-sm:hidden">

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as ai from "../ai.js";
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as boards from "../boards.js";
@@ -24,7 +25,9 @@ import type * as http from "../http.js";
 import type * as hub from "../hub.js";
 import type * as inbox from "../inbox.js";
 import type * as invites from "../invites.js";
+import type * as invoices from "../invoices.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_ai from "../lib/ai.js";
 import type * as lib_docs from "../lib/docs.js";
 import type * as lib_email from "../lib/email.js";
 import type * as lib_env from "../lib/env.js";
@@ -43,6 +46,7 @@ import type * as presence from "../presence.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
 import type * as reactions from "../reactions.js";
+import type * as shared_ai from "../shared/ai.js";
 import type * as shared_character from "../shared/character.js";
 import type * as shared_crm from "../shared/crm.js";
 import type * as shared_docs from "../shared/docs.js";
@@ -68,6 +72,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ai: typeof ai;
   attachments: typeof attachments;
   auth: typeof auth;
   boards: typeof boards;
@@ -84,7 +89,9 @@ declare const fullApi: ApiFromModules<{
   hub: typeof hub;
   inbox: typeof inbox;
   invites: typeof invites;
+  invoices: typeof invoices;
   "lib/access": typeof lib_access;
+  "lib/ai": typeof lib_ai;
   "lib/docs": typeof lib_docs;
   "lib/email": typeof lib_email;
   "lib/env": typeof lib_env;
@@ -103,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   r2: typeof r2;
   reactions: typeof reactions;
+  "shared/ai": typeof shared_ai;
   "shared/character": typeof shared_character;
   "shared/crm": typeof shared_crm;
   "shared/docs": typeof shared_docs;

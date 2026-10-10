@@ -1,11 +1,19 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import type { InvoiceReading } from "@convex/shared/finance";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { format, parseISO } from "date-fns";
-import type { FormEvent } from "react";
-import { useId, useState } from "react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CircleAlertIcon,
+  SparklesIcon,
+} from "lucide-react";
+import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
+import { useId, useRef, useState } from "react";
 
+import { IconButton } from "@/components/icon-button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,6 +47,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { DROP_TARGET, useFileDrop } from "@/features/card/use-file-drop";
 import { CategoryPicker } from "@/features/finance/category-picker";
 import {
   DayField,
@@ -48,16 +58,38 @@ import {
   SwitchRow,
 } from "@/features/finance/entry-fields";
 import {
+  FileDropZone,
+  FileStrip,
+  FileViewer,
+  InvoiceHint,
+  ReadMark,
+  formFileId,
+  isReadable,
+} from "@/features/finance/entry-files";
+import type {
+  FillableField,
+  InvoiceSuggestion,
+} from "@/features/finance/invoice-fill";
+import {
+  FAILURES,
+  anyMoney,
+  dayText,
+  suggest,
+} from "@/features/finance/invoice-fill";
+import {
   DestinationField,
   ReceivedField,
   changesCurrency,
   useTransferTarget,
 } from "@/features/finance/transfer-fields";
+import type { ReadState } from "@/features/finance/use-entry-files";
+import { useEntryFiles } from "@/features/finance/use-entry-files";
 import {
   UNIT_KEY,
   UnitToggle,
   storedUnit,
 } from "@/features/portfolios/transaction-dialog";
+import { useAiReady } from "@/hooks/use-ai-ready";
 import { useToday } from "@/hooks/use-today";
 import { useBtcPrices } from "@/lib/bitcoin-price";
 import type { Account, Category, Entry, EntryType } from "@/lib/finance";
@@ -75,6 +107,7 @@ import type {
   TransferDraft,
 } from "@/lib/finance-actions";
 import { addEntry, deleteEntry, updateEntry } from "@/lib/finance-actions";
+import { dropJob, jobById } from "@/lib/invoice-jobs";
 import type { Portfolio, Transaction, Unit } from "@/lib/portfolio";
 import {
   SATS_PER_BTC,
@@ -648,6 +681,542 @@ function BitcoinPart(props: BitcoinPartProps) {
   );
 }
 
+/** Reviewing invoices dropped together: which of how many, and how to move along. */
+export interface Review {
+  position: number;
+  total: number;
+  /** Invoices still to review besides this one. */
+  remaining: number;
+  onSkip: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  /** Saved: on to the next one, or done. */
+  onAdded: () => void;
+}
+
+/** Fills in what the invoice says, where `open` lets it; says which fields it filled. */
+function fillFields(
+  fields: Fields,
+  suggestion: InvoiceSuggestion,
+  open: (field: FillableField) => boolean
+): { fields: Fields; filled: FillableField[] } {
+  const next = { ...fields };
+  const filled: FillableField[] = [];
+  const take = <K extends FillableField>(field: K, value?: Fields[K]) => {
+    if (value !== undefined && open(field)) {
+      next[field] = value;
+      filled.push(field);
+    }
+  };
+  take("name", suggestion.name);
+  take("amount", suggestion.amount);
+  take("date", suggestion.date);
+  take("paid", suggestion.paid);
+  take("category", suggestion.category);
+  if (!fields.note.trim()) {
+    take("note", suggestion.note);
+  }
+  return { fields: next, filled };
+}
+
+const FILLABLE: ReadonlySet<string> = new Set<FillableField>([
+  "name",
+  "amount",
+  "date",
+  "paid",
+  "category",
+  "note",
+]);
+
+/** The form and the invoice read for it: what it filled in, and what it says. */
+interface Fill {
+  fields: Fields;
+  setFields: Dispatch<SetStateAction<Fields>>;
+  /** Fields the invoice filled in, marked by their labels. */
+  filled: ReadonlySet<string>;
+  /** Fields typed in, which reading leaves alone. */
+  touched: ReadonlySet<string>;
+  /** What the invoice says, once it's read. */
+  suggestion?: InvoiceSuggestion;
+  /** A new entry's invoice, read: what it didn't say is pointed out. */
+  settled: boolean;
+  /** Whether a field waits on the invoice, which may fill it in. */
+  pending: (field: FillableField) => boolean;
+  /** Whether what the invoice says for a field can be offered: it didn't fill it in. */
+  offers: (field: FillableField) => boolean;
+  /** Takes what the invoice says for a field. */
+  use: (patch: Partial<Fields>) => void;
+  /** Changes fields as typed, which reading leaves alone from then on. */
+  change: (patch: Partial<Fields>) => void;
+}
+
+/**
+ * Fills the form in from the invoice once it's read: on a new entry, every
+ * field not typed in yet; a kept entry only hears what it says, to use.
+ */
+function useInvoiceFill({
+  account,
+  entry,
+  today,
+  read,
+  initial,
+}: {
+  account: Account;
+  entry?: Entry;
+  today: string;
+  read?: ReadState;
+  /** The fields as the form starts. */
+  initial: () => Fields;
+}): Fill {
+  const [fields, setFields] = useState(initial);
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const [filled, setFilled] = useState<ReadonlySet<string>>(new Set());
+  const [applied, setApplied] = useState<InvoiceReading>();
+  if (read?.reading && read.reading !== applied) {
+    setApplied(read.reading);
+    const result = fillFields(
+      fields,
+      suggest(read.reading, account, today),
+      (field) => !entry && !touched.has(field)
+    );
+    setFields(result.fields);
+    setFilled(new Set([...filled, ...result.filled]));
+  }
+  return {
+    change: (patch) => {
+      setFields((current) => ({ ...current, ...patch }));
+      const keys = new Set(
+        Object.keys(patch).filter((key) => FILLABLE.has(key))
+      );
+      if (keys.size > 0) {
+        setTouched((current) => new Set([...current, ...keys]));
+        setFilled(
+          (current) => new Set([...current].filter((key) => !keys.has(key)))
+        );
+      }
+    },
+    fields,
+    filled,
+    offers: (field) => applied !== undefined && !filled.has(field),
+    pending: (field) => read?.busy === true && !entry && !touched.has(field),
+    setFields,
+    settled:
+      !entry && read !== undefined && !read.busy && read.failure === undefined,
+    suggestion: applied && suggest(applied, account, today),
+    touched,
+    use: (patch) => {
+      setFields((current) => ({ ...current, ...patch }));
+      setFilled((current) => new Set([...current, ...Object.keys(patch)]));
+    },
+  };
+}
+
+/** What reading the invoice came to, above the fields: going, done, or why not. */
+function ReadingBanner({
+  read,
+  editing,
+  onRetry,
+}: {
+  read?: ReadState;
+  editing: boolean;
+  onRetry: () => void;
+}) {
+  if (!read || read.failure === "off") {
+    return null;
+  }
+  let tone = "bg-primary/6";
+  let icon = <SparklesIcon className="text-primary size-4" />;
+  let text: ReactNode = editing
+    ? "Read the invoice. What it says shows under each field."
+    : "Filled in from the invoice. Check it before saving.";
+  if (read.busy) {
+    tone = "bg-muted/80";
+    icon = <SparklesIcon className="text-primary size-4 animate-pulse" />;
+    text = (
+      <>
+        Reading <span className="font-medium">{read.name}</span>…
+      </>
+    );
+  } else if (read.failure) {
+    tone = "bg-amber-500/10 text-amber-800 dark:text-amber-300";
+    icon = <CircleAlertIcon className="size-4" />;
+    text = FAILURES[read.failure];
+  }
+  return (
+    <p
+      aria-live="polite"
+      className={cn(
+        "flex min-h-10 items-center gap-2.5 rounded-xl px-3 py-2 text-sm",
+        tone
+      )}
+    >
+      <span aria-hidden className="shrink-0">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{text}</span>
+      {read.failure === "failed" && (
+        <button
+          className="shrink-0 font-medium hover:underline"
+          onClick={onRetry}
+          type="button"
+        >
+          Try again
+        </button>
+      )}
+    </p>
+  );
+}
+
+/** Which invoice of the batch this is, with a way to the ones around it. */
+function ReviewNav({ review }: { review: Review }) {
+  const { onNext, onPrevious, position, total } = review;
+  return (
+    <FluidTooltip.Group>
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <span className="text-muted-foreground mr-1 text-sm tabular-nums">
+          {position} of {total}
+        </span>
+        <IconButton
+          disabled={!onPrevious}
+          label="Previous invoice"
+          onClick={onPrevious}
+          type="button"
+        >
+          <ChevronLeftIcon />
+        </IconButton>
+        <IconButton
+          disabled={!onNext}
+          label="Next invoice"
+          onClick={onNext}
+          type="button"
+        >
+          <ChevronRightIcon />
+        </IconButton>
+      </div>
+    </FluidTooltip.Group>
+  );
+}
+
+/** A field's label, marked when the invoice filled it in. */
+function FieldLabel({
+  children,
+  filled,
+}: {
+  children: ReactNode;
+  filled: boolean;
+}) {
+  return (
+    <>
+      {children}
+      {filled && <ReadMark />}
+    </>
+  );
+}
+
+interface FieldProps {
+  id: string;
+  fields: Fields;
+  fill: Fill;
+}
+
+function NameField({
+  id,
+  fields,
+  fill,
+  autoFocus,
+}: FieldProps & { autoFocus: boolean }) {
+  const said = fill.suggestion?.name;
+  const offered =
+    said && fill.offers("name") && said !== fields.name.trim()
+      ? said
+      : undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={`${id}-name`}>
+        <FieldLabel filled={fill.filled.has("name")}>Name</FieldLabel>
+      </Label>
+      <div className={cn(fill.pending("name") && "invoice-pending")}>
+        <Input
+          autoComplete="off"
+          autoFocus={autoFocus}
+          id={`${id}-name`}
+          maxLength={MAX_ENTRY_NAME}
+          onChange={(event) => fill.change({ name: event.target.value })}
+          placeholder={PLACEHOLDERS[fields.kind]}
+          value={fields.name}
+        />
+      </div>
+      {offered && (
+        <InvoiceHint action="Use" onAction={() => fill.use({ name: offered })}>
+          The invoice says “{offered}”
+        </InvoiceHint>
+      )}
+      {fill.settled && !said && !fields.name.trim() && (
+        <InvoiceHint tone="warning">Couldn’t read who it’s from.</InvoiceHint>
+      )}
+    </div>
+  );
+}
+
+function AmountField({
+  id,
+  fields,
+  fill,
+  account,
+  cents,
+}: FieldProps & { account: Account; cents?: number }) {
+  const said = fill.suggestion?.amount;
+  const offered =
+    said && fill.offers("amount") && parseMoney(said) !== cents
+      ? parseMoney(said)
+      : undefined;
+  const foreign = fill.suggestion?.foreign;
+  const error =
+    fields.amount.trim() && cents === undefined
+      ? "Enter an amount, like 42.50."
+      : undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      <MoneyField
+        currency={account.currency}
+        error={error}
+        id={`${id}-amount`}
+        label={
+          <FieldLabel filled={fill.filled.has("amount")}>Amount</FieldLabel>
+        }
+        onChange={(amount) => fill.change({ amount })}
+        pending={fill.pending("amount")}
+        value={fields.amount}
+      />
+      {offered !== undefined && (
+        <InvoiceHint action="Use" onAction={() => fill.use({ amount: said })}>
+          The invoice says {formatMoney(offered, account.currency)}
+        </InvoiceHint>
+      )}
+      {foreign && (
+        <InvoiceHint tone="warning">
+          It’s {anyMoney(foreign.cents, foreign.currency)}. Enter what{" "}
+          {fields.kind === "credit" ? "came in" : "went out"} in{" "}
+          {account.currency}.
+        </InvoiceHint>
+      )}
+      {fill.settled && !said && !foreign && cents === undefined && (
+        <InvoiceHint tone="warning">Couldn’t read the total.</InvoiceHint>
+      )}
+    </div>
+  );
+}
+
+function DateField({ id, fields, fill }: FieldProps) {
+  const said = fill.suggestion?.date;
+  const offered =
+    said && fill.offers("date") && said !== fields.date ? said : undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      <DayField
+        id={`${id}-date`}
+        label={<FieldLabel filled={fill.filled.has("date")}>Date</FieldLabel>}
+        onChange={(date) => fill.change({ date })}
+        pending={fill.pending("date")}
+        value={fields.date}
+      />
+      {offered && (
+        <InvoiceHint action="Use" onAction={() => fill.use({ date: offered })}>
+          The invoice says {dayText(offered)}
+        </InvoiceHint>
+      )}
+      {fill.settled && !said && !fill.touched.has("date") && (
+        <InvoiceHint tone="warning">Couldn’t read its date.</InvoiceHint>
+      )}
+    </div>
+  );
+}
+
+const ASIDE =
+  "bg-muted/70 animate-in fade-in relative h-80 shrink-0 duration-300 md:h-auto";
+
+/** The entry's files beside the form: the one picked shown large, and the rest in a strip. */
+function FilesPane({
+  files,
+  reads,
+  over,
+}: {
+  files: ReturnType<typeof useEntryFiles>;
+  reads: boolean;
+  /** Files are dragged over the dialog. */
+  over: boolean;
+}) {
+  const { add, items, read, readItem, remove, retry, select, shown } = files;
+  if (!shown) {
+    // The entry's own files, still loading: the pane holds their place.
+    return (
+      <aside className={ASIDE} data-slot="entry-viewer">
+        <div className="grid h-full place-items-center">
+          <Spinner className="text-muted-foreground" />
+        </div>
+      </aside>
+    );
+  }
+  const shownId = formFileId(shown);
+  const job = shown.kind === "new" ? shown.job : undefined;
+  const settled = read !== undefined && !read.busy && !read.failure;
+  const up = job?.status !== "uploading" && job?.status !== "failed";
+  return (
+    <aside className={ASIDE} data-slot="entry-viewer">
+      <div className="absolute inset-0 flex flex-col">
+        <FileViewer
+          item={shown}
+          onRead={() => readItem(shown)}
+          // A batch's invoice stays: it's skipped from the review instead.
+          onRemove={job?.batch ? undefined : () => remove(shownId)}
+          readable={reads && isReadable(shown) && read?.id !== shownId && up}
+          reading={read?.busy === true && read.id === shownId}
+        />
+        <FileStrip
+          items={items}
+          onAdd={add}
+          onRemove={remove}
+          onRetry={retry}
+          onSelect={select}
+          readId={settled ? read.id : undefined}
+          selected={shownId}
+        />
+      </div>
+      {over && (
+        <div
+          aria-hidden
+          className={cn(DROP_TARGET, "absolute inset-2 rounded-xl")}
+        />
+      )}
+    </aside>
+  );
+}
+
+/** Deleting, skipping, or leaving it, and saving it: under the form. */
+function EntryFooter({
+  entry,
+  review,
+  sticky,
+  action,
+  disabled,
+  busy,
+  onDeleted,
+}: {
+  entry?: Entry;
+  review?: Review;
+  /** Pinned under fields that scroll beside the files. */
+  sticky: boolean;
+  action: string;
+  disabled: boolean;
+  busy: boolean;
+  onDeleted: () => void;
+}) {
+  const onSkip = review?.onSkip;
+  return (
+    <DialogFooter
+      className={cn(
+        sticky
+          ? "bg-popover sticky bottom-0 mt-auto border-t px-5 py-4"
+          : "mt-6"
+      )}
+    >
+      {entry && <DeleteEntry entry={entry} onDeleted={onDeleted} />}
+      {onSkip && (
+        <Button
+          className="sm:mr-auto"
+          onClick={onSkip}
+          type="button"
+          variant="ghost"
+        >
+          Skip
+        </Button>
+      )}
+      <DialogClose render={<Button type="button" variant="ghost" />}>
+        {review ? "Close" : "Cancel"}
+      </DialogClose>
+      <Button disabled={disabled} type="submit">
+        {busy && <Spinner />}
+        {action}
+      </Button>
+    </DialogFooter>
+  );
+}
+
+/** What the form's title and button say: adding, changing, or reviewing invoices. */
+function wording(
+  entry: Entry | undefined,
+  review: Review | undefined,
+  kind: EntryType
+): { title: string; action: string } {
+  if (review) {
+    return {
+      action: review.remaining > 0 ? "Add & next" : `Add ${kind}`,
+      title: "Review invoices",
+    };
+  }
+  return entry
+    ? { action: "Save", title: "Edit transaction" }
+    : { action: `Add ${kind}`, title: "Add transaction" };
+}
+
+/** The save button: what it says, and whether it waits on saving or on files still going up. */
+function saveButton(
+  files: { uploading: boolean; failed: boolean },
+  { action, saving, valid }: { action: string; saving: boolean; valid: boolean }
+): { action: string; busy: boolean; disabled: boolean } {
+  return {
+    action: files.uploading ? "Uploading…" : action,
+    busy: saving || files.uploading,
+    disabled: !valid || saving || files.uploading || files.failed,
+  };
+}
+
+/** How the dialog lays out: the form alone, or the files beside it. */
+const LAYOUTS = {
+  alone: { body: "", form: "", root: "" },
+  beside: {
+    body: "p-5",
+    form: "min-h-0 md:overflow-y-auto",
+    root: "min-h-0 flex-1 md:grid md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[minmax(0,1fr)]",
+  },
+};
+
+/** The title, and in a review which invoice of how many it is. */
+function FormHeader({ title, review }: { title: string; review?: Review }) {
+  return (
+    <DialogHeader className={cn(review && "flex-row items-center gap-3 pr-0")}>
+      <DialogTitle>{title}</DialogTitle>
+      {review && <ReviewNav review={review} />}
+    </DialogHeader>
+  );
+}
+
+/** Says a file didn't upload, which keeps the entry from saving till it's tried again or taken out. */
+function UploadProblem({ failed }: { failed: boolean }) {
+  if (!failed) {
+    return null;
+  }
+  return (
+    <p className="text-destructive text-xs">
+      A file didn’t upload. Try it again, or take it out.
+    </p>
+  );
+}
+
+/** What the paid switch says under it: what counts, or what the invoice said. */
+function paidHint(fields: Fields, fill: Fill): string {
+  const kind = entryKind(fields.kind);
+  if (fill.filled.has("paid") && fields.paid) {
+    return `The invoice says it’s ${statusLabel(kind, true).toLowerCase()}.`;
+  }
+  if (fill.filled.has("paid")) {
+    return kind === "debit"
+      ? "The invoice says it’s still to be paid."
+      : "The invoice says it’s still to come in.";
+  }
+  return `Only what’s ${statusLabel(kind, true).toLowerCase()} counts toward the month.`;
+}
+
 interface EntryFormProps {
   account: Account;
   categories: Category[];
@@ -657,6 +1226,13 @@ interface EntryFormProps {
   entry?: Entry;
   /** The day a new entry starts on. */
   defaultDate: string;
+  /** Whether invoices are read to fill the form in. */
+  reads: boolean;
+  /** Files already on their way to it, as jobs; the first is read as its invoice. */
+  jobs: string[];
+  /** Hears which jobs are the form's, to let go of them if it's left unsaved. */
+  onJobsChange: (ids: string[]) => void;
+  review?: Review;
   onDone: () => void;
 }
 
@@ -666,19 +1242,33 @@ function EntryForm({
   portfolios,
   entry,
   defaultDate,
+  reads,
+  jobs,
+  onJobsChange,
+  review,
   onDone,
 }: EntryFormProps) {
   const id = useId();
   const today = useToday();
-  const [fields, setFields] = useState(() =>
-    initialFields(entry, defaultDate, today, portfolios)
-  );
   const [saving, setSaving] = useState(false);
+  const files = useEntryFiles({
+    account,
+    entry,
+    initialJobs: jobs,
+    onJobsChange,
+    reads,
+  });
+  const fill = useInvoiceFill({
+    account,
+    entry,
+    initial: () => initialFields(entry, defaultDate, today, portfolios),
+    read: files.read,
+    today,
+  });
+  const { change, fields, setFields } = fill;
+  const { add: addFiles } = files;
+  const drop = useFileDrop(addFiles);
   const cents = parseMoney(fields.amount);
-  const amountError =
-    fields.amount.trim() && cents === undefined
-      ? "Enter an amount, like 42.50."
-      : undefined;
   const buy = buyChange(fields, entry, today);
   const transferring = fields.kind === "transfer";
   const transfer = useTransfer(account, entry, fields);
@@ -690,9 +1280,11 @@ function EntryForm({
   // Only a debit buys bitcoin; one already linked keeps the part so it can let go.
   const showBitcoin =
     fields.kind === "debit" && (portfolios.length > 0 || entry?.buyId);
+  const twoPane = files.items.length > 0 || files.loading;
+  const layout = twoPane ? LAYOUTS.beside : LAYOUTS.alone;
+  const { title, action } = wording(entry, review, fields.kind);
+  const save = saveButton(files, { action, saving, valid });
 
-  const change = (patch: Partial<Fields>) =>
-    setFields((current) => ({ ...current, ...patch }));
   const changeBitcoin = (patch: Partial<BitcoinFields>) =>
     setFields((current) => ({
       ...current,
@@ -701,7 +1293,7 @@ function EntryForm({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!valid) {
+    if (!valid || files.uploading || files.failed) {
       return;
     }
     const draft: EntryDraft = {
@@ -716,154 +1308,220 @@ function EntryForm({
     const moved = transferChange(fields, entry, transfer.received);
     setSaving(true);
     const saved = entry
-      ? await updateEntry(entry, draft, buy, moved)
-      : await addEntry(account, draft, buy, moved);
+      ? await updateEntry(entry, draft, buy, moved, files.changes)
+      : await addEntry(account, draft, buy, moved, files.changes.add);
     setSaving(false);
-    if (saved !== undefined) {
-      onDone();
+    if (saved === undefined) {
+      return;
     }
+    files.finish();
+    (review?.onAdded ?? onDone)();
   };
 
-  const paidLabel = statusLabel(entryKind(fields.kind), true);
-
   return (
-    <form className="flex flex-col gap-5" onSubmit={submit}>
-      <DialogHeader>
-        <DialogTitle>
-          {entry ? "Edit transaction" : "Add transaction"}
-        </DialogTitle>
-      </DialogHeader>
+    <div className={cn("flex flex-col", layout.root)} {...drop.handlers}>
+      {twoPane && <FilesPane files={files} over={drop.over} reads={reads} />}
 
-      <KindTabs
-        locked={transfer.source !== undefined}
-        onChange={(kind) => change({ kind })}
-        value={fields.kind}
-      />
+      <form className={cn("flex flex-col", layout.form)} onSubmit={submit}>
+        <div
+          className={cn(
+            "animate-in fade-in flex flex-col gap-5 duration-200",
+            layout.body
+          )}
+        >
+          <FormHeader review={review} title={title} />
 
-      {transfer.source && (
-        <TransferSource account={account} entry={transfer.source} />
-      )}
-      {transferring && (
-        <DestinationField
-          account={account}
-          destinations={transfer.destinations}
-          id={`${id}-to`}
-          onChange={(to) => change({ to })}
-          value={fields.to}
-        />
-      )}
+          <ReadingBanner
+            editing={entry !== undefined}
+            onRetry={() => files.rereadInvoice()}
+            read={files.read}
+          />
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-name`}>Name</Label>
-        <Input
-          autoComplete="off"
-          autoFocus={!entry}
-          id={`${id}-name`}
-          maxLength={MAX_ENTRY_NAME}
-          onChange={(event) => change({ name: event.target.value })}
-          placeholder={PLACEHOLDERS[fields.kind]}
-          value={fields.name}
-        />
-      </div>
+          <KindTabs
+            locked={transfer.source !== undefined}
+            onChange={(kind) => change({ kind })}
+            value={fields.kind}
+          />
 
-      <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
-        <MoneyField
-          currency={account.currency}
-          error={amountError}
-          id={`${id}-amount`}
-          onChange={(amount) => change({ amount })}
-          value={fields.amount}
-        />
-        <DayField
-          id={`${id}-date`}
-          onChange={(date) => change({ date })}
-          value={fields.date}
-        />
-      </div>
+          {transfer.source && (
+            <TransferSource account={account} entry={transfer.source} />
+          )}
+          {transferring && (
+            <DestinationField
+              account={account}
+              destinations={transfer.destinations}
+              id={`${id}-to`}
+              onChange={(to) => change({ to })}
+              value={fields.to}
+            />
+          )}
 
-      {transferring && changesCurrency(account, transfer.destination) && (
-        <ReceivedField
-          account={account}
-          cents={cents}
-          destination={transfer.destination}
-          id={`${id}-received`}
-          onChange={(typedReceived) => change({ typedReceived })}
-          received={transfer.received}
-          value={transfer.receivedText}
-        />
-      )}
+          <NameField
+            autoFocus={!(entry || twoPane)}
+            fields={fields}
+            fill={fill}
+            id={id}
+          />
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-category`}>Category</Label>
-        <CategoryPicker
-          categories={categories}
-          id={`${id}-category`}
-          onChange={(category) => change({ category })}
-          projectId={account.projectId}
-          value={fields.category}
-        />
-      </div>
+          <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
+            <AmountField
+              account={account}
+              cents={cents}
+              fields={fields}
+              fill={fill}
+              id={id}
+            />
+            <DateField fields={fields} fill={fill} id={id} />
+          </div>
 
-      <SwitchRow
-        checked={fields.paid}
-        hint={`Only what’s ${paidLabel.toLowerCase()} counts toward the month.`}
-        id={`${id}-paid`}
-        label={paidLabel}
-        onChange={(paid) => change({ paid })}
-      />
+          {transferring && changesCurrency(account, transfer.destination) && (
+            <ReceivedField
+              account={account}
+              cents={cents}
+              destination={transfer.destination}
+              id={`${id}-received`}
+              onChange={(typedReceived) => change({ typedReceived })}
+              received={transfer.received}
+              value={transfer.receivedText}
+            />
+          )}
 
-      {showBitcoin && (
-        <BitcoinPart
-          account={account}
-          cents={cents}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-category`}>
+              <FieldLabel filled={fill.filled.has("category")}>
+                Category
+              </FieldLabel>
+            </Label>
+            <div className={cn(fill.pending("category") && "invoice-pending")}>
+              <CategoryPicker
+                categories={categories}
+                id={`${id}-category`}
+                onChange={(category) => change({ category })}
+                projectId={account.projectId}
+                value={fields.category}
+              />
+            </div>
+          </div>
+
+          <SwitchRow
+            checked={fields.paid}
+            hint={paidHint(fields, fill)}
+            id={`${id}-paid`}
+            label={statusLabel(entryKind(fields.kind), true)}
+            onChange={(paid) => change({ paid })}
+          />
+
+          {showBitcoin && (
+            <BitcoinPart
+              account={account}
+              cents={cents}
+              entry={entry}
+              fields={fields}
+              future={fields.date > today}
+              id={id}
+              onAmountChange={(amount) => change({ amount })}
+              onChange={changeBitcoin}
+              portfolios={portfolios}
+            />
+          )}
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-note`}>
+              <FieldLabel filled={fill.filled.has("note")}>Note</FieldLabel>
+            </Label>
+            <Textarea
+              id={`${id}-note`}
+              onChange={(event) => change({ note: event.target.value })}
+              placeholder="Optional"
+              value={fields.note}
+            />
+          </div>
+
+          {!twoPane && (
+            <FileDropZone
+              onFiles={addFiles}
+              over={drop.over}
+              reads={reads && !entry}
+            />
+          )}
+
+          <UploadProblem failed={files.failed} />
+        </div>
+
+        <EntryFooter
+          action={save.action}
+          busy={save.busy}
+          disabled={save.disabled}
           entry={entry}
-          fields={fields}
-          future={fields.date > today}
-          id={id}
-          onAmountChange={(amount) => change({ amount })}
-          onChange={changeBitcoin}
-          portfolios={portfolios}
+          onDeleted={onDone}
+          review={review}
+          sticky={twoPane}
         />
-      )}
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-note`}>Note</Label>
-        <Textarea
-          id={`${id}-note`}
-          onChange={(event) => change({ note: event.target.value })}
-          placeholder="Optional"
-          value={fields.note}
-        />
-      </div>
-
-      <DialogFooter className="mt-1">
-        {entry && <DeleteEntry entry={entry} onDeleted={onDone} />}
-        <DialogClose render={<Button type="button" variant="ghost" />}>
-          Cancel
-        </DialogClose>
-        <Button disabled={!valid || saving} type="submit">
-          {saving && <Spinner />}
-          {entry ? "Save" : `Add ${fields.kind}`}
-        </Button>
-      </DialogFooter>
-    </form>
+      </form>
+    </div>
   );
 }
 
-type EntryDialogProps = Omit<EntryFormProps, "onDone"> & {
+type EntryDialogProps = Omit<
+  EntryFormProps,
+  "onDone" | "onJobsChange" | "jobs" | "reads"
+> & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Files on their way to a new entry, as jobs; the first is read as its invoice. */
+  jobs?: string[];
+  /** Starts the form over, when the dialog moves on to another entry or invoice. */
+  formKey?: string;
 };
 
+const NO_JOBS: string[] = [];
+
+/**
+ * Adds or changes an entry, with the files it keeps. With files, it widens
+ * to show them beside the form, and an invoice dropped in fills the form in.
+ */
 export function EntryDialog({
   open,
   onOpenChange,
+  jobs = NO_JOBS,
+  formKey,
   ...props
 }: EntryDialogProps) {
+  const reads = useAiReady();
+  // The form's own uploads, let go of if it's left unsaved; a batch's stay in its tray.
+  const pending = useRef<string[]>([]);
+  const leave = () => {
+    for (const jobId of pending.current) {
+      if (!jobById(jobId)?.batch) {
+        dropJob(jobId);
+      }
+    }
+    pending.current = [];
+  };
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent showCloseButton={false}>
-        <EntryForm {...props} onDone={() => onOpenChange(false)} />
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) {
+          leave();
+        }
+        onOpenChange(next);
+      }}
+      open={open}
+    >
+      <DialogContent
+        className="transition-[opacity,scale,max-width] has-data-[slot=entry-viewer]:max-w-4xl has-data-[slot=entry-viewer]:gap-0 has-data-[slot=entry-viewer]:p-0 md:has-data-[slot=entry-viewer]:overflow-hidden"
+        showCloseButton={false}
+      >
+        <EntryForm
+          {...props}
+          jobs={jobs}
+          key={formKey}
+          onDone={() => onOpenChange(false)}
+          onJobsChange={(ids) => {
+            pending.current = ids;
+          }}
+          reads={reads}
+        />
       </DialogContent>
     </Dialog>
   );

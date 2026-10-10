@@ -882,6 +882,81 @@
   }
 }
 
+/* Over an invoice being read: a soft band of light passing down it, again and
+   again, its lower edge the brightest, like a scanner's. */
+@layer components {
+  .invoice-scan {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      top: 0;
+      height: 35%;
+      background: linear-gradient(
+        to bottom,
+        transparent,
+        color-mix(in oklab, var(--primary) 8%, transparent) 70%,
+        color-mix(in oklab, var(--primary) 22%, transparent) 98%,
+        color-mix(in oklab, var(--primary) 55%, transparent)
+      );
+      translate: 0 -100%;
+      animation: invoice-scan 2.4s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      background: color-mix(in oklab, var(--primary) 5%, transparent);
+
+      &::before {
+        display: none;
+      }
+    }
+  }
+
+  @keyframes invoice-scan {
+    from {
+      translate: 0 -100%;
+    }
+
+    to {
+      translate: 0 300%;
+    }
+  }
+
+  /* A field waiting on the invoice to be read, with the character's sheen
+     passing over it. */
+  .invoice-pending {
+    position: relative;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-lg);
+      pointer-events: none;
+      background: linear-gradient(
+        110deg,
+        transparent 35%,
+        color-mix(in oklab, var(--primary) 9%, transparent) 50%,
+        transparent 65%
+      );
+      background-size: 250% 100%;
+      animation: character-sheen 1.6s linear infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::after {
+        animation: none;
+        background: color-mix(in oklab, var(--primary) 4%, transparent);
+      }
+    }
+  }
+}
+
 /* Over someone away in the office: z's drifting up off them, one after another. */
 @layer components {
   .office-zzz > span {
