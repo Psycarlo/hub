@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-11
+
+### Added
+
+- A Clock widget for the time in any city, digital or analog, with a strip showing its day and night; add one for each city you follow.
+- The add-widget menu shows which widgets are already on your home, and how many of the 12 you're using.
+- Give an account a starting balance, held or owed, so its past needn't be entered.
+
+### Changed
+
+- Account cards and an account's month show what it holds at the month's end, with the month's sums beneath.
+- Widgets other than the clock go on your home once each.
+
 ## [0.6.0] - 2026-10-10
 
 ### Added
