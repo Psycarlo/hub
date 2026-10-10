@@ -123,6 +123,11 @@ export function isActive(item: UploadItem): boolean {
   );
 }
 
+/** Whether any Drive upload is waiting or under way, so a reload would drop it. */
+export function uploadingToDrive(): boolean {
+  return items.some(isActive);
+}
+
 /** Deletes an upload never filed. One that can't be is swept up within a day anyway. */
 async function discard(key: string): Promise<void> {
   try {

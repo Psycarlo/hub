@@ -9,12 +9,16 @@ import { APP_NAME } from "@/lib/brand";
 import { convex, convexUrl } from "@/lib/convex";
 import { pruneDrafts } from "@/lib/drafts";
 import { startLeaveGuard } from "@/lib/leaving";
+import { startPwa } from "@/lib/pwa";
 import { startStaleBuildReload } from "@/lib/stale-build";
 import { startTheme } from "@/lib/theme";
+import { startUpdates } from "@/lib/updates";
 
 startTheme();
 startLeaveGuard();
 startStaleBuildReload();
+startPwa();
+startUpdates();
 pruneDrafts();
 document.title = APP_NAME;
 

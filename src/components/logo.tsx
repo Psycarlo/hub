@@ -8,42 +8,25 @@ const LETTER_WIDTH = 12;
 const MARK = 28;
 const GAP = 8;
 
-/** The uploaded logo, clipped to the mark's rounded square, or the default: spokes joining at the middle. */
+/** The default logo, also the installed app's icon. Made from assets/logo.png. */
+const DEFAULT_LOGO = "/icons/icon-192.png";
+
+/** The uploaded logo, or the default one, clipped to the mark's rounded square. */
 function MarkShapes() {
-  const logo = useLogo();
+  const logo = useLogo() ?? DEFAULT_LOGO;
   const clip = useId();
-  if (logo) {
-    return (
-      <>
-        <clipPath id={clip}>
-          <rect height={MARK} rx="8" width={MARK} />
-        </clipPath>
-        <image
-          clipPath={`url(#${clip})`}
-          height={MARK}
-          href={logo}
-          preserveAspectRatio="xMidYMid meet"
-          width={MARK}
-        />
-      </>
-    );
-  }
   return (
     <>
-      <rect className="fill-primary" height={MARK} rx="8" width={MARK} />
-      <path
-        className="stroke-primary-foreground"
-        d="M14 14 8.5 8.5M14 14l5.5-5.5M14 14v6.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeWidth="2.2"
+      <clipPath id={clip}>
+        <rect height={MARK} rx="8" width={MARK} />
+      </clipPath>
+      <image
+        clipPath={`url(#${clip})`}
+        height={MARK}
+        href={logo}
+        preserveAspectRatio="xMidYMid meet"
+        width={MARK}
       />
-      <g className="fill-primary-foreground">
-        <circle cx="14" cy="14" r="3.2" />
-        <circle cx="8" cy="8" r="2.2" />
-        <circle cx="20" cy="8" r="2.2" />
-        <circle cx="14" cy="21.5" r="2.2" />
-      </g>
     </>
   );
 }

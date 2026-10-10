@@ -15,7 +15,7 @@ export const APP_VERSION: string = __APP_VERSION__;
  * index.html reads it too, to set the favicon before the app loads.
  */
 const LOGO_KEY = "hub-logo";
-const DEFAULT_ICON = "/favicon.svg";
+const DEFAULT_ICON = "/favicon.png";
 const rememberedLogo = readStorage(LOGO_KEY);
 
 /** The unread dot, on a 64px icon: in the top-right corner, with a clear ring around it. */

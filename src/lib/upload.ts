@@ -23,6 +23,13 @@ export function uploadable(files: File[]): File[] {
   return fitting;
 }
 
+let sending = 0;
+
+/** Whether a photo, image or attachment is on its way up, so a reload would drop it. */
+export function sendingUploads(): boolean {
+  return sending > 0;
+}
+
 /**
  * Uploads a file to the signed link `target` makes, then records it in
  * Convex. Resolves with the object key.
@@ -34,17 +41,22 @@ async function upload(
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new UploadError(TOO_BIG);
   }
-  const { key, url } = await target();
-  const response = await fetch(url, {
-    body: file,
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    method: "PUT",
-  });
-  if (!response.ok) {
-    throw new UploadError("The upload didn’t go through. Try again.");
+  sending += 1;
+  try {
+    const { key, url } = await target();
+    const response = await fetch(url, {
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      method: "PUT",
+    });
+    if (!response.ok) {
+      throw new UploadError("The upload didn’t go through. Try again.");
+    }
+    await convex.mutation(api.r2.syncMetadata, { key });
+    return key;
+  } finally {
+    sending -= 1;
   }
-  await convex.mutation(api.r2.syncMetadata, { key });
-  return key;
 }
 
 /**

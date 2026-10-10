@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 
 const SIDES = {
   bottom:
-    "inset-x-0 bottom-0 max-h-[calc(100dvh-2rem)] rounded-t-2xl data-ending-style:translate-y-full data-starting-style:translate-y-full",
+    "inset-x-0 bottom-0 max-h-[calc(100dvh-2rem)] rounded-t-2xl pb-[env(safe-area-inset-bottom)] data-ending-style:translate-y-full data-starting-style:translate-y-full",
   left: "inset-y-0 left-0 h-dvh w-3/4 max-w-sm rounded-r-2xl data-ending-style:-translate-x-full data-starting-style:-translate-x-full",
   right:
-    "inset-y-0 right-0 h-dvh w-full sm:inset-y-2 sm:right-2 sm:h-auto sm:max-w-lg sm:rounded-2xl data-ending-style:translate-x-[calc(100%+0.5rem)] data-starting-style:translate-x-[calc(100%+0.5rem)]",
+    "inset-y-0 right-0 h-dvh w-full max-sm:pb-[env(safe-area-inset-bottom)] sm:inset-y-2 sm:right-2 sm:h-auto sm:max-w-lg sm:rounded-2xl data-ending-style:translate-x-[calc(100%+0.5rem)] data-starting-style:translate-x-[calc(100%+0.5rem)]",
 } as const;
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {

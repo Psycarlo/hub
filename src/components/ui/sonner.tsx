@@ -17,6 +17,8 @@ function Toaster(props: ToasterProps) {
   return (
     <Sonner
       className="toaster group"
+      // Clear of the home indicator on phones without a home button.
+      mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }}
       icons={{
         error: <OctagonXIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,

@@ -15,3 +15,6 @@ interface ImportMeta {
 
 /** The hub's version from package.json, put in at build time. */
 declare const __APP_VERSION__: string;
+
+/** New on every build; /version.json names the live one. */
+declare const __BUILD_ID__: string;

@@ -8,7 +8,8 @@ export function onLeave(save: () => void): () => void {
   return () => savers.delete(save);
 }
 
-function saveAll() {
+/** Saves everything waiting on a pause in typing, now. */
+export function saveAll() {
   for (const save of savers) {
     save();
   }

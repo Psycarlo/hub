@@ -329,7 +329,10 @@ function Sidebar({
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>Projects, boards and tables.</SheetDescription>
           </SheetHeader>
-          <div className="flex size-full flex-col">{children}</div>
+          {/* The footer clears the home indicator on phones without a home button. */}
+          <div className="flex size-full flex-col pb-[env(safe-area-inset-bottom)]">
+            {children}
+          </div>
         </SheetContent>
       </Sheet>
     );

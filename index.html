@@ -6,7 +6,21 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <link rel="icon" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- With credentials, so it still loads behind Vercel's preview protection. -->
+    <link
+      rel="manifest"
+      href="/manifest.webmanifest"
+      crossorigin="use-credentials"
+    />
+    <meta name="theme-color" content="#f7f8fa" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!--
+      No apple-mobile-web-app-status-bar-style: its translucent bar runs the
+      page under iOS 26's status bar blur. The default bar follows theme-color.
+    -->
     <title>Hub</title>
     <script>
       try {
@@ -17,6 +31,9 @@
             matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]').content = dark
+          ? "#08090c"
+          : "#f7f8fa";
         const logo = localStorage.getItem("hub-logo");
         if (logo) {
           document.querySelector('link[rel="icon"]').href = logo;

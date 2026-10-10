@@ -21,13 +21,16 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
+import { APP_NAME, APP_VERSION } from "@/lib/brand";
 import { convex } from "@/lib/convex";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import type { Fiat } from "@/lib/portfolio";
 import { fiatSymbol } from "@/lib/portfolio";
+import { installed, installsFromShareSheet, useInstall } from "@/lib/pwa";
 import { setSounds, useSounds } from "@/lib/sounds";
 import type { Theme } from "@/lib/theme";
 import { setTheme, useTheme } from "@/lib/theme";
+import { checkForUpdate } from "@/lib/updates";
 import { isImage, uploadFile } from "@/lib/upload";
 
 const MIN_PASSWORD = 8;
@@ -381,6 +384,63 @@ function SoundsField() {
   );
 }
 
+function installHint(offered: boolean): string {
+  if (offered) {
+    return "Opens in its own window, from your home screen or dock.";
+  }
+  if (installsFromShareSheet) {
+    return "Tap Share, then Add to Home Screen.";
+  }
+  return "Install it from your browser’s menu: Chrome, Edge and Safari can.";
+}
+
+function InstallField() {
+  const install = useInstall();
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-sm font-medium">Install {APP_NAME}</span>
+        <span className="text-muted-foreground text-xs">
+          {installHint(install !== null)}
+        </span>
+      </span>
+      {install && (
+        <Button onClick={install} size="sm" variant="outline">
+          Install
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function VersionField() {
+  const [checking, setChecking] = useState(false);
+  const check = async () => {
+    setChecking(true);
+    const found = await checkForUpdate();
+    setChecking(false);
+    if (found === "latest") {
+      toast("You’re on the latest version");
+    } else if (found === "failed") {
+      toast.error("Couldn’t check for updates. Try again once you’re online.");
+    }
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-sm font-medium">Version {APP_VERSION}</span>
+        <span className="text-muted-foreground text-xs">
+          New versions load by themselves, while you’re away from {APP_NAME}.
+        </span>
+      </span>
+      <Button disabled={checking} onClick={check} size="sm" variant="outline">
+        {checking && <Spinner />}
+        Check for updates
+      </Button>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   return (
     <>
@@ -415,6 +475,10 @@ export function SettingsPage() {
         </Section>
         <Section description="Saved on this device." title="Sounds">
           <SoundsField />
+        </Section>
+        <Section title="App">
+          {!installed && <InstallField />}
+          <VersionField />
         </Section>
       </main>
     </>
