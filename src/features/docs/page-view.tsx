@@ -1,7 +1,7 @@
 import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import {
   BookOpenTextIcon,
   EllipsisIcon,
@@ -35,6 +35,9 @@ import { ancestors, pageTitle } from "@/lib/docs";
 import { createPage, updatePage } from "@/lib/docs-actions";
 import type { Project } from "@/lib/project";
 import { canEdit, projectPath } from "@/lib/project";
+
+/** The page with its text, as it opens. */
+type FullPage = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
 const ICON =
   "-ml-1 flex size-16 items-center justify-center self-start rounded-xl text-5xl leading-none";
@@ -123,7 +126,7 @@ function EditablePage({
   docs,
   page,
   full,
-}: PageViewProps & { full: Doc<"docPages"> }) {
+}: PageViewProps & { full: FullPage }) {
   const [, navigate] = useLocation();
   const me = useMe();
   const editor = useRef<PageEditorHandle>(null);
@@ -249,13 +252,7 @@ function EditablePage({
 }
 
 /** The page as its newest version reads, for viewers of the project. */
-function ReadOnlyPage({
-  page,
-  full,
-}: {
-  page: DocPage;
-  full: Doc<"docPages">;
-}) {
+function ReadOnlyPage({ page, full }: { page: DocPage; full: FullPage }) {
   return (
     <>
       <div className="flex flex-col gap-2">

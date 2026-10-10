@@ -274,11 +274,16 @@ export default defineSchema({
   }).index("by_record", ["recordId"]),
 
   docPages: defineTable({
-    /** Markdown. */
-    content: v.string(),
+    /**
+     * Markdown, only on pages saved before the text moved to their newest
+     * revision. Goes once migrations:movePageText has run everywhere.
+     */
+    content: v.optional(v.string()),
     createdBy: v.id("users"),
     /** The opening words of the text, for cards and lists. */
     excerpt: v.string(),
+    /** Whether the text has anything in it, for lists that don't read it. Missing until the text moves. */
+    hasContent: v.optional(v.boolean()),
     /** An emoji shown before the title, or empty for the default icon. */
     icon: v.string(),
     parentId: v.optional(v.id("docPages")),
@@ -295,7 +300,10 @@ export default defineSchema({
     .index("by_project_and_parent", ["projectId", "parentId"])
     .index("by_parent", ["parentId"]),
 
-  /** Recent texts of each page, the bases that edits made at once merge from. */
+  /**
+   * Recent texts of each page: the newest is the page's text now, and the
+   * others are the bases that edits made at once merge from.
+   */
   docRevisions: defineTable({
     authorId: v.id("users"),
     content: v.string(),

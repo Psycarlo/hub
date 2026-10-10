@@ -25,6 +25,7 @@ import type * as hub from "../hub.js";
 import type * as inbox from "../inbox.js";
 import type * as invites from "../invites.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_docs from "../lib/docs.js";
 import type * as lib_email from "../lib/email.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_files from "../lib/files.js";
@@ -77,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   inbox: typeof inbox;
   invites: typeof invites;
   "lib/access": typeof lib_access;
+  "lib/docs": typeof lib_docs;
   "lib/email": typeof lib_email;
   "lib/env": typeof lib_env;
   "lib/files": typeof lib_files;

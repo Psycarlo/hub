@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser, roleIn } from "./lib/access";
+import { hasText } from "./lib/docs";
 import type { ProjectRole } from "./shared/model";
 
 /** Newest notifications shown. */
@@ -78,7 +79,7 @@ async function itemOf(
       kind: "page",
       page: {
         _id: page._id,
-        hasContent: page.content.trim() !== "",
+        hasContent: hasText(page),
         icon: page.icon,
         title: page.title,
       },

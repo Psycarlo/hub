@@ -12,6 +12,7 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
+import { hasText, textOf } from "./lib/docs";
 import { mentionExcerpt, pageExcerpt } from "./shared/docs";
 import { mentionedUsers } from "./shared/mentions";
 import { mergeText } from "./shared/merge";
@@ -40,7 +41,7 @@ function summary(page: Doc<"docPages">): PageSummary {
     _creationTime: page._creationTime,
     _id: page._id,
     excerpt: page.excerpt,
-    hasContent: page.content.trim() !== "",
+    hasContent: hasText(page),
     icon: page.icon,
     parentId: page.parentId,
     projectId: page.projectId,
@@ -73,7 +74,11 @@ export const get = query({
   args: { pageId: v.id("docPages") },
   handler: async (ctx, { pageId }) => {
     const access = await ifVisible(requirePage(ctx, pageId, "view"));
-    return access?.page ?? null;
+    if (!access) {
+      return null;
+    }
+    const { page } = access;
+    return { ...page, content: await textOf(ctx, page) };
   },
 });
 
@@ -174,9 +179,9 @@ export const create = mutation({
     const content = (args.content ?? "").slice(0, MAX_CONTENT);
     const now = Date.now();
     const pageId = await ctx.db.insert("docPages", {
-      content,
       createdBy: user._id,
       excerpt: pageExcerpt(content),
+      hasContent: content.trim() !== "",
       icon: args.icon ?? "",
       parentId: args.parentId,
       projectId: args.projectId,
@@ -251,6 +256,7 @@ export const save = mutation({
   },
   handler: async (ctx, { pageId, base, content }) => {
     const { page, user } = await requirePage(ctx, pageId, "edit");
+    const current = await textOf(ctx, page);
     const mine = content.slice(0, MAX_CONTENT);
     let merged = mine;
     if (base !== page.revision) {
@@ -261,15 +267,17 @@ export const save = mutation({
         )
         .unique();
       // Too old to place: the newest save wins, as with any plain overwrite.
-      merged = from ? mergeText(from.content, mine, page.content, true) : mine;
+      merged = from ? mergeText(from.content, mine, current, true) : mine;
     }
-    if (merged === page.content) {
-      return { content: page.content, revision: page.revision };
+    if (merged === current) {
+      return { content: current, revision: page.revision };
     }
     const revision = page.revision + 1;
+    // The text goes in the new revision alone; a page saved before loses its own copy.
     await ctx.db.patch(pageId, {
-      content: merged,
+      content: undefined,
       excerpt: pageExcerpt(merged),
+      hasContent: merged.trim() !== "",
       revision,
       updatedAt: Date.now(),
       updatedBy: user._id,
@@ -281,7 +289,7 @@ export const save = mutation({
       revision,
     });
     await prune(ctx, pageId, revision);
-    await notifyMentions(ctx, page, user._id, page.content, merged);
+    await notifyMentions(ctx, page, user._id, current, merged);
     return { content: merged, revision };
   },
 });
