@@ -1,6 +1,6 @@
 /**
  * What's left once a project, board, card, table, page, portfolio, finance
- * account, habit, or Drive file or folder is deleted. The parent
+ * account, habit, brand, or Drive file or folder is deleted. The parent
  * goes first, so nobody sees it anymore; the rest is cleared here in batches
  * that stay well within a mutation's limits.
  */
@@ -367,6 +367,23 @@ export const habit = internalMutation({
   },
 });
 
+export const brand = internalMutation({
+  args: { brandId: v.id("brands") },
+  handler: async (ctx, { brandId }) => {
+    const files = await ctx.db
+      .query("brandFiles")
+      .withIndex("by_brand", (q) => q.eq("brandId", brandId))
+      .take(FILE_BATCH);
+    for (const file of files) {
+      await ctx.db.delete(file._id);
+      await dropFile(ctx, file.key);
+    }
+    if (files.length === FILE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.brand, { brandId });
+    }
+  },
+});
+
 export const project = internalMutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
@@ -434,6 +451,16 @@ export const project = internalMutation({
         habitId: item._id,
       });
     }
+    const brands = await ctx.db
+      .query("brands")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    for (const item of brands) {
+      await ctx.db.delete(item._id);
+      await ctx.scheduler.runAfter(0, internal.cleanup.brand, {
+        brandId: item._id,
+      });
+    }
     // Every file of the Drive goes, wherever it sits, so its folders can go as they are.
     const files = await ctx.db
       .query("driveFiles")
@@ -461,16 +488,18 @@ export const project = internalMutation({
       }
       await ctx.db.delete(folder._id);
     }
-    if (
-      boards.length > 0 ||
-      tables.length > 0 ||
-      pages.length > 0 ||
-      portfolios.length > 0 ||
-      accounts.length > 0 ||
-      habits.length > 0 ||
-      files.length > 0 ||
-      folders.length > 0
-    ) {
+    const batches = [
+      boards,
+      tables,
+      pages,
+      portfolios,
+      accounts,
+      habits,
+      brands,
+      files,
+      folders,
+    ];
+    if (batches.some((batch) => batch.length > 0)) {
       await ctx.scheduler.runAfter(0, internal.cleanup.project, { projectId });
     }
   },

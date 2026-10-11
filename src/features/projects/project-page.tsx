@@ -20,6 +20,8 @@ import {
   MemberAvatars,
 } from "@/features/boards/board-card";
 import { BoardDialog } from "@/features/boards/board-dialog";
+import { BrandGrid } from "@/features/brands/brand-card";
+import { BrandDialog } from "@/features/brands/brand-dialog";
 import { tablePath } from "@/features/crm/crm-context";
 import { NewTableDialog } from "@/features/crm/new-table-dialog";
 import { TableIcon } from "@/features/crm/table-icon";
@@ -35,6 +37,7 @@ import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import type { ProjectItem } from "@/features/projects/new-in-project";
 import { NewInProject } from "@/features/projects/new-in-project";
 import { ProjectDialog } from "@/features/projects/project-dialog";
+import type { Brand } from "@/lib/brands";
 import type { CrmRecord, CrmTable, NavTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
 import type { DocPage, DocsContent } from "@/lib/docs";
@@ -176,6 +179,9 @@ interface ProjectPageProps {
   /** The project's habits; only personal projects have them. */
   habits: Habit[];
   habitsLoaded: boolean;
+  /** The project's brands. */
+  brands: Brand[];
+  brandsLoaded: boolean;
   content?: ProjectContent;
   loaded: boolean;
 }
@@ -324,6 +330,7 @@ function ProjectSections({
   portfolios,
   accounts,
   habits,
+  brands,
   files,
   onNew,
 }: {
@@ -338,6 +345,7 @@ function ProjectSections({
   portfolios: Portfolio[];
   accounts: Account[];
   habits: Habit[];
+  brands: Brand[];
   /** Files lately opened or added in the Drive. */
   files: DriveFile[];
   onNew: (kind: ProjectItem) => void;
@@ -376,6 +384,21 @@ function ProjectSections({
           onNew={() => onNew("board")}
           project={project}
         />
+      )}
+      {brands.length > 0 && (
+        <Section
+          action={
+            editable && (
+              <Button onClick={() => onNew("brand")} variant="outline">
+                <PlusIcon />
+                New brand
+              </Button>
+            )
+          }
+          title="Brands"
+        >
+          <BrandGrid brands={brands} project={project} />
+        </Section>
       )}
       {pages.length > 0 && (
         <Section
@@ -449,7 +472,7 @@ function ProjectSections({
   );
 }
 
-/** Where a project's boards, tables, docs, portfolios, accounts and habits go, before it has any. */
+/** Where a project's boards, tables, docs, brands, portfolios, accounts and habits go, before it has any. */
 function NoContent({
   editable,
   personal,
@@ -461,13 +484,13 @@ function NoContent({
   onNew: (kind: ProjectItem) => void;
 }) {
   let description =
-    "Boards, tables, docs, files, portfolios and accounts in this project show up here.";
+    "Boards, tables, docs, files, brands, portfolios and accounts in this project show up here.";
   if (editable && personal) {
     description =
-      "Build habits, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive, follow bitcoin portfolios and the money in your accounts.";
+      "Build habits, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
   } else if (editable) {
     description =
-      "Plan work on boards, track deals in CRM tables, write docs, keep files in the Drive, follow bitcoin portfolios and the money in your accounts.";
+      "Plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
   }
   return (
     <Empty className="bg-muted/60 rounded-2xl py-10">
@@ -497,6 +520,8 @@ export function ProjectPage({
   accountsLoaded,
   habits,
   habitsLoaded,
+  brands,
+  brandsLoaded,
   content,
   loaded,
 }: ProjectPageProps) {
@@ -537,6 +562,7 @@ export function ProjectPage({
     portfolios,
     accounts,
     habits,
+    brands,
     files,
   ].some((items) => items.length > 0);
   const allLoaded = [
@@ -546,6 +572,7 @@ export function ProjectPage({
     portfoliosLoaded,
     accountsLoaded,
     habitsLoaded,
+    brandsLoaded,
     recent !== undefined,
   ].every(Boolean);
 
@@ -553,6 +580,7 @@ export function ProjectPage({
     <ProjectSections
       accounts={accounts}
       boards={projectBoards}
+      brands={brands}
       files={files}
       habits={habits}
       content={loaded ? content : undefined}
@@ -636,6 +664,7 @@ export function ProjectPage({
       <NewTableDialog {...dialogProps("table")} project={project} />
       <PortfolioDialog {...dialogProps("portfolio")} project={project} />
       <AccountDialog {...dialogProps("account")} project={project} />
+      <BrandDialog {...dialogProps("brand")} project={project} />
       {project.personalFor && (
         <HabitDialog {...dialogProps("habit")} project={project} />
       )}

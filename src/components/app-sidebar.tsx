@@ -8,6 +8,7 @@ import {
   PlusIcon,
   ShieldIcon,
   SquareKanbanIcon,
+  SwatchBookIcon,
   WalletIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -44,6 +45,7 @@ import {
 import { ADMIN_PATH, SETTINGS_PATH, UserMenu } from "@/components/user-menu";
 import { BOARD_ROUTE, boardPath } from "@/features/board/board-context";
 import { findBoard, parseSlug } from "@/features/board/board-route";
+import { brandPath } from "@/features/brands/brands-context";
 import { tablePath } from "@/features/crm/crm-context";
 import { TableIcon } from "@/features/crm/table-icon";
 import { SidebarDocs } from "@/features/docs/sidebar-docs";
@@ -56,6 +58,7 @@ import { OFFICE_PATH, OfficeItem } from "@/features/office/office-item";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
 import { APP_VERSION } from "@/lib/brand";
+import type { Brand } from "@/lib/brands";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
@@ -131,6 +134,8 @@ interface ProjectItemProps {
   portfolios: Portfolio[];
   /** This project's finance accounts. */
   accounts: Account[];
+  /** This project's brands. */
+  brands: Brand[];
   /** Whether the project keeps habits, which share one page. */
   hasHabits: boolean;
   openBoard?: Board;
@@ -149,6 +154,7 @@ function ProjectItem({
   boards,
   portfolios,
   accounts,
+  brands,
   hasHabits,
   openBoard,
   location,
@@ -227,6 +233,22 @@ function ProjectItem({
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
           ))}
+          {brands.map((brand) => {
+            const href = brandPath(project, brand);
+            return (
+              <SidebarMenuSubItem key={brand._id}>
+                <SidebarMenuSubButton
+                  isActive={
+                    location === href || location.startsWith(`${href}/`)
+                  }
+                  render={<NavLink href={href} />}
+                >
+                  <SwatchBookIcon />
+                  <span>{brand.title}</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            );
+          })}
           {portfolios.map((portfolio) => {
             const href = portfolioPath(project, portfolio);
             return (
@@ -289,6 +311,8 @@ interface AppSidebarProps {
   accounts: Account[];
   /** Habits in every project. */
   habits: Habit[];
+  /** Brands in every project. */
+  brands: Brand[];
   /** Unread notifications in the inbox. */
   unread: number;
   onNewProject: () => void;
@@ -303,6 +327,7 @@ export function AppSidebar({
   portfolios,
   accounts,
   habits,
+  brands,
   unread,
   onNewProject,
 }: AppSidebarProps) {
@@ -338,6 +363,7 @@ export function AppSidebar({
     <ProjectItem
       accounts={accounts.filter((account) => account.projectId === project._id)}
       boards={boards.filter((board) => board.projectId === project._id)}
+      brands={brands.filter((brand) => brand.projectId === project._id)}
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       drive={drive.get(project._id) ?? EMPTY_TREE}
       hasHabits={habits.some((habit) => habit.projectId === project._id)}

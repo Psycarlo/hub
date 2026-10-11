@@ -43,6 +43,7 @@ import type { User } from "@/hooks/use-users";
 import { MeContext, useMe } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { useBrandSync, useUnreadIcon } from "@/lib/brand";
+import type { Brand } from "@/lib/brands";
 import { convex } from "@/lib/convex";
 import type { NavTable } from "@/lib/crm";
 import type { DocPage } from "@/lib/docs";
@@ -71,6 +72,7 @@ const NO_FOLDERS: DriveFolder[] = [];
 const NO_PORTFOLIOS: Portfolio[] = [];
 const NO_ACCOUNTS: Account[] = [];
 const NO_HABITS: Habit[] = [];
+const NO_BRANDS: Brand[] = [];
 
 // Projects carry the CRM and its table library, which board-only visits never need.
 const ProjectRoute = lazy(async () => {
@@ -126,6 +128,7 @@ function Workspace() {
   const portfolioList = useQuery(api.portfolios.list);
   const accountList = useQuery(api.finance.accounts);
   const habitList = useQuery(api.habits.list);
+  const brandList = useQuery(api.brands.list);
   const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
@@ -137,6 +140,7 @@ function Workspace() {
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const accounts = accountList ?? NO_ACCOUNTS;
   const habits = habitList ?? NO_HABITS;
+  const brands = brandList ?? NO_BRANDS;
   const [creatingProject, setCreatingProject] = useState(false);
   const focus = useFocusState();
   const projectsLoaded = projectList !== undefined;
@@ -150,6 +154,7 @@ function Workspace() {
           <AppSidebar
             accounts={accounts}
             boards={boards}
+            brands={brands}
             docs={docs}
             drive={drive}
             habits={habits}
@@ -194,6 +199,8 @@ function Workspace() {
                         accountsLoaded={accountList !== undefined}
                         boards={boards}
                         boardsLoaded={boardsLoaded}
+                        brands={brands}
+                        brandsLoaded={brandList !== undefined}
                         docs={docs}
                         docsLoaded={pages !== undefined}
                         habits={habits}

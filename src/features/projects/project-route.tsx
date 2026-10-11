@@ -6,6 +6,14 @@ import { buttonVariants } from "@/components/ui/button";
 import { Empty, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BOARDS_SEGMENT } from "@/features/board/board-context";
+import { BrandPage } from "@/features/brands/brand-page";
+import {
+  BRANDS_SEGMENT,
+  brandPath,
+  brandsPath,
+  parseBrandParam,
+} from "@/features/brands/brands-context";
+import { BrandsPage } from "@/features/brands/brands-page";
 import { TablePage } from "@/features/crm/table-page";
 import {
   DOCS_SEGMENT,
@@ -43,6 +51,7 @@ import { PortfolioPage } from "@/features/portfolios/portfolio-page";
 import { PortfoliosPage } from "@/features/portfolios/portfolios-page";
 import { ProjectPage } from "@/features/projects/project-page";
 import { useProjectContent } from "@/hooks/use-project-content";
+import type { Brand } from "@/lib/brands";
 import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
@@ -100,6 +109,9 @@ interface ProjectViewProps {
   /** The project's habits. */
   habits: Habit[];
   habitsLoaded: boolean;
+  /** The project's brands. */
+  brands: Brand[];
+  brandsLoaded: boolean;
   tableSlug?: string;
   recordId?: string;
 }
@@ -344,6 +356,63 @@ function FinanceView({
   );
 }
 
+interface BrandsViewProps {
+  project: Project;
+  brands: Brand[];
+  loaded: boolean;
+  /** The brand part of the link: its name, then its id. */
+  brandParam?: string;
+}
+
+function BrandsView({ project, brands, loaded, brandParam }: BrandsViewProps) {
+  const [, navigate] = useLocation();
+  const id = brandParam ? parseBrandParam(brandParam) : undefined;
+  // A list of one would only repeat it, so its own page stands in.
+  const alone = brands.length === 1;
+  const lone = !brandParam && alone ? brands[0] : undefined;
+  const brand = id ? brands.find((item) => item._id === id) : lone;
+  const path = brand ? brandPath(project, brand) : undefined;
+  // The link follows the name as it changes; any name before the id still opens it.
+  useEffect(() => {
+    if (path && !(brandParam && path.endsWith(`/${brandParam}`))) {
+      navigate(path, { replace: true });
+    }
+  }, [brandParam, navigate, path]);
+
+  if (brand) {
+    return (
+      <BrandPage
+        alone={alone}
+        brand={brand}
+        key={brand._id}
+        project={project}
+      />
+    );
+  }
+  if (!brandParam) {
+    return <BrandsPage brands={brands} loaded={loaded} project={project} />;
+  }
+  return (
+    <>
+      <TopBar
+        crumbs={[
+          { href: projectPath(project), label: project.title },
+          { href: brandsPath(project), label: "Brands" },
+        ]}
+      />
+      {loaded ? (
+        <NotFound
+          href={brandsPath(project)}
+          label="Brands"
+          title="Brand not found"
+        />
+      ) : (
+        <Loading />
+      )}
+    </>
+  );
+}
+
 interface HabitsViewProps {
   project: Project;
   habits: Habit[];
@@ -394,7 +463,7 @@ function HabitsView({ project, habits, loaded, habitParam }: HabitsViewProps) {
 
 interface ProjectRouteProps extends Omit<
   ProjectViewProps,
-  "project" | "docs" | "portfolios" | "accounts" | "habits"
+  "project" | "docs" | "portfolios" | "accounts" | "habits" | "brands"
 > {
   slug: string;
   loaded: boolean;
@@ -406,6 +475,8 @@ interface ProjectRouteProps extends Omit<
   accounts: Account[];
   /** Habits in every project. */
   habits: Habit[];
+  /** Brands in every project. */
+  brands: Brand[];
 }
 
 export function ProjectRoute({
@@ -417,6 +488,7 @@ export function ProjectRoute({
   portfolios,
   accounts,
   habits,
+  brands,
   ...props
 }: ProjectRouteProps) {
   const search = useSearch();
@@ -424,6 +496,7 @@ export function ProjectRoute({
   const projectPortfolios = ofProject(portfolios, project);
   const projectAccounts = ofProject(accounts, project);
   const projectHabits = ofProject(habits, project);
+  const projectBrands = ofProject(brands, project);
   const segment = props.tableSlug?.toLowerCase();
   if (!project) {
     return (
@@ -485,6 +558,17 @@ export function ProjectRoute({
       <Redirect replace to={projectPath(project)} />
     );
   }
+  if (segment === BRANDS_SEGMENT) {
+    return (
+      <BrandsView
+        brandParam={props.recordId}
+        brands={projectBrands}
+        key={project._id}
+        loaded={props.brandsLoaded}
+        project={project}
+      />
+    );
+  }
   if (segment === DRIVE_SEGMENT) {
     return (
       <DriveRoute
@@ -508,6 +592,7 @@ export function ProjectRoute({
   return (
     <ProjectView
       accounts={projectAccounts}
+      brands={projectBrands}
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       docsLoaded={docsLoaded}
       habits={projectHabits}

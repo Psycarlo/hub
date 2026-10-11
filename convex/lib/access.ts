@@ -338,6 +338,18 @@ export async function requireHabit(
   return { ...(await requireProject(ctx, habit.projectId, need)), habit };
 }
 
+export async function requireBrand(
+  ctx: QueryCtx,
+  brandId: Id<"brands">,
+  need: Need
+): Promise<ProjectAccess & { brand: Doc<"brands"> }> {
+  const brand = await ctx.db.get(brandId);
+  if (!brand) {
+    throw new ConvexError("This brand doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, brand.projectId, need)), brand };
+}
+
 export async function requireDriveFolder(
   ctx: QueryCtx,
   folderId: Id<"driveFolders">,

@@ -7,6 +7,9 @@ import {
   vActivityType,
   vAppRole,
   vBoardLabel,
+  vBrandColor,
+  vBrandFont,
+  vBrandPlace,
   vCardChange,
   vCardDefaults,
   vCharacter,
@@ -17,6 +20,7 @@ import {
   vField,
   vFiat,
   vHabitIcon,
+  vLogoMode,
   vPriority,
   vProjectColor,
   vProjectRole,
@@ -690,6 +694,50 @@ export default defineSchema({
   })
     .index("by_habit_and_date", ["habitId", "date"])
     .index("by_project_and_date", ["projectId", "date"]),
+
+  /** A brand a project keeps: its logos, colors, type, banners and links. */
+  brands: defineTable({
+    /** In order: the first leads. */
+    colors: v.array(vBrandColor),
+    /** R2 key of the banner that leads it, kept here so lists needn't read its files. */
+    coverKey: v.optional(v.string()),
+    createdBy: v.id("users"),
+    description: v.string(),
+    /** In order: the first sets headings. */
+    fonts: v.array(vBrandFont),
+    /**
+     * The logo that stands for it on cards and in lists, and the background
+     * it's drawn for. Picked from its logos as they change.
+     */
+    mark: v.optional(v.object({ key: v.string(), mode: vLogoMode })),
+    projectId: v.id("projects"),
+    /** Links to its profiles elsewhere, in order. */
+    socials: v.array(v.string()),
+    title: v.string(),
+    /** Its own site; empty for none. */
+    website: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  /** A brand's logos, banners and font files. */
+  brandFiles: defineTable({
+    brandId: v.id("brands"),
+    /** Pixels, for images the browser could read. */
+    height: v.optional(v.number()),
+    /** R2 key of the upload. */
+    key: v.string(),
+    /** The file's name, as it was uploaded. */
+    name: v.string(),
+    place: vBrandPlace,
+    projectId: v.id("projects"),
+    /** In bytes. */
+    size: v.number(),
+    /** MIME type, or empty when the browser didn't know it. */
+    type: v.string(),
+    uploadedBy: v.id("users"),
+    width: v.optional(v.number()),
+  })
+    .index("by_brand", ["brandId"])
+    .index("by_key", ["key"]),
 
   /** Files uploaded to R2, and who uploaded them. */
   files: defineTable({

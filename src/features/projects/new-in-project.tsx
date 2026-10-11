@@ -6,6 +6,7 @@ import {
   HardDriveUploadIcon,
   PlusIcon,
   SquareKanbanIcon,
+  SwatchBookIcon,
   Table2Icon,
   WalletIcon,
 } from "lucide-react";
@@ -21,6 +22,7 @@ export type ProjectItem =
   | "files"
   | "portfolio"
   | "account"
+  | "brand"
   | "habit";
 
 const ITEMS: {
@@ -65,6 +67,12 @@ const ITEMS: {
     icon: WalletIcon,
     kind: "account",
     label: "Finance account",
+  },
+  {
+    description: "Keep logos, colors and type in one place, ready to share.",
+    icon: SwatchBookIcon,
+    kind: "brand",
+    label: "Brand",
   },
   {
     description: "Do something every day, or on the days you pick.",

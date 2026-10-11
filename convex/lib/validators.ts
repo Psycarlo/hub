@@ -1,6 +1,7 @@
 import type { Infer, VLiteral, VString, VUnion } from "convex/values";
 import { v } from "convex/values";
 
+import { FONT_SOURCES, LOGO_KINDS, LOGO_MODES } from "../shared/brands";
 import {
   BODIES,
   BOTTOMS,
@@ -78,6 +79,9 @@ export const vClockLook = oneOf(CLOCK_LOOKS);
 export const vHourCycle = oneOf(HOUR_CYCLES);
 export const vTaskSort = oneOf(TASK_SORTS);
 export const vEmote = oneOf(EMOTES);
+export const vLogoKind = oneOf(LOGO_KINDS);
+export const vLogoMode = oneOf(LOGO_MODES);
+export const vFontSource = oneOf(FONT_SOURCES);
 
 /** A tile in the office, x across and y from the back wall. */
 export const vTile = v.object({ x: v.number(), y: v.number() });
@@ -111,6 +115,33 @@ export const vBoardLabel = v.object({
   id: v.string(),
   name: v.string(),
 });
+
+/** One of a brand's colors; its place in the list says how much it leads. */
+export const vBrandColor = v.object({
+  hex: vHexColor,
+  id: v.string(),
+  /** Empty when it goes by its hex alone. */
+  name: v.string(),
+});
+
+/** A typeface a brand uses, and what for. */
+export const vBrandFont = v.object({
+  /** As Google Fonts or the files name it, like `Inter`. */
+  family: v.string(),
+  id: v.string(),
+  /** What it's used for, like "Headings"; empty for nothing in particular. */
+  role: v.string(),
+  source: vFontSource,
+  /** The weights used, from Google Fonts; uploaded files tell their own. */
+  weights: v.array(v.number()),
+});
+
+/** Where a brand's file sits: in a logo slot, among its banners, or with a typeface. */
+export const vBrandPlace = v.union(
+  v.object({ kind: v.literal("logo"), logo: vLogoKind, mode: vLogoMode }),
+  v.object({ kind: v.literal("banner") }),
+  v.object({ fontId: v.string(), kind: v.literal("font") })
+);
 
 /** An account drawn as a card in a leather wallet, rather than a plain tile. */
 export const vAccountLook = v.object({

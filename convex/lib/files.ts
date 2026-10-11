@@ -68,7 +68,10 @@ export function attachedFile(upload: {
   };
 }
 
-/** Whether an upload made to attach is attached already: to a card, a comment or an entry. */
+/**
+ * Whether an upload made to attach is attached already: to a card, a
+ * comment, an entry or a brand.
+ */
 export async function isAttached(ctx: QueryCtx, key: string): Promise<boolean> {
   const attachment = await ctx.db
     .query("attachments")
@@ -81,7 +84,14 @@ export async function isAttached(ctx: QueryCtx, key: string): Promise<boolean> {
     .query("financeFiles")
     .withIndex("by_key", (q) => q.eq("key", key))
     .first();
-  return entryFile !== null;
+  if (entryFile) {
+    return true;
+  }
+  const brandFile = await ctx.db
+    .query("brandFiles")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .first();
+  return brandFile !== null;
 }
 
 /** Forgets an upload and deletes it from R2. */
