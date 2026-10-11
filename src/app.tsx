@@ -34,6 +34,10 @@ import {
 } from "@/features/focus/focus-mode";
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
+import {
+  useAppBadge,
+  useSystemNotifications,
+} from "@/features/inbox/use-system-notifications";
 import { LoginPage } from "@/features/login/login-page";
 import { OFFICE_PATH } from "@/features/office/office-item";
 import { ProjectDialog } from "@/features/projects/project-dialog";
@@ -53,6 +57,7 @@ import { driveByProject } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
 import type { Board } from "@/lib/model";
+import { startNotifications } from "@/lib/notify";
 import type { Portfolio } from "@/lib/portfolio";
 import { usePresence } from "@/lib/presence";
 import type { Project } from "@/lib/project";
@@ -133,6 +138,9 @@ function Workspace() {
   const inbox = useInbox();
   useUnreadIcon(inbox.unread > 0);
   useArrivalPing(inbox);
+  useAppBadge(inbox.unread);
+  useSystemNotifications(inbox, me._id);
+  useEffect(() => startNotifications(me._id), [me._id]);
   const projects = projectList ?? NO_PROJECTS;
   const boards = boardList ?? NO_BOARDS;
   const docs = docsByProject(pages ?? NO_PAGES);

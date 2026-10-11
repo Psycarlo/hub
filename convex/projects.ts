@@ -12,6 +12,7 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
+import { notify } from "./lib/notify";
 import { vMember, vProjectColor } from "./lib/validators";
 import type { ProjectRole } from "./shared/model";
 import { COLORS, isHexColor } from "./shared/palette";
@@ -252,8 +253,10 @@ async function freeSlug(
   return slug;
 }
 
+/** Makes the project's people the given ones; those just added by someone else hear of it. */
 async function setMembers(
   ctx: MutationCtx,
+  actorId: Id<"users">,
   projectId: Id<"projects">,
   members: ProjectMember[]
 ): Promise<void> {
@@ -280,6 +283,9 @@ async function setMembers(
   }
   for (const [userId, role] of wanted) {
     await ctx.db.insert("projectMembers", { projectId, role, userId });
+    if (userId !== actorId) {
+      await notify(ctx, { actorId, projectId, userId });
+    }
   }
 }
 
@@ -306,7 +312,7 @@ export const create = mutation({
     const members = args.members.some((member) => member.userId === user._id)
       ? args.members
       : [{ role: "owner" as const, userId: user._id }, ...args.members];
-    await setMembers(ctx, projectId, members);
+    await setMembers(ctx, user._id, projectId, members);
     if (args.board) {
       await insertBoard(ctx, {
         ...args.board,
@@ -358,7 +364,7 @@ export const update = mutation({
     await ctx.db.patch(projectId, patch);
     if (members && personal) {
       // Its owner stays its only owner; everyone else can edit or view.
-      await setMembers(ctx, projectId, [
+      await setMembers(ctx, user._id, projectId, [
         { role: "owner", userId: personal },
         ...members
           .filter((member) => member.userId !== personal)
@@ -373,7 +379,7 @@ export const update = mutation({
       if (!isAdmin(user) && own?.role !== "owner") {
         throw new ConvexError("You can’t remove yourself as an owner.");
       }
-      await setMembers(ctx, projectId, members);
+      await setMembers(ctx, user._id, projectId, members);
     }
     return { slug: patch.slug ?? project.slug };
   },

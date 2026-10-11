@@ -3,7 +3,7 @@ import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { LockIcon, PlusIcon, Settings2Icon, UploadIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
@@ -37,7 +37,9 @@ import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import type { ProjectItem } from "@/features/projects/new-in-project";
 import { NewInProject } from "@/features/projects/new-in-project";
 import { ProjectDialog } from "@/features/projects/project-dialog";
+import { run } from "@/lib/actions";
 import type { Brand } from "@/lib/brands";
+import { convex } from "@/lib/convex";
 import type { CrmRecord, CrmTable, NavTable, ProjectContent } from "@/lib/crm";
 import { firstValue, stageField } from "@/lib/crm";
 import type { DocPage, DocsContent } from "@/lib/docs";
@@ -506,6 +508,20 @@ type Dialog = "settings" | Exclude<ProjectItem, "page" | "files">;
 
 const NO_FILES: DriveFile[] = [];
 
+/** Seeing the project counts as reading the news of being added to it. */
+function useReadProjectNews(projectId: Project["_id"]) {
+  const inbox = useQuery(api.inbox.list);
+  const unread = inbox?.some(
+    (item) =>
+      item.kind === "project" && item.project._id === projectId && !item.read
+  );
+  useEffect(() => {
+    if (unread) {
+      run(convex.mutation(api.inbox.readProject, { projectId }));
+    }
+  }, [unread, projectId]);
+}
+
 export function ProjectPage({
   project,
   docs,
@@ -526,6 +542,7 @@ export function ProjectPage({
   loaded,
 }: ProjectPageProps) {
   const [dialog, setDialog] = useState<Dialog>();
+  useReadProjectNews(project._id);
   const newPage = useNewPage(project);
   const filePicker = useRef<HTMLInputElement>(null);
   const recent = useQuery(api.drive.recent, { projectId: project._id });

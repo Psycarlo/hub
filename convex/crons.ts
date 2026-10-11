@@ -11,4 +11,7 @@ crons.daily(
   internal.drive.purgeExpired
 );
 
+// On the hour, so it's 9 in the morning somewhere: reminds those people of cards coming due.
+crons.hourly("card due reminders", { minuteUTC: 0 }, internal.reminders.due);
+
 export default crons;

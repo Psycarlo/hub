@@ -23,5 +23,6 @@
       "@convex/*": ["./convex/*"]
     }
   },
-  "include": ["src"]
+  // The generated API reaches convex/delivery.ts, which needs web-push's declaration.
+  "include": ["src", "convex/lib/web-push.d.ts"]
 }

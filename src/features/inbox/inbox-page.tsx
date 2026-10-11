@@ -1,34 +1,59 @@
+import { api } from "@convex/_generated/api";
+import {
+  notificationQuote,
+  notificationWords,
+} from "@convex/shared/notifications";
 import { cn } from "cn";
 import { format } from "date-fns";
+import type { LucideIcon } from "lucide-react";
 import {
   ArchiveIcon,
   AtSignIcon,
+  BellOffIcon,
+  CalendarClockIcon,
+  CalendarIcon,
   CheckCheckIcon,
   InboxIcon,
   MailIcon,
   MailOpenIcon,
+  MessageSquareIcon,
+  PencilIcon,
+  UserMinusIcon,
+  UserPlusIcon,
 } from "lucide-react";
-import { Link } from "wouter";
+import { useEffect } from "react";
+import { toast } from "sonner";
+import { Link, useLocation, useSearchParams } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
 import { MentionText } from "@/components/mention-text";
+import { ProjectAvatar } from "@/components/project-avatar";
 import { TopBar } from "@/components/top-bar";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { cardPath, OPENED_FROM_BOARD } from "@/features/board/board-context";
-import { pagePath } from "@/features/docs/docs-context";
+import { PRIORITY_STYLES, STATUS_STYLES } from "@/features/card/card-fields";
 import { PageIcon } from "@/features/docs/page-icon";
-import { fileHref } from "@/features/drive/drive-context";
 import { FileIcon } from "@/features/drive/file-icon";
-import type { Inbox, InboxItem } from "@/hooks/use-inbox";
-import { useUser } from "@/hooks/use-users";
+import {
+  notificationPath,
+  notificationState,
+} from "@/features/inbox/notification-path";
+import { NotificationsButton } from "@/features/inbox/notifications-button";
+import type { Inbox, InboxGroup, InboxItem } from "@/hooks/use-inbox";
+import { useMe, useUsers } from "@/hooks/use-users";
+import { run } from "@/lib/actions";
+import { convex } from "@/lib/convex";
 import { pageTitle } from "@/lib/docs";
+import type { UserId } from "@/lib/model";
 import { cardKey } from "@/lib/model";
 
 /** Shares the top-level path with short board links, so INBOX is a reserved code. */
 export const INBOX_PATH = "/inbox";
+
+/** Opens the inbox at a notification, which leads on to what it's about: where pushes go. */
+const OPEN_PARAM = "open";
 
 /** "now", "5m", "3h", "2d", then the date. */
 function shortAgo(at: number): string {
@@ -47,48 +72,217 @@ function shortAgo(at: number): string {
   return days < 7 ? `${days}d` : format(new Date(at), "MMM d");
 }
 
-/** What the mention is in: the card by its key and title, or the page or file by its icon and name. */
-function Subject({ item }: { item: InboxItem }) {
-  const title = cn("truncate", !item.read && "text-foreground font-medium");
-  if (item.kind === "file") {
-    return (
-      <span className="flex min-w-0 items-center gap-2">
-        <FileIcon file={item.file} size="sm" />
-        <span className={title}>{item.file.name}</span>
-      </span>
-    );
+/** Today here, as `YYYY-MM-DD`, which reminders count from. */
+function today(): string {
+  return format(new Date(), "yyyy-MM-dd");
+}
+
+/** The icon on the avatar's corner: what kind of news it is. */
+function newsIcon(
+  item: InboxItem,
+  me: UserId
+): { icon: LucideIcon; className?: string } {
+  switch (item.kind) {
+    case "page": {
+      return { icon: AtSignIcon };
+    }
+    case "file": {
+      return {
+        icon: item.reason === "comment" ? MessageSquareIcon : AtSignIcon,
+      };
+    }
+    case "project": {
+      return { icon: UserPlusIcon };
+    }
+    default: {
+      break;
+    }
   }
-  if (item.kind === "page") {
+  switch (item.reason) {
+    case "comment": {
+      return { icon: MessageSquareIcon };
+    }
+    case "due": {
+      return { icon: CalendarClockIcon };
+    }
+    case "overdue": {
+      return { className: "text-destructive", icon: CalendarClockIcon };
+    }
+    case "change": {
+      break;
+    }
+    default: {
+      return { icon: AtSignIcon };
+    }
+  }
+  const changes = item.changes ?? [];
+  const mine = changes.find(
+    (change) =>
+      change.kind === "assignees" &&
+      change.from.includes(me) !== change.to.includes(me)
+  );
+  if (mine?.kind === "assignees") {
+    return { icon: mine.to.includes(me) ? UserPlusIcon : UserMinusIcon };
+  }
+  const [first] = changes;
+  switch (first?.kind) {
+    case "status": {
+      return STATUS_STYLES[first.to];
+    }
+    case "priority": {
+      return first.to ? PRIORITY_STYLES[first.to] : { icon: PencilIcon };
+    }
+    case "due": {
+      return { icon: CalendarIcon };
+    }
+    case "assignees": {
+      return { icon: UserPlusIcon };
+    }
+    default: {
+      return { icon: PencilIcon };
+    }
+  }
+}
+
+/** Who did it, with what kind of news it is on the corner; a reminder shows its own icon. */
+function Who({ item, me }: { item: InboxItem; me: UserId }) {
+  const { icon: Icon, className } = newsIcon(item, me);
+  if (!item.actorId) {
     return (
-      <span className="flex min-w-0 items-center gap-2">
-        <PageIcon className="text-muted-foreground" page={item.page} />
-        <span className={title}>{pageTitle(item.page)}</span>
+      <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full">
+        <Icon aria-hidden className={cn("size-4", className)} />
       </span>
     );
   }
   return (
-    <span className="flex min-w-0 items-baseline gap-2">
-      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-        {cardKey(item.board, item.card)}
+    <span className="relative shrink-0">
+      <UserAvatar aria-hidden userId={item.actorId} />
+      <span className="bg-popover ring-background text-foreground absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full ring-2">
+        <Icon aria-hidden className={cn("size-2.5", className)} />
       </span>
-      <span className={title}>{item.card.title || "Untitled"}</span>
     </span>
   );
 }
 
-function hrefOf(item: InboxItem): string {
-  if (item.kind === "file") {
-    return fileHref(item.project, item.file);
+/** What it's about: the card by its key and title, or the page, file or project by its icon and name. */
+function Subject({ item, read }: { item: InboxItem; read: boolean }) {
+  const title = cn("truncate", !read && "text-foreground font-medium");
+  switch (item.kind) {
+    case "file": {
+      return (
+        <span className="flex min-w-0 items-center gap-2">
+          <FileIcon file={item.file} size="sm" />
+          <span className={title}>{item.file.name}</span>
+        </span>
+      );
+    }
+    case "page": {
+      return (
+        <span className="flex min-w-0 items-center gap-2">
+          <PageIcon className="text-muted-foreground" page={item.page} />
+          <span className={title}>{pageTitle(item.page)}</span>
+        </span>
+      );
+    }
+    case "project": {
+      return (
+        <span className="flex min-w-0 items-center gap-2">
+          <ProjectAvatar project={item.project} />
+          <span className={title}>{item.project.title}</span>
+        </span>
+      );
+    }
+    default: {
+      return (
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+            {cardKey(item.board, item.card)}
+          </span>
+          <span className={title}>{item.card.title || "Untitled"}</span>
+        </span>
+      );
+    }
   }
-  return item.kind === "page"
-    ? pagePath(item.project, item.page)
-    : cardPath(item.project, item.board, item.card);
 }
 
-function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
-  const { read } = item;
-  const { name } = useUser(item.actorId);
-  const date = new Date(item._creationTime);
+/** "Ana moved it to Done", "Ana mentioned you: …", or "Due tomorrow". */
+function Said({ item, me }: { item: InboxItem; me: UserId }) {
+  const users = useUsers();
+  const name = (userId: string) => users.get(userId)?.name ?? "Someone";
+  const words = notificationWords(item, me, name, today());
+  const quote = notificationQuote(item);
+  return (
+    <span className="text-muted-foreground truncate text-sm">
+      {item.actorId ? `${name(item.actorId)} ${words}` : words}
+      {quote && (
+        <>
+          : <MentionText content={quote} />
+        </>
+      )}
+    </span>
+  );
+}
+
+/** Subscribes to the card or file again, or stops. */
+function follow(item: InboxItem, subscribed: boolean): Promise<unknown> | null {
+  if (item.kind === "card") {
+    return convex.mutation(api.subscriptions.setCard, {
+      cardId: item.card._id,
+      subscribed,
+    });
+  }
+  if (item.kind === "file") {
+    return convex.mutation(api.subscriptions.setFile, {
+      fileId: item.file._id,
+      subscribed,
+    });
+  }
+  return null;
+}
+
+function Row({
+  group,
+  inbox,
+  me,
+}: {
+  group: InboxGroup;
+  inbox: Inbox;
+  me: UserId;
+}) {
+  const { latest, items, read } = group;
+  const date = new Date(latest._creationTime);
+  const canUnsubscribe =
+    (latest.kind === "card" || latest.kind === "file") && latest.following;
+
+  const archive = () => {
+    inbox.setArchived(items, true);
+    toast("Archived", {
+      action: { label: "Undo", onClick: () => inbox.setArchived(items, false) },
+    });
+  };
+
+  const unsubscribe = () => {
+    const done = follow(latest, false);
+    if (!done) {
+      return;
+    }
+    inbox.setArchived(items, true);
+    run(done);
+    toast("Unsubscribed", {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          const undone = follow(latest, true);
+          if (undone) {
+            run(undone);
+          }
+          inbox.setArchived(items, false);
+        },
+      },
+      description: "You won’t hear about it unless someone mentions you.",
+    });
+  };
+
   return (
     <li className="group/row relative">
       <Link
@@ -96,9 +290,9 @@ function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
           "hover:bg-foreground/5 focus-visible:ring-ring/50 flex items-center gap-3 rounded-xl py-2.5 pr-3 pl-2 transition-colors duration-150 outline-none focus-visible:ring-3",
           read && "text-muted-foreground"
         )}
-        href={hrefOf(item)}
-        onClick={() => inbox.setRead([item], true)}
-        state={item.kind === "comment" ? OPENED_FROM_BOARD : undefined}
+        href={notificationPath(latest)}
+        onClick={() => inbox.setRead(items, true)}
+        state={notificationState(latest)}
       >
         <span
           aria-hidden
@@ -107,36 +301,37 @@ function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
             read ? "bg-transparent" : "bg-primary"
           )}
         />
-        <span className="relative shrink-0">
-          <UserAvatar aria-hidden userId={item.actorId} />
-          <span className="bg-popover ring-background text-foreground absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full ring-2">
-            <AtSignIcon aria-hidden className="size-2.5" />
-          </span>
-        </span>
+        <Who item={latest} me={me} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <Subject item={item} />
-          <span className="text-muted-foreground truncate text-sm">
-            {name} mentioned you: <MentionText content={item.content} />
-          </span>
+          <Subject item={latest} read={read} />
+          <Said item={latest} me={me} />
         </span>
         {!read && <span className="sr-only">Unread</span>}
         <time
-          className="text-muted-foreground w-16 shrink-0 text-right text-xs tabular-nums group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible"
+          className={cn(
+            "text-muted-foreground shrink-0 text-right text-xs tabular-nums group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible",
+            canUnsubscribe ? "w-24" : "w-16"
+          )}
           dateTime={date.toISOString()}
           title={format(date, "PPpp")}
         >
-          {shortAgo(item._creationTime)}
+          {shortAgo(latest._creationTime)}
         </time>
       </Link>
       <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100">
         <FluidTooltip.Group>
           <IconButton
             label={read ? "Mark as unread" : "Mark as read"}
-            onClick={() => inbox.setRead([item], !read)}
+            onClick={() => inbox.setRead(items, !read)}
           >
             {read ? <MailIcon /> : <MailOpenIcon />}
           </IconButton>
-          <IconButton label="Archive" onClick={() => inbox.archive([item])}>
+          {canUnsubscribe && (
+            <IconButton label="Unsubscribe" onClick={unsubscribe}>
+              <BellOffIcon />
+            </IconButton>
+          )}
+          <IconButton label="Archive" onClick={archive}>
             <ArchiveIcon />
           </IconButton>
         </FluidTooltip.Group>
@@ -145,12 +340,12 @@ function Row({ item, inbox }: { item: InboxItem; inbox: Inbox }) {
   );
 }
 
-function InboxList({ inbox }: { inbox: Inbox }) {
-  if (inbox.items.length > 0) {
+function InboxList({ inbox, me }: { inbox: Inbox; me: UserId }) {
+  if (inbox.groups.length > 0) {
     return (
       <ol aria-label="Notifications" className="flex flex-col gap-0.5">
-        {inbox.items.map((item) => (
-          <Row inbox={inbox} item={item} key={item._id} />
+        {inbox.groups.map((group) => (
+          <Row group={group} inbox={inbox} key={group.subject} me={me} />
         ))}
       </ol>
     );
@@ -169,15 +364,47 @@ function InboxList({ inbox }: { inbox: Inbox }) {
       <InboxIcon aria-hidden className="text-muted-foreground size-8" />
       <EmptyTitle>You’re all caught up</EmptyTitle>
       <EmptyDescription>
-        When someone mentions you in a comment, a doc or on a file, it shows up
-        here.
+        Mentions, assignments, reminders and news about what you subscribe to
+        show up here.
       </EmptyDescription>
     </Empty>
   );
 }
 
+/**
+ * A push leads to `/inbox?open=<id>`: once the inbox loads, this reads the
+ * notification and goes on to what it's about. One that's gone leaves the
+ * inbox showing.
+ */
+function useOpenParam(inbox: Inbox): void {
+  const [params] = useSearchParams();
+  const [, navigate] = useLocation();
+  const open = params.get(OPEN_PARAM);
+  useEffect(() => {
+    if (!(open && inbox.loaded)) {
+      return;
+    }
+    const group = inbox.groups.find((candidate) =>
+      candidate.items.some((item) => item._id === open)
+    );
+    if (!group) {
+      navigate(INBOX_PATH, { replace: true });
+      return;
+    }
+    inbox.setRead(group.items, true);
+    navigate(notificationPath(group.latest), {
+      replace: true,
+      state: notificationState(group.latest),
+    });
+  }, [open, inbox, navigate]);
+}
+
 export function InboxPage({ inbox }: { inbox: Inbox }) {
-  const unread = inbox.items.filter((item) => !item.read);
+  const me = useMe();
+  useOpenParam(inbox);
+  const unread = inbox.groups
+    .filter((group) => !group.read)
+    .flatMap((group) => group.items);
   return (
     <>
       <TopBar
@@ -190,18 +417,21 @@ export function InboxPage({ inbox }: { inbox: Inbox }) {
           },
         ]}
       >
-        {unread.length > 0 && (
-          <IconButton
-            label="Mark all as read"
-            onClick={() => inbox.setRead(unread, true)}
-          >
-            <CheckCheckIcon />
-          </IconButton>
-        )}
+        <FluidTooltip.Group>
+          <NotificationsButton />
+          {unread.length > 0 && (
+            <IconButton
+              label="Mark all as read"
+              onClick={() => inbox.setRead(unread, true)}
+            >
+              <CheckCheckIcon />
+            </IconButton>
+          )}
+        </FluidTooltip.Group>
       </TopBar>
       <main className="flex grow flex-col px-4 pt-2 pb-8 sm:px-6">
         <div className="mx-auto flex w-full max-w-3xl grow flex-col">
-          <InboxList inbox={inbox} />
+          <InboxList inbox={inbox} me={me._id} />
         </div>
       </main>
     </>

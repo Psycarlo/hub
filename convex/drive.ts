@@ -8,7 +8,6 @@ import { deleteDriveFile } from "./cleanup";
 import type { ProjectAccess } from "./lib/access";
 import {
   allows,
-  canSee,
   ifVisible,
   requireDriveFile,
   requireDriveFolder,
@@ -18,6 +17,7 @@ import {
 } from "./lib/access";
 import { dropFile, keyName, ownedFile, signedLink } from "./lib/files";
 import { mediaUrl } from "./lib/media";
+import { notifyFileComment } from "./lib/notify";
 import type { DriveChange } from "./lib/validators";
 import { vColor, vUpload } from "./lib/validators";
 import { r2 } from "./r2";
@@ -36,7 +36,6 @@ import {
   TOO_BIG,
   TRASH_MS,
 } from "./shared/drive";
-import { mentionedUsers } from "./shared/mentions";
 import type { Color } from "./shared/palette";
 
 const MAX_TYPE = 100;
@@ -1376,7 +1375,10 @@ export const link = mutation({
 
 // ———————————————————————————————————————— Comments
 
-/** Comments on a file. Everyone it mentions who can see the project gets a notification. */
+/**
+ * Comments on a file. Everyone it mentions who can see the project is told,
+ * and so are the file's followers.
+ */
 export const comment = mutation({
   args: { content: v.string(), fileId: v.id("driveFiles") },
   handler: async (ctx, { content, fileId }) => {
@@ -1390,24 +1392,7 @@ export const comment = mutation({
       content: text,
       fileId,
     });
-    for (const mentioned of mentionedUsers(text)) {
-      const userId = ctx.db.normalizeId("users", mentioned);
-      if (
-        userId &&
-        userId !== user._id &&
-        (await canSee(ctx, userId, item.projectId))
-      ) {
-        await ctx.db.insert("notifications", {
-          actorId: user._id,
-          archived: false,
-          content: text,
-          driveCommentId,
-          fileId,
-          read: false,
-          userId,
-        });
-      }
-    }
+    await notifyFileComment(ctx, user._id, item, driveCommentId, text);
     return driveCommentId;
   },
 });

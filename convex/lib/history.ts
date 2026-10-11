@@ -2,12 +2,9 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { BoardLabel } from "../shared/model";
 import { BURST_MS, isClosed, legacyLabels } from "../shared/model";
+import { changesNothing, fold, sameMembers } from "./changes";
+import { notifyChanges } from "./notify";
 import type { CardChange } from "./validators";
-
-function sameMembers(a: readonly string[], b: readonly string[]): boolean {
-  const members = new Set(a);
-  return a.length === b.length && b.every((item) => members.has(item));
-}
 
 /** The labels as the card's history keeps them: whole, should one be renamed or deleted. */
 function labelsOf(board: Doc<"boards">, ids: readonly string[]): BoardLabel[] {
@@ -72,56 +69,6 @@ async function changesOf(
     });
   }
   return changes;
-}
-
-/** Whether the change leaves the card as it was, like a status set and set back. */
-function changesNothing(change: CardChange): boolean {
-  switch (change.kind) {
-    case "attachments": {
-      return change.names.length === 0;
-    }
-    case "description": {
-      return false;
-    }
-    case "assignees": {
-      return sameMembers(change.from, change.to);
-    }
-    case "labels": {
-      return sameMembers(
-        change.from.map(({ id }) => id),
-        change.to.map(({ id }) => id)
-      );
-    }
-    case "sprint": {
-      return change.from?.id === change.to?.id;
-    }
-    default: {
-      return change.from === change.to;
-    }
-  }
-}
-
-/** The later change folded into the earlier one, when both are to the same thing. */
-function fold(earlier: CardChange, later: CardChange): CardChange | undefined {
-  if (earlier.kind !== later.kind) {
-    return undefined;
-  }
-  // Each case reads `earlier` as the same kind of change as `later`, as checked above.
-  switch (later.kind) {
-    case "attachments": {
-      const { names, removed } = earlier as typeof later;
-      return removed === later.removed
-        ? { ...later, names: [...names, ...later.names] }
-        : undefined;
-    }
-    case "description": {
-      return later;
-    }
-    default: {
-      // From where the first change started to where the last one ended.
-      return { ...later, from: (earlier as typeof later).from } as CardChange;
-    }
-  }
 }
 
 /**
@@ -203,7 +150,7 @@ function doneStamp(
   return { doneAt: isClosed(patch.status) ? Date.now() : undefined };
 }
 
-/** Patches a card, adding what that changes to its history. */
+/** Patches a card, adding what that changes to its history and telling its followers. */
 export async function patchCard(
   ctx: MutationCtx,
   actorId: Id<"users">,
@@ -211,8 +158,10 @@ export async function patchCard(
   card: Doc<"cards">,
   patch: Partial<Doc<"cards">>
 ): Promise<void> {
-  for (const change of await changesOf(ctx, board, card, patch)) {
+  const changes = await changesOf(ctx, board, card, patch);
+  for (const change of changes) {
     await recordChange(ctx, card._id, actorId, change);
   }
+  await notifyChanges(ctx, actorId, card, board.projectId, changes);
   await ctx.db.patch(card._id, { ...patch, ...doneStamp(card, patch) });
 }

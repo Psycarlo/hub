@@ -45,7 +45,7 @@ export interface UserView {
   character: Character;
 }
 
-function displayName(user: Doc<"users">): string {
+export function displayName(user: Doc<"users">): string {
   return user.name?.trim() || user.email?.split("@")[0] || "Someone";
 }
 

@@ -4,10 +4,10 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { attachFile, attachmentView, dropCommentFiles } from "./attachments";
-import { canSee, ifVisible, requireCard } from "./lib/access";
+import { ifVisible, requireCard } from "./lib/access";
+import { notifyCardComment } from "./lib/notify";
 import { vUpload } from "./lib/validators";
 import { dropCommentReactions } from "./reactions";
-import { mentionedUsers } from "./shared/mentions";
 import { MAX_COMMENT_FILES } from "./shared/model";
 
 const MAX_COMMENT = 10_000;
@@ -70,7 +70,7 @@ export const list = query({
 
 /**
  * Adds a comment, or a reply to one, with any files uploaded for it. Everyone
- * it mentions who can see the card gets a notification.
+ * it mentions who can see the card is told, and so are the card's followers.
  */
 export const add = mutation({
   args: {
@@ -80,7 +80,7 @@ export const add = mutation({
     parentId: v.optional(v.id("comments")),
   },
   handler: async (ctx, { cardId, content, files = [], parentId }) => {
-    const { project, user } = await requireCard(ctx, cardId, "edit");
+    const { card, project, user } = await requireCard(ctx, cardId, "edit");
     const text = content.trim().slice(0, MAX_COMMENT);
     if (!text && files.length === 0) {
       throw new ConvexError("Write something first.");
@@ -99,24 +99,7 @@ export const add = mutation({
     for (const file of files) {
       await attachFile(ctx, user._id, cardId, file, commentId);
     }
-    for (const mentioned of mentionedUsers(text)) {
-      const userId = ctx.db.normalizeId("users", mentioned);
-      if (
-        userId &&
-        userId !== user._id &&
-        (await canSee(ctx, userId, project._id))
-      ) {
-        await ctx.db.insert("notifications", {
-          actorId: user._id,
-          archived: false,
-          cardId,
-          commentId,
-          content: text,
-          read: false,
-          userId,
-        });
-      }
-    }
+    await notifyCardComment(ctx, user._id, card, project._id, commentId, text);
     return commentId;
   },
 });

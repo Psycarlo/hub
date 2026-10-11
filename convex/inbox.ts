@@ -5,7 +5,11 @@ import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUser, roleIn } from "./lib/access";
 import { hasText } from "./lib/docs";
+import type { Followable } from "./lib/notify";
+import { follows } from "./lib/notify";
+import type { CardChange } from "./lib/validators";
 import type { ProjectRole } from "./shared/model";
+import type { CardNews, FileNews } from "./shared/notifications";
 
 /** Newest notifications shown. */
 const LIMIT = 200;
@@ -13,23 +17,34 @@ const LIMIT = 200;
 interface Notification {
   _id: Id<"notifications">;
   _creationTime: number;
-  actorId: Id<"users">;
-  content: string;
   read: boolean;
   /** Where the card, page or file sits, which its links go through. */
-  project: { slug: string };
+  project: { slug: string; title: string };
 }
 
-/** A mention in a card comment. */
-export interface CommentMention extends Notification {
-  kind: "comment";
+/** News about a card: a mention, a comment, a change, or it coming due. */
+export interface CardNotification extends Notification {
+  kind: "card";
+  /** Missing on reminders, which nobody sent. */
+  actorId?: Id<"users">;
+  reason: CardNews;
+  /** What changed, on a change. */
+  changes?: CardChange[];
+  /** The comment, on a mention or comment. */
+  content?: string;
+  /** The day it was due when reminded, `YYYY-MM-DD`. */
+  due?: string;
+  /** Whether they still follow the card, so they can unsubscribe from here. */
+  following: boolean;
   card: { _id: Id<"cards">; number: number; title: string };
   board: { _id: Id<"boards">; code: string; title: string };
 }
 
 /** A mention on a doc page. */
-export interface PageMention extends Notification {
+export interface PageNotification extends Notification {
   kind: "page";
+  actorId: Id<"users">;
+  content: string;
   page: {
     _id: Id<"docPages">;
     title: string;
@@ -38,9 +53,14 @@ export interface PageMention extends Notification {
   };
 }
 
-/** A mention in a comment on a Drive file. */
-export interface FileMention extends Notification {
+/** A mention in, or a comment on, a Drive file. */
+export interface FileNotification extends Notification {
   kind: "file";
+  actorId: Id<"users">;
+  reason: FileNews;
+  content: string;
+  /** Whether they still follow the file, so they can unsubscribe from here. */
+  following: boolean;
   file: {
     _id: Id<"driveFiles">;
     name: string;
@@ -49,65 +69,161 @@ export interface FileMention extends Notification {
   };
 }
 
-export type InboxItem = CommentMention | PageMention | FileMention;
+/** Being added to a project. */
+export interface ProjectNotification extends Notification {
+  kind: "project";
+  actorId: Id<"users">;
+  project: {
+    _id: Id<"projects">;
+    color: Doc<"projects">["color"];
+    personalFor?: Id<"users">;
+    slug: string;
+    title: string;
+  };
+}
+
+export type InboxItem =
+  | CardNotification
+  | PageNotification
+  | FileNotification
+  | ProjectNotification;
 
 /** The person's role on a project, or null when they can't see it. */
 type RoleOf = (project: Doc<"projects">) => Promise<ProjectRole | null>;
 
-/** The card, page or file a notification points at, or null once it's gone or out of sight. */
-async function itemOf(
+/** Whether they follow a card or file, each looked up once. */
+type FollowingOf = (item: Followable) => Promise<boolean>;
+
+/** Lookups for the person's notifications, shared across them since most are about a few things. */
+export function lookupsFor(
   ctx: QueryCtx,
-  roleOf: RoleOf,
-  notification: Doc<"notifications">
-): Promise<InboxItem | null> {
-  const common = {
+  user: Doc<"users">
+): { followingOf: FollowingOf; roleOf: RoleOf } {
+  const roles = new Map<Id<"projects">, Promise<ProjectRole | null>>();
+  const following = new Map<string, Promise<boolean>>();
+  return {
+    followingOf: (item) => {
+      const known = following.get(item._id);
+      if (known) {
+        return known;
+      }
+      const result = follows(ctx, item, user._id);
+      following.set(item._id, result);
+      return result;
+    },
+    roleOf: (project) => {
+      const known = roles.get(project._id);
+      if (known) {
+        return known;
+      }
+      const role = roleIn(ctx, user, project);
+      roles.set(project._id, role);
+      return role;
+    },
+  };
+}
+
+type Lookups = ReturnType<typeof lookupsFor>;
+
+/** The notification row about one kind of thing. */
+type RowAbout<Key extends string> = Extract<
+  Doc<"notifications">,
+  Record<Key, unknown>
+>;
+
+function commonOf(notification: Doc<"notifications">) {
+  return {
     _creationTime: notification._creationTime,
     _id: notification._id,
-    actorId: notification.actorId,
-    content: notification.content,
     read: notification.read,
   };
-  if ("pageId" in notification) {
-    const page = await ctx.db.get(notification.pageId);
-    const project = page ? await ctx.db.get(page.projectId) : null;
-    // Pages on projects the person has since left drop out.
-    if (!(page && project && (await roleOf(project)))) {
-      return null;
-    }
-    return {
-      ...common,
-      kind: "page",
-      page: {
-        _id: page._id,
-        hasContent: hasText(page),
-        icon: page.icon,
-        title: page.title,
-      },
-      project: { slug: project.slug },
-    };
+}
+
+async function pageItem(
+  ctx: QueryCtx,
+  { roleOf }: Lookups,
+  notification: RowAbout<"pageId">
+): Promise<PageNotification | null> {
+  const page = await ctx.db.get(notification.pageId);
+  const project = page ? await ctx.db.get(page.projectId) : null;
+  // Pages on projects the person has since left drop out.
+  if (!(page && project && (await roleOf(project)))) {
+    return null;
   }
-  if ("fileId" in notification) {
-    const file = await ctx.db.get(notification.fileId);
-    const project = file ? await ctx.db.get(file.projectId) : null;
-    // Trashed files, and files on projects the person has since left, drop out.
-    if (
-      !(file && project && (await roleOf(project))) ||
-      file.trashedAt !== undefined
-    ) {
-      return null;
-    }
-    return {
-      ...common,
-      file: {
-        _id: file._id,
-        folderId: file.folderId,
-        name: file.name,
-        type: file.type,
-      },
-      kind: "file",
-      project: { slug: project.slug },
-    };
+  return {
+    ...commonOf(notification),
+    actorId: notification.actorId,
+    content: notification.content,
+    kind: "page",
+    page: {
+      _id: page._id,
+      hasContent: hasText(page),
+      icon: page.icon,
+      title: page.title,
+    },
+    project: { slug: project.slug, title: project.title },
+  };
+}
+
+async function fileItem(
+  ctx: QueryCtx,
+  { followingOf, roleOf }: Lookups,
+  notification: RowAbout<"fileId">
+): Promise<FileNotification | null> {
+  const file = await ctx.db.get(notification.fileId);
+  const project = file ? await ctx.db.get(file.projectId) : null;
+  // Trashed files, and files on projects the person has since left, drop out.
+  if (
+    !(file && project && (await roleOf(project))) ||
+    file.trashedAt !== undefined
+  ) {
+    return null;
   }
+  return {
+    ...commonOf(notification),
+    actorId: notification.actorId,
+    content: notification.content,
+    file: {
+      _id: file._id,
+      folderId: file.folderId,
+      name: file.name,
+      type: file.type,
+    },
+    following: await followingOf(file),
+    kind: "file",
+    project: { slug: project.slug, title: project.title },
+    reason: notification.reason ?? "mention",
+  };
+}
+
+async function projectItem(
+  ctx: QueryCtx,
+  { roleOf }: Lookups,
+  notification: RowAbout<"projectId">
+): Promise<ProjectNotification | null> {
+  const project = await ctx.db.get(notification.projectId);
+  if (!(project && (await roleOf(project)))) {
+    return null;
+  }
+  return {
+    ...commonOf(notification),
+    actorId: notification.actorId,
+    kind: "project",
+    project: {
+      _id: project._id,
+      color: project.color,
+      personalFor: project.personalFor,
+      slug: project.slug,
+      title: project.title,
+    },
+  };
+}
+
+async function cardItem(
+  ctx: QueryCtx,
+  { followingOf, roleOf }: Lookups,
+  notification: RowAbout<"cardId">
+): Promise<CardNotification | null> {
   const card = await ctx.db.get(notification.cardId);
   const board = card ? await ctx.db.get(card.boardId) : null;
   const project = board ? await ctx.db.get(board.projectId) : null;
@@ -116,12 +232,36 @@ async function itemOf(
     return null;
   }
   return {
-    ...common,
+    ...commonOf(notification),
+    actorId: notification.actorId,
     board: { _id: board._id, code: board.code, title: board.title },
     card: { _id: card._id, number: card.number, title: card.title },
-    kind: "comment",
-    project: { slug: project.slug },
+    changes: notification.changes,
+    content: notification.content,
+    due: notification.due,
+    following: await followingOf(card),
+    kind: "card",
+    project: { slug: project.slug, title: project.title },
+    reason: notification.reason ?? "mention",
   };
+}
+
+/** What a notification is about, or null once that's gone or out of sight. */
+export function itemOf(
+  ctx: QueryCtx,
+  lookups: Lookups,
+  notification: Doc<"notifications">
+): Promise<InboxItem | null> {
+  if ("pageId" in notification) {
+    return pageItem(ctx, lookups, notification);
+  }
+  if ("fileId" in notification) {
+    return fileItem(ctx, lookups, notification);
+  }
+  if ("projectId" in notification) {
+    return projectItem(ctx, lookups, notification);
+  }
+  return cardItem(ctx, lookups, notification);
 }
 
 /** The signed-in person's notifications that aren't archived, newest first. */
@@ -136,19 +276,9 @@ export const list = query({
       )
       .order("desc")
       .take(LIMIT);
-    // Most notifications share a few projects: each role is looked up once.
-    const roles = new Map<Id<"projects">, Promise<ProjectRole | null>>();
-    const roleOf: RoleOf = (project) => {
-      const known = roles.get(project._id);
-      if (known) {
-        return known;
-      }
-      const role = roleIn(ctx, user, project);
-      roles.set(project._id, role);
-      return role;
-    };
+    const lookups = lookupsFor(ctx, user);
     const items = await Promise.all(
-      notifications.map((notification) => itemOf(ctx, roleOf, notification))
+      notifications.map((notification) => itemOf(ctx, lookups, notification))
     );
     return items.filter((item) => item !== null);
   },
@@ -167,30 +297,41 @@ export const setRead = mutation({
   },
 });
 
-export const archive = mutation({
-  args: { ids: v.array(v.id("notifications")) },
-  handler: async (ctx, { ids }) => {
+/** Archives notifications, which reads them, or brings them back as they were. */
+export const setArchived = mutation({
+  args: {
+    archived: v.boolean(),
+    ids: v.array(v.id("notifications")),
+    /** Brought back unread, should they have been unread when archived. */
+    unread: v.optional(v.array(v.id("notifications"))),
+  },
+  handler: async (ctx, { archived, ids, unread = [] }) => {
     const user = await requireUser(ctx);
     for (const id of ids) {
       const notification = await ctx.db.get(id);
       if (notification?.userId === user._id) {
-        await ctx.db.patch(id, { archived: true, read: true });
+        await ctx.db.patch(id, {
+          archived,
+          read: archived || !unread.includes(id),
+        });
       }
     }
   },
 });
 
-/** Opening a card reads the mentions of you in it. */
+/** Opening a card reads the news about it. */
 export const readCard = mutation({
   args: { cardId: v.id("cards") },
   handler: async (ctx, { cardId }) => {
     const user = await requireUser(ctx);
     const notifications = await ctx.db
       .query("notifications")
-      .withIndex("by_card", (q) => q.eq("cardId", cardId))
+      .withIndex("by_card_and_user", (q) =>
+        q.eq("cardId", cardId).eq("userId", user._id)
+      )
       .collect();
     for (const notification of notifications) {
-      if (notification.userId === user._id && !notification.read) {
+      if (!notification.read) {
         await ctx.db.patch(notification._id, { read: true });
       }
     }
@@ -216,7 +357,7 @@ export const readPage = mutation({
   },
 });
 
-/** Opening a Drive file reads the mentions of you in its comments. */
+/** Opening a Drive file reads the news about it. */
 export const readFile = mutation({
   args: { fileId: v.id("driveFiles") },
   handler: async (ctx, { fileId }) => {
@@ -225,6 +366,25 @@ export const readFile = mutation({
       .query("notifications")
       .withIndex("by_file_and_user", (q) =>
         q.eq("fileId", fileId).eq("userId", user._id)
+      )
+      .collect();
+    for (const notification of notifications) {
+      if (!notification.read) {
+        await ctx.db.patch(notification._id, { read: true });
+      }
+    }
+  },
+});
+
+/** Opening a project reads being added to it. */
+export const readProject = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const user = await requireUser(ctx);
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_project_and_user", (q) =>
+        q.eq("projectId", projectId).eq("userId", user._id)
       )
       .collect();
     for (const notification of notifications) {

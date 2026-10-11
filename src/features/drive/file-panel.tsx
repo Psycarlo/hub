@@ -16,6 +16,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { When } from "@/features/card/card-parts";
 import { useDrive } from "@/features/drive/drive-state";
 import { FolderIcon } from "@/features/drive/file-icon";
+import { FileSubscribe } from "@/features/inbox/subscribe-button";
 import { useUser } from "@/hooks/use-users";
 import type { DriveFile } from "@/lib/drive";
 import { fileKind, formatDuration, KIND_LABELS } from "@/lib/drive";
@@ -247,7 +248,10 @@ export function FilePanel({
           <Details file={file} />
         </section>
         <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold">Activity</h3>
+          <div className="flex min-h-6 items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">Activity</h3>
+            <FileSubscribe fileId={file._id} />
+          </div>
           {activity === undefined ? (
             <Spinner className="text-muted-foreground" />
           ) : (

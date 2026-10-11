@@ -1,6 +1,7 @@
 /*
  * The hub's service worker: it lets the installed app open without a
- * connection, and open fast with one. It never decides which version runs.
+ * connection, and open fast with one, and shows pushed notifications. It
+ * never decides which version runs.
  * Pages come from the network first, so a deploy is live on the next load,
  * and src/lib/updates.ts reloads open ones. Only same-origin GETs are
  * handled: Convex, uploaded files and everything else cross-origin go
@@ -103,6 +104,50 @@ const asset = async (event) => {
   return response;
 };
 
+/**
+ * Every push shows a notification: Safari stops pushing to a site that
+ * receives one without showing it, and Chrome shows a vague one instead. The
+ * hub only pushes what the person hasn't read yet. A notification about the
+ * same card, page, file or project replaces the last one.
+ */
+const notify = async (event) => {
+  let message = {};
+  try {
+    message = event.data?.json() ?? {};
+  } catch {
+    // Not from the hub; still say something.
+  }
+  await self.registration.showNotification(message.title ?? "Something new", {
+    body: message.body ?? "",
+    data: { path: message.path ?? "/inbox" },
+    icon: "/icons/icon-192.png",
+    renotify: Boolean(message.tag),
+    tag: message.tag,
+  });
+  // Without a count, the installed app's icon shows a dot until it opens.
+  try {
+    await self.navigator.setAppBadge?.();
+  } catch {
+    // Badges are a nicety; not every browser has them.
+  }
+};
+
+/** Opens where the notification leads, in an open window if there is one. */
+const follow = async (path) => {
+  const windows = await self.clients.matchAll({
+    includeUncontrolled: true,
+    type: "window",
+  });
+  const open = windows.find((client) => "focus" in client);
+  if (open) {
+    await open.focus();
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin -- a worker's client takes no origin
+    open.postMessage({ open: path });
+    return;
+  }
+  await self.clients.openWindow(path);
+};
+
 self.addEventListener("install", (event) => {
   // Nothing here is tied to a build, so a new worker can take over at once.
   self.skipWaiting();
@@ -128,4 +173,16 @@ self.addEventListener("fetch", (event) => {
   } else if (url.pathname.startsWith("/assets/")) {
     event.respondWith(asset(event));
   }
+});
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(notify(event));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const path = event.notification.data?.path;
+  event.waitUntil(
+    follow(typeof path === "string" && path.startsWith("/") ? path : "/inbox")
+  );
 });

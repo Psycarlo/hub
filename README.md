@@ -108,7 +108,18 @@ npx convex env set OPENROUTER_API_KEY sk-or-xxxxx
 
 Admins pick the model for each task in **Admin**. Without a key, files still attach to transactions, but nothing reads them.
 
-### 6. Run
+### 6. Set up push notifications (optional)
+
+```bash
+npx web-push generate-vapid-keys
+npx convex env set VAPID_PUBLIC_KEY xxxxx
+npx convex env set VAPID_PRIVATE_KEY xxxxx
+npx convex env set VAPID_SUBJECT mailto:you@example.com
+```
+
+Each person turns notifications on per device with the bell in **Inbox**. Without the keys, notifications only show while the hub is open in the background. On iPhone and iPad, they need the hub added to the Home Screen.
+
+### 7. Run
 
 ```bash
 pnpm dev            # vite on http://localhost:5173

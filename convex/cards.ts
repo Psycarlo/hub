@@ -15,6 +15,7 @@ import {
   visibleProjects,
 } from "./lib/access";
 import { patchCard } from "./lib/history";
+import { notifyChanges } from "./lib/notify";
 import { vPriority, vStatus, vUpload } from "./lib/validators";
 import { isClosed, LEGACY_LABELS, MAX_CARD_FILES } from "./shared/model";
 
@@ -103,8 +104,9 @@ export const create = mutation({
     const number = board.nextCardNumber;
     const now = Date.now();
     await ctx.db.patch(board._id, { nextCardNumber: number + 1 });
+    const assignees = await checkPeople(ctx, board.projectId, args.assignees);
     const cardId = await ctx.db.insert("cards", {
-      assignees: await checkPeople(ctx, board.projectId, args.assignees),
+      assignees,
       boardId: board._id,
       createdBy: user._id,
       description: args.description.slice(0, MAX_DESCRIPTION),
@@ -122,6 +124,13 @@ export const create = mutation({
     // They come with the card, so its creation stands for them in its history.
     for (const file of files) {
       await attachFile(ctx, user._id, cardId, file);
+    }
+    // Its maker and assignees follow it; the assignees hear they were assigned.
+    const card = await ctx.db.get(cardId);
+    if (card && assignees.length > 0) {
+      await notifyChanges(ctx, user._id, card, board.projectId, [
+        { from: [], kind: "assignees", to: assignees },
+      ]);
     }
     return { _id: cardId, number };
   },

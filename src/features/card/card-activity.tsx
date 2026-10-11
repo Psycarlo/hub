@@ -23,6 +23,7 @@ import {
   Composer,
   useReadMentions,
 } from "@/features/card/comments";
+import { CardSubscribe } from "@/features/inbox/subscribe-button";
 import type { CardEvent } from "@/hooks/use-card-history";
 import { useCardHistory } from "@/hooks/use-card-history";
 import type { Comment } from "@/hooks/use-comments";
@@ -441,9 +442,12 @@ export function CardActivity({
       aria-labelledby={id}
       className={cn("flex flex-col gap-4", className)}
     >
-      <h2 className="font-medium" id={id}>
-        Activity
-      </h2>
+      <div className="flex min-h-6 items-center justify-between gap-3">
+        <h2 className="font-medium" id={id}>
+          Activity
+        </h2>
+        <CardSubscribe cardId={card._id} />
+      </div>
       <ol className="before:bg-border relative flex flex-col gap-4 before:absolute before:top-3 before:bottom-3 before:left-3 before:w-px">
         {entries.map((entry) =>
           entry.kind === "burst" ? (

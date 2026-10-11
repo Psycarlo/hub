@@ -24,6 +24,7 @@ import {
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMe } from "@/hooks/use-users";
+import { stopPushing } from "@/lib/notify";
 import type { Theme } from "@/lib/theme";
 import { setTheme, useTheme } from "@/lib/theme";
 
@@ -105,6 +106,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={async () => {
+            await stopPushing(me._id);
             await signOut();
             navigate("/", { replace: true });
           }}

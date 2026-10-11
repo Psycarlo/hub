@@ -418,12 +418,11 @@ export function CommentThread({
   );
 }
 
-/** Seeing the card counts as reading the mentions of you in it. */
+/** Seeing the card counts as reading the news about it. */
 export function useReadMentions(card: Card) {
   const inbox = useQuery(api.inbox.list);
   const unread = inbox?.some(
-    (item) =>
-      item.kind === "comment" && item.card._id === card._id && !item.read
+    (item) => item.kind === "card" && item.card._id === card._id && !item.read
   );
   useEffect(() => {
     if (unread) {

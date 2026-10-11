@@ -16,9 +16,9 @@ import { releaseBuy } from "./lib/finance";
 const BATCH = 100;
 
 /**
- * A card with its comments and the notifications pointing at it. Its files,
- * history and reactions can be many, so they're cleared afterwards in batches
- * of their own.
+ * A card with its comments, the notifications pointing at it and who follows
+ * it. Its files, history and reactions can be many, so they're cleared
+ * afterwards in batches of their own.
  */
 export async function deleteCard(
   ctx: MutationCtx,
@@ -33,10 +33,14 @@ export async function deleteCard(
   }
   const notifications = await ctx.db
     .query("notifications")
-    .withIndex("by_card", (q) => q.eq("cardId", cardId))
+    .withIndex("by_card_and_user", (q) => q.eq("cardId", cardId))
     .collect();
-  for (const notification of notifications) {
-    await ctx.db.delete(notification._id);
+  const subscriptions = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_card_and_user", (q) => q.eq("cardId", cardId))
+    .collect();
+  for (const row of [...notifications, ...subscriptions]) {
+    await ctx.db.delete(row._id);
   }
   await ctx.db.delete(cardId);
   await ctx.scheduler.runAfter(0, internal.cleanup.card, { cardId });
@@ -171,7 +175,18 @@ export const driveFile = internalMutation({
       .query("notifications")
       .withIndex("by_file_and_user", (q) => q.eq("fileId", fileId))
       .take(BATCH);
-    const batches = [events, comments, stars, opens, notifications];
+    const subscriptions = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_file_and_user", (q) => q.eq("fileId", fileId))
+      .take(BATCH);
+    const batches = [
+      events,
+      comments,
+      stars,
+      opens,
+      notifications,
+      subscriptions,
+    ];
     for (const row of batches.flat()) {
       await ctx.db.delete(row._id);
     }
@@ -488,6 +503,14 @@ export const project = internalMutation({
       }
       await ctx.db.delete(folder._id);
     }
+    // News of people being added to it.
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_project_and_user", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    for (const notification of notifications) {
+      await ctx.db.delete(notification._id);
+    }
     const batches = [
       boards,
       tables,
@@ -498,6 +521,7 @@ export const project = internalMutation({
       brands,
       files,
       folders,
+      notifications,
     ];
     if (batches.some((batch) => batch.length > 0)) {
       await ctx.scheduler.runAfter(0, internal.cleanup.project, { projectId });

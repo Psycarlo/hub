@@ -13,6 +13,7 @@ import {
   visibleProjects,
 } from "./lib/access";
 import { hasText, textOf } from "./lib/docs";
+import { notify } from "./lib/notify";
 import { mentionExcerpt, pageExcerpt } from "./shared/docs";
 import { mentionedUsers } from "./shared/mentions";
 import { mergeText } from "./shared/merge";
@@ -119,12 +120,10 @@ async function notifyMentions(
       userId !== actorId &&
       (await canSee(ctx, userId, page.projectId))
     ) {
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         actorId,
-        archived: false,
         content: mentionExcerpt(after, mentioned),
         pageId: page._id,
-        read: false,
         userId,
       });
     }

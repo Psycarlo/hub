@@ -12,6 +12,7 @@ import {
   vBrandPlace,
   vCardChange,
   vCardDefaults,
+  vCardNews,
   vCharacter,
   vColor,
   vDriveChange,
@@ -19,6 +20,7 @@ import {
   vEntryKind,
   vField,
   vFiat,
+  vFileNews,
   vHabitIcon,
   vLogoMode,
   vPriority,
@@ -221,7 +223,8 @@ export default defineSchema({
   })
     .index("by_board_and_number", ["boardId", "number"])
     .index("by_board_and_status", ["boardId", "status"])
-    .index("by_sprint", ["sprintId"]),
+    .index("by_sprint", ["sprintId"])
+    .index("by_due", ["due"]),
 
   /** Who changed what on a card, for its activity. */
   cardEvents: defineTable({
@@ -272,17 +275,52 @@ export default defineSchema({
     userId: v.id("users"),
   }).index("by_card_and_comment", ["cardId", "commentId"]),
 
-  /** Someone was mentioned in a card comment, or on a doc page. */
+  /**
+   * Who follows a card or a Drive file, past who would anyway: a card's maker
+   * and assignees, and a file's uploader, unless they unsubscribed. Making a
+   * card, being assigned it, commenting or being mentioned subscribes them.
+   */
+  subscriptions: defineTable(
+    v.union(
+      v.object({
+        cardId: v.id("cards"),
+        subscribed: v.boolean(),
+        userId: v.id("users"),
+      }),
+      v.object({
+        fileId: v.id("driveFiles"),
+        subscribed: v.boolean(),
+        userId: v.id("users"),
+      })
+    )
+  )
+    .index("by_card_and_user", ["cardId", "userId"])
+    .index("by_file_and_user", ["fileId", "userId"]),
+
+  /**
+   * News for someone: a mention, a comment or a change on what they follow,
+   * a card coming due, or being added to a project.
+   */
   notifications: defineTable(
     v.union(
       v.object({
-        actorId: v.id("users"),
+        /** Missing on reminders, which nobody sent. */
+        actorId: v.optional(v.id("users")),
         archived: v.boolean(),
         cardId: v.id("cards"),
-        commentId: v.id("comments"),
-        /** The comment's text. */
-        content: v.string(),
+        /** What changed, folded together while unread, on a change. */
+        changes: v.optional(v.array(vCardChange)),
+        /** On a mention or comment. */
+        commentId: v.optional(v.id("comments")),
+        /** The comment's text, on a mention or comment. */
+        content: v.optional(v.string()),
+        /** The day the card was due when a reminder went out, `YYYY-MM-DD`. */
+        due: v.optional(v.string()),
+        /** When its push is due, in ms; gone once it's sent or dropped. */
+        pushAt: v.optional(v.number()),
         read: v.boolean(),
+        /** A mention when missing, from before there was other news. */
+        reason: v.optional(vCardNews),
         userId: v.id("users"),
       }),
       v.object({
@@ -291,6 +329,7 @@ export default defineSchema({
         /** The line of the page that mentions them, as it read then. */
         content: v.string(),
         pageId: v.id("docPages"),
+        pushAt: v.optional(v.number()),
         read: v.boolean(),
         userId: v.id("users"),
       }),
@@ -301,6 +340,18 @@ export default defineSchema({
         content: v.string(),
         driveCommentId: v.id("driveComments"),
         fileId: v.id("driveFiles"),
+        pushAt: v.optional(v.number()),
+        read: v.boolean(),
+        /** A mention when missing, from before there was other news. */
+        reason: v.optional(vFileNews),
+        userId: v.id("users"),
+      }),
+      v.object({
+        /** Who added them to the project. */
+        actorId: v.id("users"),
+        archived: v.boolean(),
+        projectId: v.id("projects"),
+        pushAt: v.optional(v.number()),
         read: v.boolean(),
         userId: v.id("users"),
       })
@@ -308,10 +359,21 @@ export default defineSchema({
   )
     .index("by_user_and_archived", ["userId", "archived"])
     .index("by_comment", ["commentId"])
-    .index("by_card", ["cardId"])
+    .index("by_card_and_user", ["cardId", "userId"])
     .index("by_page_and_user", ["pageId", "userId"])
     .index("by_drive_comment", ["driveCommentId"])
-    .index("by_file_and_user", ["fileId", "userId"]),
+    .index("by_file_and_user", ["fileId", "userId"])
+    .index("by_project_and_user", ["projectId", "userId"]),
+
+  /** Browsers someone turned notifications on in, which news is pushed to. */
+  pushDevices: defineTable({
+    /** The push service's address for the browser, unique to it. */
+    endpoint: v.string(),
+    keys: v.object({ auth: v.string(), p256dh: v.string() }),
+    userId: v.id("users"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_endpoint", ["endpoint"]),
 
   crmTables: defineTable({
     createdBy: v.id("users"),

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { navigate } from "wouter/use-browser-location";
 
 /** Chrome's offer to install the hub, which only it and Edge make. */
 interface InstallPromptEvent extends Event {
@@ -16,6 +17,10 @@ export const installsFromShareSheet: boolean =
   /iPhone|iPad|iPod/u.test(navigator.userAgent) ||
   // iPadOS asks for desktop sites, so it reads as a Mac with a touch screen.
   (/Macintosh/u.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+/** Whether there's a service worker: in builds only, since in development it would cache what Vite serves. */
+export const hasWorker: boolean =
+  import.meta.env.PROD && "serviceWorker" in navigator;
 
 let offer: InstallPromptEvent | null = null;
 const listeners = new Set<() => void>();
@@ -45,6 +50,36 @@ export function useInstall(): (() => Promise<void>) | null {
   };
 }
 
+/** The service worker once it runs, or undefined when there's none registered. */
+export async function workerRegistration(): Promise<
+  ServiceWorkerRegistration | undefined
+> {
+  if (!hasWorker) {
+    return undefined;
+  }
+  try {
+    // `ready` waits for good when nothing's registered, so it's asked only once something is.
+    const registered = await navigator.serviceWorker.getRegistration();
+    return registered ? await navigator.serviceWorker.ready : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Follows a notification clicked while the hub is open to where it leads. */
+function onWorkerMessage(event: MessageEvent): void {
+  const data: unknown = event.data;
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "open" in data &&
+    typeof data.open === "string" &&
+    data.open.startsWith("/")
+  ) {
+    navigate(data.open);
+  }
+}
+
 async function register(): Promise<void> {
   try {
     await navigator.serviceWorker.register("/sw.js", {
@@ -57,7 +92,8 @@ async function register(): Promise<void> {
 
 /**
  * Registers the service worker, in builds only: in development it would cache
- * what Vite serves. Also keeps the browser's install offer for Settings.
+ * what Vite serves. Also keeps the browser's install offer for Settings, and
+ * follows notifications clicked while the hub is open.
  */
 export function startPwa(): void {
   addEventListener("beforeinstallprompt", (event) => {
@@ -68,9 +104,10 @@ export function startPwa(): void {
     offer = null;
     notify();
   });
-  if (!(import.meta.env.PROD && "serviceWorker" in navigator)) {
+  if (!hasWorker) {
     return;
   }
+  navigator.serviceWorker.addEventListener("message", onWorkerMessage);
   // After the page has loaded, so the worker's own fetching doesn't slow it.
   if (document.readyState === "complete") {
     register();
