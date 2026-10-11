@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-11
+
+### Added
+
+- Brands in projects: keep a brand's logos, colors, typefaces, banners, website and social links in one place, laid out as its guidelines.
+- Logos for light and dark backgrounds (symbol, wordmark, lockup and app icon), each in every format you have, with one button to download them all.
+- Each brand color with its HEX, RGB, HSL and CMYK values and how readable white and black text are on it; copy the palette as CSS, Tailwind or JSON.
+- Brand typefaces from Google Fonts by name, or from your own font files, each shown set in itself.
+- See a brand on a social profile, business cards and a website, drawn from what it has.
+- Download a brand's whole kit as a zip, or its brand book as a PDF.
+- Export a finance account's month, quarter or year as a PDF statement or a CSV, with its invoices if you like, while progress shows in the corner.
+
 ## [0.7.1] - 2026-10-11
 
 ### Fixed
