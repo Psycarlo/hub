@@ -44,6 +44,8 @@ import {
   MAX_ENTRY_FILES,
   MAX_ENTRY_NAME,
   MAX_ENTRY_NOTE,
+  MAX_EXPORT_LINKS,
+  MAX_EXPORT_MONTHS,
   STARTER_CATEGORIES,
   dayIn,
   isDate,
@@ -1123,6 +1125,139 @@ export const fileLink = mutation({
     }
     await requireEntry(ctx, file.entryId, "view");
     return await signedLink(file, download);
+  },
+});
+
+/** A file an entry keeps, as an export lists it. */
+export interface ExportFile {
+  _id: Id<"financeFiles">;
+  entryId: Id<"financeEntries">;
+  name: string;
+  size: number;
+  type: string;
+}
+
+/** Everything an export of an account over some months is made from. */
+export interface FinanceExport {
+  projectTitle: string;
+  account: Doc<"financeAccounts">;
+  categories: Category[];
+  /** In order: by day, then as they were added. */
+  entries: Entry[];
+  files: ExportFile[];
+  /** What the accounts its transfers go to or come from are called, by id. */
+  transfers: { accountId: Id<"financeAccounts">; title: string }[];
+  /** What it held as the first month began. */
+  opening: number;
+  /** What it held as the last month ended. */
+  closing: number;
+}
+
+function monthsFrom(first: string, last: string): number {
+  const [fromYear = 0, fromMonth = 0] = first.split("-").map(Number);
+  const [toYear = 0, toMonth = 0] = last.split("-").map(Number);
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth) + 1;
+}
+
+/**
+ * An account's entries from the start of `first` to the end of `last`, the
+ * files they keep, and what it held either side; null once it's out of reach.
+ */
+export const exportData = query({
+  args: {
+    accountId: v.id("financeAccounts"),
+    first: v.string(),
+    last: v.string(),
+  },
+  handler: async (
+    ctx,
+    { accountId, first, last }
+  ): Promise<FinanceExport | null> => {
+    const access = await ifVisible(requireAccount(ctx, accountId, "view"));
+    if (!access) {
+      return null;
+    }
+    if (!(isMonth(first) && isMonth(last) && first <= last)) {
+      throw new ConvexError("That isn’t a period to export.");
+    }
+    if (monthsFrom(first, last) > MAX_EXPORT_MONTHS) {
+      throw new ConvexError(
+        `An export covers up to ${MAX_EXPORT_MONTHS} months.`
+      );
+    }
+    const { account, project } = access;
+    const end = nextMonth(last);
+    const entries = await ctx.db
+      .query("financeEntries")
+      .withIndex("by_account_and_date", (q) =>
+        q.eq("accountId", accountId).gte("date", first).lt("date", end)
+      )
+      .collect();
+    const kept = await Promise.all(
+      entries
+        .filter((entry) => entry.fileCount)
+        .map((entry) => filesOf(ctx, entry._id).collect())
+    );
+    const others = new Set(
+      entries.flatMap((entry) =>
+        entry.transfer ? [entry.transfer.accountId] : []
+      )
+    );
+    // Named only where the person can see them, as the app would.
+    const transfers = await Promise.all(
+      [...others].map(async (otherId) => {
+        const other = await ifVisible(requireAccount(ctx, otherId, "view"));
+        return {
+          accountId: otherId,
+          title: other?.account.title ?? "another account",
+        };
+      })
+    );
+    const balance = await balanceOf(ctx, account);
+    return {
+      account,
+      categories: sortLabels(await categoriesOf(ctx, project._id)),
+      closing: balance - (await paidSince(ctx, accountId, end)),
+      entries: entries.toSorted(byDate),
+      files: kept.flat().map((file) => ({
+        _id: file._id,
+        entryId: file.entryId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      })),
+      opening: balance - (await paidSince(ctx, accountId, first)),
+      projectTitle: project.title,
+      transfers,
+    };
+  },
+});
+
+/** Short-lived links to download files the account's entries keep, a few at a time. */
+export const exportLinks = mutation({
+  args: {
+    accountId: v.id("financeAccounts"),
+    fileIds: v.array(v.id("financeFiles")),
+  },
+  handler: async (
+    ctx,
+    { accountId, fileIds }
+  ): Promise<{ fileId: Id<"financeFiles">; url: string }[]> => {
+    await requireAccount(ctx, accountId, "view");
+    if (fileIds.length > MAX_EXPORT_LINKS) {
+      throw new ConvexError(
+        `Ask for up to ${MAX_EXPORT_LINKS} files at a time.`
+      );
+    }
+    const links: { fileId: Id<"financeFiles">; url: string }[] = [];
+    for (const fileId of fileIds) {
+      const file = await ctx.db.get(fileId);
+      // One deleted since, or another account's, is left out.
+      if (file?.accountId === accountId) {
+        links.push({ fileId, url: await signedLink(file, true) });
+      }
+    }
+    return links;
   },
 });
 

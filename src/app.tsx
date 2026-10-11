@@ -12,6 +12,7 @@ import type { DefaultParams } from "wouter";
 import { Redirect, Route, Switch } from "wouter";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { CornerDock } from "@/components/corner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PageGlow } from "@/components/page-glow";
 import { AccessRemoved, LoadingScreen } from "@/components/status-screens";
@@ -25,6 +26,7 @@ import { AdminPage } from "@/features/admin/admin-page";
 import { BOARD_ROUTE } from "@/features/board/board-context";
 import { BoardRoute } from "@/features/board/board-route";
 import { UploadTray } from "@/features/drive/upload-tray";
+import { ExportTray } from "@/features/finance/export-tray";
 import {
   FocusContext,
   FocusMode,
@@ -143,109 +145,112 @@ function Workspace() {
 
   return (
     <FocusContext value={focus}>
-      <SidebarProvider>
-        <AppSidebar
-          accounts={accounts}
-          boards={boards}
-          docs={docs}
-          drive={drive}
-          habits={habits}
-          onNewProject={newProject}
-          portfolios={portfolios}
-          projects={projects}
-          tables={tables}
-          unread={inbox.unread}
-        />
-        <SidebarInset>
-          <PageGlow />
-          {/* Positioned, so every page paints over the glow. */}
-          <div className="relative flex min-w-0 flex-1 flex-col">
-            <Switch>
-              <Route path="/">
-                <HomePage
-                  boards={boards}
-                  loaded={
-                    projectsLoaded && boardsLoaded && widgets !== undefined
-                  }
-                  onNewProject={newProject}
-                  projects={projects}
-                  tables={tables}
-                  widgets={widgets}
-                />
-              </Route>
-              <Route path={BOARD_ROUTE}>
-                {(route) => (
-                  <BoardRoute
+      <CornerDock>
+        <SidebarProvider>
+          <AppSidebar
+            accounts={accounts}
+            boards={boards}
+            docs={docs}
+            drive={drive}
+            habits={habits}
+            onNewProject={newProject}
+            portfolios={portfolios}
+            projects={projects}
+            tables={tables}
+            unread={inbox.unread}
+          />
+          <SidebarInset>
+            <PageGlow />
+            {/* Positioned, so every page paints over the glow. */}
+            <div className="relative flex min-w-0 flex-1 flex-col">
+              <Switch>
+                <Route path="/">
+                  <HomePage
                     boards={boards}
-                    loaded={projectsLoaded && boardsLoaded}
+                    loaded={
+                      projectsLoaded && boardsLoaded && widgets !== undefined
+                    }
+                    onNewProject={newProject}
                     projects={projects}
-                    slug={route.slug}
+                    tables={tables}
+                    widgets={widgets}
                   />
-                )}
-              </Route>
-              <Route<ProjectParams> path="/p/:project/:table?/:record?">
-                {(route) => (
-                  <Suspense fallback={<RouteFallback />}>
-                    <ProjectRoute
-                      accounts={accounts}
-                      accountsLoaded={accountList !== undefined}
+                </Route>
+                <Route path={BOARD_ROUTE}>
+                  {(route) => (
+                    <BoardRoute
                       boards={boards}
-                      boardsLoaded={boardsLoaded}
-                      docs={docs}
-                      docsLoaded={pages !== undefined}
-                      habits={habits}
-                      habitsLoaded={habitList !== undefined}
-                      loaded={projectsLoaded}
-                      portfolios={portfolios}
-                      portfoliosLoaded={portfolioList !== undefined}
+                      loaded={projectsLoaded && boardsLoaded}
                       projects={projects}
-                      recordId={route.record}
-                      slug={route.project}
-                      tableSlug={route.table}
-                      tables={tables}
+                      slug={route.slug}
                     />
+                  )}
+                </Route>
+                <Route<ProjectParams> path="/p/:project/:table?/:record?">
+                  {(route) => (
+                    <Suspense fallback={<RouteFallback />}>
+                      <ProjectRoute
+                        accounts={accounts}
+                        accountsLoaded={accountList !== undefined}
+                        boards={boards}
+                        boardsLoaded={boardsLoaded}
+                        docs={docs}
+                        docsLoaded={pages !== undefined}
+                        habits={habits}
+                        habitsLoaded={habitList !== undefined}
+                        loaded={projectsLoaded}
+                        portfolios={portfolios}
+                        portfoliosLoaded={portfolioList !== undefined}
+                        projects={projects}
+                        recordId={route.record}
+                        slug={route.project}
+                        tableSlug={route.table}
+                        tables={tables}
+                      />
+                    </Suspense>
+                  )}
+                </Route>
+                <Route path={OFFICE_PATH}>
+                  <Suspense fallback={<RouteFallback />}>
+                    <OfficePage />
                   </Suspense>
-                )}
-              </Route>
-              <Route path={OFFICE_PATH}>
-                <Suspense fallback={<RouteFallback />}>
-                  <OfficePage />
-                </Suspense>
-              </Route>
-              <Route path={INBOX_PATH}>
-                <InboxPage inbox={inbox} />
-              </Route>
-              <Route path={SETTINGS_PATH}>
-                <SettingsPage />
-              </Route>
-              <Route path={ADMIN_PATH}>
-                <AdminPage />
-              </Route>
-              {/* Short links like `/HUB-12`, after the app's own pages so those always win. */}
-              <Route path="/:slug">
-                {(route) => (
-                  <BoardRoute
-                    boards={boards}
-                    loaded={projectsLoaded && boardsLoaded}
-                    projects={projects}
-                    slug={route.slug}
-                  />
-                )}
-              </Route>
-              <Route>
-                <Redirect replace to="/" />
-              </Route>
-            </Switch>
-          </div>
-        </SidebarInset>
-        <ProjectDialog
-          onOpenChange={setCreatingProject}
-          open={creatingProject}
-          projects={projects}
-        />
-        <FocusMode focus={focus} widgets={widgets} />
-        <UploadTray />
-      </SidebarProvider>
+                </Route>
+                <Route path={INBOX_PATH}>
+                  <InboxPage inbox={inbox} />
+                </Route>
+                <Route path={SETTINGS_PATH}>
+                  <SettingsPage />
+                </Route>
+                <Route path={ADMIN_PATH}>
+                  <AdminPage />
+                </Route>
+                {/* Short links like `/HUB-12`, after the app's own pages so those always win. */}
+                <Route path="/:slug">
+                  {(route) => (
+                    <BoardRoute
+                      boards={boards}
+                      loaded={projectsLoaded && boardsLoaded}
+                      projects={projects}
+                      slug={route.slug}
+                    />
+                  )}
+                </Route>
+                <Route>
+                  <Redirect replace to="/" />
+                </Route>
+              </Switch>
+            </div>
+          </SidebarInset>
+          <ProjectDialog
+            onOpenChange={setCreatingProject}
+            open={creatingProject}
+            projects={projects}
+          />
+          <FocusMode focus={focus} widgets={widgets} />
+          <UploadTray />
+          <ExportTray />
+        </SidebarProvider>
+      </CornerDock>
     </FocusContext>
   );
 }

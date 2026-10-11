@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   CalendarPlusIcon,
+  DownloadIcon,
   FileUpIcon,
   LandmarkIcon,
   PlusIcon,
@@ -40,6 +41,7 @@ import {
   EntrySearch,
   FilterButton,
 } from "@/features/finance/entry-filters";
+import { ExportDialog } from "@/features/finance/export-dialog";
 import { financePath } from "@/features/finance/finance-context";
 import type { FinanceView } from "@/features/finance/finance-parts";
 import { useFinanceView } from "@/features/finance/finance-parts";
@@ -77,7 +79,7 @@ import { canEdit, canManage, projectPath } from "@/lib/project";
 
 const NO_CATEGORIES: Category[] = [];
 
-type Dialog = "settings" | "entry" | "recurring" | "categories";
+type Dialog = "settings" | "entry" | "recurring" | "categories" | "export";
 
 function monthlyEntries(count: number): string {
   return count === 1 ? "1 monthly entry" : `${count} monthly entries`;
@@ -455,7 +457,7 @@ function MonthEntries(props: MonthEntriesProps) {
   );
 }
 
-/** The account's name, and its monthly entries, categories and settings. */
+/** The account's name, and its monthly entries, categories, export and settings. */
 function AccountHeader({
   account,
   recurring,
@@ -494,6 +496,9 @@ function AccountHeader({
               <TagsIcon />
             </IconButton>
           )}
+          <IconButton label="Export" onClick={() => onOpen("export")}>
+            <DownloadIcon />
+          </IconButton>
           {manageable && (
             <IconButton
               label="Account settings"
@@ -924,6 +929,11 @@ export function AccountPage({
         categories={categories}
         editable={editable}
         items={recurring}
+      />
+      <ExportDialog
+        {...dialogProps("export")}
+        account={account}
+        month={month}
       />
       {editable && (
         <CategoriesDialog

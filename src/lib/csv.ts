@@ -1,9 +1,12 @@
 const NEEDS_QUOTES = /[",\r\n]/u;
 // Spreadsheets run cells that start with these as formulas.
 const FORMULA = /^[=+\-@\t\r]/u;
+// A plain number, like -12.50, is no formula and stays a number.
+const NUMBER = /^-?\d+(?:\.\d+)?$/u;
+const REVOKE_MS = 60_000;
 
 function cell(value: string): string {
-  const safe = FORMULA.test(value) ? `'${value}` : value;
+  const safe = FORMULA.test(value) && !NUMBER.test(value) ? `'${value}` : value;
   return NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
@@ -65,7 +68,7 @@ export function parseCsv(input: string): string[][] {
 
 export function downloadFile(
   name: string,
-  content: string,
+  content: BlobPart,
   type: string
 ): void {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -73,5 +76,6 @@ export function downloadFile(
   link.href = url;
   link.download = name;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Some browsers still read a big file after the click returns.
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_MS);
 }

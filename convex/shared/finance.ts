@@ -20,6 +20,10 @@ export const MAX_CATEGORIES = 100;
 export const MAX_CENTS = 100_000_000_000_000;
 /** Files an entry keeps, like its invoice, a receipt and the proof it was paid. */
 export const MAX_ENTRY_FILES = 5;
+/** The longest stretch an export covers, in months: a year. */
+export const MAX_EXPORT_MONTHS = 12;
+/** Download links an export asks for at once, so none expire before they're used. */
+export const MAX_EXPORT_LINKS = 25;
 
 /** What a model read off an invoice or receipt; whatever it couldn't is left out. */
 export interface InvoiceReading {

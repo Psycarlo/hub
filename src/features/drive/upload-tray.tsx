@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
+import { Corner } from "@/components/corner";
 import { IconButton } from "@/components/icon-button";
 import {
   AlertDialog,
@@ -323,74 +324,78 @@ export function UploadTray() {
 
   return (
     <>
-      <AnimatePresence>
-        {items.length > 0 && (
-          <motion.section
-            animate={{ filter: "blur(0px)", opacity: 1, scale: 1, y: 0 }}
-            aria-label="Uploads"
-            // On phones, just above the floating focus mode button, which keeps the corner itself.
-            className="bg-popover text-popover-foreground shadow-raised fixed right-4 bottom-4 z-40 flex w-92 max-w-[calc(100vw-2rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl max-md:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.25rem)] max-sm:right-2 max-sm:max-w-[calc(100vw-1rem)]"
-            exit={{
-              filter: "blur(4px)",
-              opacity: 0,
-              scale: 0.96,
-              transition: { duration: 0.15 },
-              y: 8,
-            }}
-            initial={{ filter: "blur(4px)", opacity: 0, scale: 0.96, y: 16 }}
-            onPointerEnter={() => setHovered(true)}
-            onPointerLeave={() => setHovered(false)}
-            transition={{ duration: 0.3, ease: EASE_OUT }}
-          >
-            <header className="flex items-center gap-3 py-2.5 pr-2 pl-3">
-              <Ring share={summary.share} state={summary.state} />
-              <div aria-live="polite" className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-semibold">
-                  {summary.title}
-                </span>
-                {summary.detail && (
-                  <span className="text-muted-foreground truncate text-xs tabular-nums">
-                    {summary.detail}
+      <Corner>
+        <AnimatePresence>
+          {items.length > 0 && (
+            <motion.section
+              animate={{ filter: "blur(0px)", opacity: 1, scale: 1, y: 0 }}
+              aria-label="Uploads"
+              className="bg-popover text-popover-foreground shadow-raised pointer-events-auto order-1 flex w-92 max-w-full origin-bottom-right flex-col overflow-hidden rounded-2xl"
+              exit={{
+                filter: "blur(4px)",
+                opacity: 0,
+                scale: 0.96,
+                transition: { duration: 0.15 },
+                y: 8,
+              }}
+              initial={{ filter: "blur(4px)", opacity: 0, scale: 0.96, y: 16 }}
+              onPointerEnter={() => setHovered(true)}
+              onPointerLeave={() => setHovered(false)}
+              transition={{ duration: 0.3, ease: EASE_OUT }}
+            >
+              <header className="flex items-center gap-3 py-2.5 pr-2 pl-3">
+                <Ring share={summary.share} state={summary.state} />
+                <div
+                  aria-live="polite"
+                  className="flex min-w-0 flex-1 flex-col"
+                >
+                  <span className="truncate text-sm font-semibold">
+                    {summary.title}
                   </span>
+                  {summary.detail && (
+                    <span className="text-muted-foreground truncate text-xs tabular-nums">
+                      {summary.detail}
+                    </span>
+                  )}
+                </div>
+                <FluidTooltip.Group>
+                  <IconButton
+                    aria-expanded={!collapsed}
+                    className="[&>svg]:transition-transform [&>svg]:duration-200 [&>svg]:ease-out aria-[expanded=false]:[&>svg]:rotate-180"
+                    label={collapsed ? "Show uploads" : "Hide uploads"}
+                    onClick={() => setCollapsed(!collapsed)}
+                  >
+                    <ChevronDownIcon />
+                  </IconButton>
+                  <IconButton
+                    label={summary.active > 0 ? "Cancel uploads" : "Close"}
+                    onClick={close}
+                  >
+                    <XIcon />
+                  </IconButton>
+                </FluidTooltip.Group>
+              </header>
+              <AnimatePresence initial={false}>
+                {!collapsed && (
+                  <motion.div
+                    animate={{ height: "auto", opacity: 1 }}
+                    className="overflow-hidden"
+                    exit={{ height: 0, opacity: 0 }}
+                    initial={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: EASE_OUT }}
+                  >
+                    <ol className="flex max-h-72 flex-col overflow-y-auto border-t py-1">
+                      {items.map((item) => (
+                        <Row folders={folders} item={item} key={item.id} />
+                      ))}
+                    </ol>
+                  </motion.div>
                 )}
-              </div>
-              <FluidTooltip.Group>
-                <IconButton
-                  aria-expanded={!collapsed}
-                  className="[&>svg]:transition-transform [&>svg]:duration-200 [&>svg]:ease-out aria-[expanded=false]:[&>svg]:rotate-180"
-                  label={collapsed ? "Show uploads" : "Hide uploads"}
-                  onClick={() => setCollapsed(!collapsed)}
-                >
-                  <ChevronDownIcon />
-                </IconButton>
-                <IconButton
-                  label={summary.active > 0 ? "Cancel uploads" : "Close"}
-                  onClick={close}
-                >
-                  <XIcon />
-                </IconButton>
-              </FluidTooltip.Group>
-            </header>
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.div
-                  animate={{ height: "auto", opacity: 1 }}
-                  className="overflow-hidden"
-                  exit={{ height: 0, opacity: 0 }}
-                  initial={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: EASE_OUT }}
-                >
-                  <ol className="flex max-h-72 flex-col overflow-y-auto border-t py-1">
-                    {items.map((item) => (
-                      <Row folders={folders} item={item} key={item.id} />
-                    ))}
-                  </ol>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.section>
-        )}
-      </AnimatePresence>
+              </AnimatePresence>
+            </motion.section>
+          )}
+        </AnimatePresence>
+      </Corner>
       <AlertDialog onOpenChange={setConfirming} open={confirming}>
         <AlertDialogContent>
           <AlertDialogHeader>
