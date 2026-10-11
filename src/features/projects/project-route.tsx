@@ -41,6 +41,8 @@ import {
   parseHabitParam,
 } from "@/features/habits/habits-context";
 import { HabitsPage } from "@/features/habits/habits-page";
+import { LOG_SEGMENT } from "@/features/log/log-context";
+import { LogPage } from "@/features/log/log-page";
 import {
   PORTFOLIOS_SEGMENT,
   parsePortfolioParam,
@@ -57,6 +59,7 @@ import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
+import type { LogTopic } from "@/lib/log";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -109,6 +112,9 @@ interface ProjectViewProps {
   /** The project's habits. */
   habits: Habit[];
   habitsLoaded: boolean;
+  /** The project's log topics. */
+  topics: LogTopic[];
+  topicsLoaded: boolean;
   /** The project's brands. */
   brands: Brand[];
   brandsLoaded: boolean;
@@ -463,7 +469,13 @@ function HabitsView({ project, habits, loaded, habitParam }: HabitsViewProps) {
 
 interface ProjectRouteProps extends Omit<
   ProjectViewProps,
-  "project" | "docs" | "portfolios" | "accounts" | "habits" | "brands"
+  | "project"
+  | "docs"
+  | "portfolios"
+  | "accounts"
+  | "habits"
+  | "topics"
+  | "brands"
 > {
   slug: string;
   loaded: boolean;
@@ -475,6 +487,8 @@ interface ProjectRouteProps extends Omit<
   accounts: Account[];
   /** Habits in every project. */
   habits: Habit[];
+  /** Log topics in every project. */
+  topics: LogTopic[];
   /** Brands in every project. */
   brands: Brand[];
 }
@@ -488,6 +502,7 @@ export function ProjectRoute({
   portfolios,
   accounts,
   habits,
+  topics,
   brands,
   ...props
 }: ProjectRouteProps) {
@@ -496,6 +511,7 @@ export function ProjectRoute({
   const projectPortfolios = ofProject(portfolios, project);
   const projectAccounts = ofProject(accounts, project);
   const projectHabits = ofProject(habits, project);
+  const projectTopics = ofProject(topics, project);
   const projectBrands = ofProject(brands, project);
   const segment = props.tableSlug?.toLowerCase();
   if (!project) {
@@ -558,6 +574,20 @@ export function ProjectRoute({
       <Redirect replace to={projectPath(project)} />
     );
   }
+  if (segment === LOG_SEGMENT) {
+    // Only personal projects keep a log.
+    return project.personalFor ? (
+      <LogPage
+        key={project._id}
+        loaded={props.topicsLoaded}
+        project={project}
+        projects={projects}
+        topics={projectTopics}
+      />
+    ) : (
+      <Redirect replace to={projectPath(project)} />
+    );
+  }
   if (segment === BRANDS_SEGMENT) {
     return (
       <BrandsView
@@ -598,6 +628,7 @@ export function ProjectRoute({
       habits={projectHabits}
       key={project._id}
       portfolios={projectPortfolios}
+      topics={projectTopics}
       project={project}
       projects={projects}
       {...props}

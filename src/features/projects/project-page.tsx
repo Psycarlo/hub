@@ -32,11 +32,16 @@ import { AccountGrid } from "@/features/finance/account-card";
 import { AccountDialog } from "@/features/finance/account-dialog";
 import { HabitGrid } from "@/features/habits/habit-card";
 import { HabitDialog } from "@/features/habits/habit-dialog";
+import { DayComposer } from "@/features/log/day-composer";
+import { logPath } from "@/features/log/log-context";
+import { TopicDialog } from "@/features/log/topic-dialog";
 import { PortfolioGrid } from "@/features/portfolios/portfolio-card";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import type { ProjectItem } from "@/features/projects/new-in-project";
 import { NewInProject } from "@/features/projects/new-in-project";
 import { ProjectDialog } from "@/features/projects/project-dialog";
+import { useLogDays } from "@/hooks/use-log";
+import { useToday } from "@/hooks/use-today";
 import { run } from "@/lib/actions";
 import type { Brand } from "@/lib/brands";
 import { convex } from "@/lib/convex";
@@ -47,6 +52,8 @@ import type { DriveFile } from "@/lib/drive";
 import { uploadFiles } from "@/lib/drive-upload";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
+import type { LogTopic } from "@/lib/log";
+import { addDays } from "@/lib/log";
 import type { Board } from "@/lib/model";
 import { SWATCH_COLORS } from "@/lib/palette";
 import type { Portfolio } from "@/lib/portfolio";
@@ -181,6 +188,9 @@ interface ProjectPageProps {
   /** The project's habits; only personal projects have them. */
   habits: Habit[];
   habitsLoaded: boolean;
+  /** The project's log topics; only personal projects have them. */
+  topics: LogTopic[];
+  topicsLoaded: boolean;
   /** The project's brands. */
   brands: Brand[];
   brandsLoaded: boolean;
@@ -275,6 +285,48 @@ function ProjectBoards({
   );
 }
 
+/** Days back the log looks, to offer what was worked on lately first. */
+const RECENT_DAYS = 30;
+
+/** Today in the project's log, filled in right here; past days are on its page. */
+function ProjectLog({
+  project,
+  projects,
+  topics,
+  onNew,
+}: {
+  project: Project;
+  projects: Project[];
+  topics: LogTopic[];
+  onNew: () => void;
+}) {
+  const today = useToday();
+  const days = useLogDays(project, addDays(today, -RECENT_DAYS), topics);
+  return (
+    <Section
+      action={
+        <Link
+          className={buttonVariants({ variant: "outline" })}
+          href={logPath(project)}
+        >
+          Open log
+        </Link>
+      }
+      title="Log"
+    >
+      <DayComposer
+        date={today}
+        days={days}
+        editable={canEdit(project)}
+        onNewTopic={onNew}
+        projects={projects}
+        today={today}
+        topics={topics}
+      />
+    </Section>
+  );
+}
+
 /** Who and what the project is, and its settings for whoever manages it. */
 function ProjectHeader({
   project,
@@ -332,6 +384,8 @@ function ProjectSections({
   portfolios,
   accounts,
   habits,
+  topics,
+  projects,
   brands,
   files,
   onNew,
@@ -347,6 +401,9 @@ function ProjectSections({
   portfolios: Portfolio[];
   accounts: Account[];
   habits: Habit[];
+  topics: LogTopic[];
+  /** The projects the person can see, for log topics standing for one. */
+  projects: Project[];
   brands: Brand[];
   /** Files lately opened or added in the Drive. */
   files: DriveFile[];
@@ -370,6 +427,14 @@ function ProjectSections({
         >
           <HabitGrid habits={habits} project={project} />
         </Section>
+      )}
+      {topics.length > 0 && (
+        <ProjectLog
+          onNew={() => onNew("log")}
+          project={project}
+          projects={projects}
+          topics={topics}
+        />
       )}
       {tables.length > 0 && (
         <ProjectTables
@@ -474,14 +539,14 @@ function ProjectSections({
   );
 }
 
-/** Where a project's boards, tables, docs, brands, portfolios, accounts and habits go, before it has any. */
+/** Where a project's boards, tables, docs, brands, portfolios, accounts, habits and log go, before it has any. */
 function NoContent({
   editable,
   personal,
   onNew,
 }: {
   editable: boolean;
-  /** A personal project, which can keep habits too. */
+  /** A personal project, which can keep habits and a log too. */
   personal: boolean;
   onNew: (kind: ProjectItem) => void;
 }) {
@@ -489,7 +554,7 @@ function NoContent({
     "Boards, tables, docs, files, brands, portfolios and accounts in this project show up here.";
   if (editable && personal) {
     description =
-      "Build habits, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
+      "Build habits, log what you work on, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
   } else if (editable) {
     description =
       "Plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
@@ -536,6 +601,8 @@ export function ProjectPage({
   accountsLoaded,
   habits,
   habitsLoaded,
+  topics,
+  topicsLoaded,
   brands,
   brandsLoaded,
   content,
@@ -579,6 +646,7 @@ export function ProjectPage({
     portfolios,
     accounts,
     habits,
+    topics,
     brands,
     files,
   ].some((items) => items.length > 0);
@@ -589,6 +657,7 @@ export function ProjectPage({
     portfoliosLoaded,
     accountsLoaded,
     habitsLoaded,
+    topicsLoaded,
     brandsLoaded,
     recent !== undefined,
   ].every(Boolean);
@@ -606,7 +675,9 @@ export function ProjectPage({
       pages={docs.roots}
       portfolios={portfolios}
       project={project}
+      projects={projects}
       tables={projectTables}
+      topics={topics}
     />
   );
   if (!(hasAny || allLoaded)) {
@@ -683,7 +754,14 @@ export function ProjectPage({
       <AccountDialog {...dialogProps("account")} project={project} />
       <BrandDialog {...dialogProps("brand")} project={project} />
       {project.personalFor && (
-        <HabitDialog {...dialogProps("habit")} project={project} />
+        <>
+          <HabitDialog {...dialogProps("habit")} project={project} />
+          <TopicDialog
+            {...dialogProps("log")}
+            project={project}
+            topics={topics}
+          />
+        </>
       )}
     </>
   );

@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import { format, parseISO } from "date-fns";
-import type { CSSProperties } from "react";
-import { useRef } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { Fragment, useRef } from "react";
 
 import type { HabitCounts } from "@/hooks/use-habits";
 import { useWidth } from "@/hooks/use-width";
@@ -31,6 +31,18 @@ function mondayOf(date: string): string {
   return addDays(date, -((weekdayOf(date) + 6) % 7));
 }
 
+/** The first day a grid of `weeks` up to the week of `today` shows. */
+export function gridStart(today: string, weeks = 53): string {
+  return addDays(mondayOf(today), -7 * (weeks - 1));
+}
+
+/** A day's square, shaped and eased alike in every grid. */
+export const DAY_SQUARE =
+  "aspect-square rounded-[22%] transition-[background-color,opacity] duration-200 ease-out";
+
+/** Rings today's square. */
+export const TODAY_RING = "outline-foreground/35 outline-1 outline-offset-1";
+
 /** One day's square: how much of the goal was met, and whether it was due. */
 function Day({
   habit,
@@ -56,11 +68,7 @@ function Day({
   }
   return (
     <span
-      className={cn(
-        "aspect-square rounded-[22%] transition-[background-color,opacity] duration-200 ease-out",
-        tone,
-        date === today && "outline-foreground/35 outline-1 outline-offset-1"
-      )}
+      className={cn(DAY_SQUARE, tone, date === today && TODAY_RING)}
       // A day partly done shows lighter, deepening as it nears the goal.
       style={
         share > 0 && share < 1
@@ -71,9 +79,7 @@ function Day({
   );
 }
 
-interface HeatmapProps {
-  habit: Habit;
-  counts: HabitCounts;
+interface DayGridProps {
   today: string;
   /** The most weeks it shows; fewer when they won't fit at `minCell`. */
   maxWeeks?: number;
@@ -81,38 +87,41 @@ interface HeatmapProps {
   minCell?: number;
   /** Month names above, and weekday names beside. */
   labeled?: boolean;
+  /** Days are buttons; otherwise the grid is a picture, read some other way. */
+  interactive?: boolean;
   className?: string;
+  /** A day's square, placed by `style`. */
+  renderDay: (date: string, style: CSSProperties) => ReactNode;
 }
 
 /**
- * The habit's days as weeks side by side, Monday on top, up to the week of
- * today. As many weeks as fit are shown, their squares stretched to fill.
+ * Days as weeks side by side, Monday on top, up to the week of today. As many
+ * weeks as fit are shown, their squares stretched to fill.
  */
-export function Heatmap({
-  habit,
-  counts,
+export function DayGrid({
   today,
   maxWeeks = 53,
   minCell = 10,
   labeled = false,
+  interactive = false,
   className,
-}: HeatmapProps) {
+  renderDay,
+}: DayGridProps) {
   const ref = useRef<HTMLDivElement>(null);
   const width = useWidth(ref) - (labeled ? LABEL_WIDTH + GAP : 0);
   const weeks = Math.max(
     1,
     Math.min(maxWeeks, Math.floor((width + GAP) / (minCell + GAP)))
   );
-  const first = addDays(mondayOf(today), -7 * (weeks - 1));
+  const first = gridStart(today, weeks);
   const columns = Array.from({ length: weeks }, (_, week) =>
     addDays(first, week * 7)
   );
   // Labels take the first row and column, the days start after them.
   const offset = labeled ? 2 : 1;
-  // A picture of the days; the habit's check and calendar are how they're read and changed.
   return (
     <div
-      aria-hidden
+      aria-hidden={!interactive}
       className={cn("grid w-full", className)}
       ref={ref}
       style={{
@@ -131,6 +140,7 @@ export function Heatmap({
             starts &&
             (week > 0 || room) && (
               <span
+                aria-hidden
                 className="text-muted-foreground overflow-visible text-[10px] leading-4 whitespace-nowrap"
                 key={monday}
                 style={{ gridColumn: week + offset, gridRow: 1 }}
@@ -143,6 +153,7 @@ export function Heatmap({
       {labeled &&
         [...NAMED_ROWS].map(([row, name]) => (
           <span
+            aria-hidden
             className="text-muted-foreground self-center text-[10px] leading-none"
             key={name}
             style={{ gridColumn: 1, gridRow: row + offset }}
@@ -154,17 +165,40 @@ export function Heatmap({
         Array.from({ length: 7 }, (_, row) => {
           const date = addDays(monday, row);
           return (
-            <Day
-              count={counts.get(habit._id, date)}
-              date={date}
-              habit={habit}
-              key={date}
-              style={{ gridColumn: week + offset, gridRow: row + offset }}
-              today={today}
-            />
+            <Fragment key={date}>
+              {renderDay(date, {
+                gridColumn: week + offset,
+                gridRow: row + offset,
+              })}
+            </Fragment>
           );
         })
       )}
     </div>
+  );
+}
+
+interface HeatmapProps extends Omit<DayGridProps, "interactive" | "renderDay"> {
+  habit: Habit;
+  counts: HabitCounts;
+}
+
+/** The habit's days as a grid of weeks, up to the week of today. */
+export function Heatmap({ habit, counts, today, ...grid }: HeatmapProps) {
+  // A picture of the days; the habit's check and calendar are how they're read and changed.
+  return (
+    <DayGrid
+      {...grid}
+      renderDay={(date, style) => (
+        <Day
+          count={counts.get(habit._id, date)}
+          date={date}
+          habit={habit}
+          style={style}
+          today={today}
+        />
+      )}
+      today={today}
+    />
   );
 }

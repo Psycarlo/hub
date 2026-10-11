@@ -2,6 +2,7 @@ import { BITCOIN_PRICE } from "@/features/widgets/bitcoin-widget";
 import { CLOCK } from "@/features/widgets/clock-widget";
 import { FINANCE } from "@/features/widgets/finance-widget";
 import { HABITS } from "@/features/widgets/habits-widget";
+import { LOG } from "@/features/widgets/log-widget";
 import { MY_TASKS } from "@/features/widgets/tasks-widget";
 import type { WidgetKind } from "@/features/widgets/widget-kind";
 import type { SettingsOf, WidgetSettings, WidgetType } from "@/lib/widgets";
@@ -12,6 +13,7 @@ export const WIDGET_KINDS: { [T in WidgetType]: WidgetKind<SettingsOf<T>> } = {
   clock: CLOCK,
   finance: FINANCE,
   habits: HABITS,
+  log: LOG,
   myTasks: MY_TASKS,
 };
 

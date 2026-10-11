@@ -28,6 +28,9 @@ export const FINANCE_DEFAULTS = { type: "finance" } as const;
 /** A new Habits widget, listing every habit in the person's own project. */
 export const HABITS_DEFAULTS = { type: "habits" } as const;
 
+/** A new Worked on widget, showing today in the person's own log. */
+export const LOG_DEFAULTS = { type: "log" } as const;
+
 /** How a clock shows the time: in numerals, or with hands on a face. */
 export const CLOCK_LOOKS = ["digital", "analog"] as const;
 

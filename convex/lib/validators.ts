@@ -23,6 +23,7 @@ import {
 } from "../shared/crm";
 import { CARD_NETWORKS, ENTRY_KINDS } from "../shared/finance";
 import { HABIT_ICONS } from "../shared/habits";
+import { TOPIC_ICONS } from "../shared/log";
 import {
   APP_ROLES,
   PRIORITIES,
@@ -74,6 +75,7 @@ export const vTransactionKind = oneOf(TRANSACTION_KINDS);
 export const vEntryKind = oneOf(ENTRY_KINDS);
 export const vCardNetwork = oneOf(CARD_NETWORKS);
 export const vHabitIcon = oneOf(HABIT_ICONS);
+export const vTopicIcon = oneOf(TOPIC_ICONS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vClockLook = oneOf(CLOCK_LOOKS);
@@ -272,6 +274,7 @@ export const vWidgetSettings = v.union(
     habitId: v.optional(v.id("habits")),
     type: v.literal("habits"),
   }),
+  v.object({ type: v.literal("log") }),
   v.object({
     /** Missing follows the person's locale. */
     hours: v.optional(vHourCycle),

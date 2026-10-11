@@ -338,6 +338,18 @@ export async function requireHabit(
   return { ...(await requireProject(ctx, habit.projectId, need)), habit };
 }
 
+export async function requireTopic(
+  ctx: QueryCtx,
+  topicId: Id<"logTopics">,
+  need: Need
+): Promise<ProjectAccess & { topic: Doc<"logTopics"> }> {
+  const topic = await ctx.db.get(topicId);
+  if (!topic) {
+    throw new ConvexError("This topic doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, topic.projectId, need)), topic };
+}
+
 export async function requireBrand(
   ctx: QueryCtx,
   brandId: Id<"brands">,

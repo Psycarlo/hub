@@ -1,8 +1,8 @@
 /**
  * What's left once a project, board, card, table, page, portfolio, finance
- * account, habit, brand, or Drive file or folder is deleted. The parent
- * goes first, so nobody sees it anymore; the rest is cleared here in batches
- * that stay well within a mutation's limits.
+ * account, habit, log topic, brand, or Drive file or folder is deleted. The
+ * parent goes first, so nobody sees it anymore; the rest is cleared here in
+ * batches that stay well within a mutation's limits.
  */
 import { v } from "convex/values";
 
@@ -382,6 +382,22 @@ export const habit = internalMutation({
   },
 });
 
+export const logTopic = internalMutation({
+  args: { topicId: v.id("logTopics") },
+  handler: async (ctx, { topicId }) => {
+    const entries = await ctx.db
+      .query("logEntries")
+      .withIndex("by_topic_and_date", (q) => q.eq("topicId", topicId))
+      .take(BATCH);
+    for (const entry of entries) {
+      await ctx.db.delete(entry._id);
+    }
+    if (entries.length === BATCH) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.logTopic, { topicId });
+    }
+  },
+});
+
 export const brand = internalMutation({
   args: { brandId: v.id("brands") },
   handler: async (ctx, { brandId }) => {
@@ -466,6 +482,16 @@ export const project = internalMutation({
         habitId: item._id,
       });
     }
+    const topics = await ctx.db
+      .query("logTopics")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    for (const item of topics) {
+      await ctx.db.delete(item._id);
+      await ctx.scheduler.runAfter(0, internal.cleanup.logTopic, {
+        topicId: item._id,
+      });
+    }
     const brands = await ctx.db
       .query("brands")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -518,6 +544,7 @@ export const project = internalMutation({
       portfolios,
       accounts,
       habits,
+      topics,
       brands,
       files,
       folders,

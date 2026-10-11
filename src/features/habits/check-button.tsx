@@ -13,7 +13,7 @@ import type { Color } from "@/lib/palette";
 import { SWATCH_COLORS, TEXT_COLORS } from "@/lib/palette";
 
 /** What reads on each swatch: white, but dark on yellow, which is too light for it. */
-const ON_SWATCH: Record<Color, string> = {
+export const ON_SWATCH: Record<Color, string> = {
   blue: "text-white",
   gray: "text-white",
   green: "text-white",

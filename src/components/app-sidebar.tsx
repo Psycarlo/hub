@@ -5,6 +5,7 @@ import {
   ChevronRightIcon,
   HouseIcon,
   InboxIcon,
+  NotebookPenIcon,
   PlusIcon,
   ShieldIcon,
   SquareKanbanIcon,
@@ -54,6 +55,7 @@ import { accountPath } from "@/features/finance/finance-context";
 import { FocusButton } from "@/features/focus/focus-mode";
 import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
+import { logPath } from "@/features/log/log-context";
 import { OFFICE_PATH, OfficeItem } from "@/features/office/office-item";
 import { portfolioPath } from "@/features/portfolios/portfolio-context";
 import { useMe } from "@/hooks/use-users";
@@ -66,6 +68,7 @@ import type { DriveTree } from "@/lib/drive";
 import { EMPTY_TREE } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
+import type { LogTopic } from "@/lib/log";
 import type { Board } from "@/lib/model";
 import type { Portfolio } from "@/lib/portfolio";
 import type { Project } from "@/lib/project";
@@ -138,6 +141,8 @@ interface ProjectItemProps {
   brands: Brand[];
   /** Whether the project keeps habits, which share one page. */
   hasHabits: boolean;
+  /** Whether the project keeps a log, which has one page. */
+  hasLog: boolean;
   openBoard?: Board;
   location: string;
   open: boolean;
@@ -156,6 +161,7 @@ function ProjectItem({
   accounts,
   brands,
   hasHabits,
+  hasLog,
   openBoard,
   location,
   open,
@@ -164,6 +170,7 @@ function ProjectItem({
 }: ProjectItemProps) {
   const base = projectPath(project);
   const habits = habitsPath(project);
+  const log = logPath(project);
   return (
     <Collapsible
       onOpenChange={onOpenChange}
@@ -203,6 +210,17 @@ function ProjectItem({
               >
                 <CalendarCheckIcon />
                 <span>Habits</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          )}
+          {hasLog && (
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                isActive={location === log}
+                render={<NavLink href={log} />}
+              >
+                <NotebookPenIcon />
+                <span>Log</span>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
           )}
@@ -313,6 +331,8 @@ interface AppSidebarProps {
   habits: Habit[];
   /** Brands in every project. */
   brands: Brand[];
+  /** Log topics in every project. */
+  topics: LogTopic[];
   /** Unread notifications in the inbox. */
   unread: number;
   onNewProject: () => void;
@@ -328,6 +348,7 @@ export function AppSidebar({
   accounts,
   habits,
   brands,
+  topics,
   unread,
   onNewProject,
 }: AppSidebarProps) {
@@ -367,6 +388,7 @@ export function AppSidebar({
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       drive={drive.get(project._id) ?? EMPTY_TREE}
       hasHabits={habits.some((habit) => habit.projectId === project._id)}
+      hasLog={topics.some((topic) => topic.projectId === project._id)}
       key={project._id}
       location={location}
       onOpenChange={(open) => setOpened({ ...opened, [project._id]: open })}

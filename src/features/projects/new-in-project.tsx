@@ -4,6 +4,7 @@ import {
   CalendarCheckIcon,
   FileTextIcon,
   HardDriveUploadIcon,
+  NotebookPenIcon,
   PlusIcon,
   SquareKanbanIcon,
   SwatchBookIcon,
@@ -14,7 +15,7 @@ import {
 import { SplitButton } from "@/components/split-button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
-/** What a project can hold. Habits are kept only in personal projects. */
+/** What a project can hold. Habits and the log are kept only in personal projects. */
 export type ProjectItem =
   | "board"
   | "table"
@@ -23,7 +24,8 @@ export type ProjectItem =
   | "portfolio"
   | "account"
   | "brand"
-  | "habit";
+  | "habit"
+  | "log";
 
 const ITEMS: {
   kind: ProjectItem;
@@ -81,6 +83,13 @@ const ITEMS: {
     label: "Habit",
     personalOnly: true,
   },
+  {
+    description: "Log what you worked on each day, with a tap.",
+    icon: NotebookPenIcon,
+    kind: "log",
+    label: "Log topic",
+    personalOnly: true,
+  },
 ];
 
 /** Starts a board, or from its menu anything else a project holds. */
@@ -91,7 +100,7 @@ export function NewInProject({
   variant,
 }: {
   onNew: (kind: ProjectItem) => void;
-  /** A personal project, which offers habits too. */
+  /** A personal project, which offers habits and the log too. */
   personal?: boolean;
   size?: "default" | "sm";
   variant?: "default" | "outline";

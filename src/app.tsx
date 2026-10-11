@@ -56,6 +56,7 @@ import type { DriveFolder } from "@/lib/drive";
 import { driveByProject } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
 import type { Habit } from "@/lib/habits";
+import type { LogTopic } from "@/lib/log";
 import type { Board } from "@/lib/model";
 import { startNotifications } from "@/lib/notify";
 import type { Portfolio } from "@/lib/portfolio";
@@ -77,6 +78,7 @@ const NO_FOLDERS: DriveFolder[] = [];
 const NO_PORTFOLIOS: Portfolio[] = [];
 const NO_ACCOUNTS: Account[] = [];
 const NO_HABITS: Habit[] = [];
+const NO_TOPICS: LogTopic[] = [];
 const NO_BRANDS: Brand[] = [];
 
 // Projects carry the CRM and its table library, which board-only visits never need.
@@ -133,6 +135,7 @@ function Workspace() {
   const portfolioList = useQuery(api.portfolios.list);
   const accountList = useQuery(api.finance.accounts);
   const habitList = useQuery(api.habits.list);
+  const topicList = useQuery(api.log.topics);
   const brandList = useQuery(api.brands.list);
   const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
@@ -148,6 +151,7 @@ function Workspace() {
   const portfolios = portfolioList ?? NO_PORTFOLIOS;
   const accounts = accountList ?? NO_ACCOUNTS;
   const habits = habitList ?? NO_HABITS;
+  const topics = topicList ?? NO_TOPICS;
   const brands = brandList ?? NO_BRANDS;
   const [creatingProject, setCreatingProject] = useState(false);
   const focus = useFocusState();
@@ -170,6 +174,7 @@ function Workspace() {
             portfolios={portfolios}
             projects={projects}
             tables={tables}
+            topics={topics}
             unread={inbox.unread}
           />
           <SidebarInset>
@@ -221,6 +226,8 @@ function Workspace() {
                         slug={route.project}
                         tableSlug={route.table}
                         tables={tables}
+                        topics={topics}
+                        topicsLoaded={topicList !== undefined}
                       />
                     </Suspense>
                   )}

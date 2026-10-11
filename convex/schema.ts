@@ -31,6 +31,7 @@ import {
   vStatus,
   vTableIcon,
   vTile,
+  vTopicIcon,
   vTransactionKind,
   vValues,
   vWidgetSettings,
@@ -755,6 +756,31 @@ export default defineSchema({
     projectId: v.id("projects"),
   })
     .index("by_habit_and_date", ["habitId", "date"])
+    .index("by_project_and_date", ["projectId", "date"]),
+
+  /** Something worked on, logged day by day: a name of its own, or one of the hub's projects. */
+  logTopics: defineTable({
+    /** Kept, with its days, but no longer offered to log. */
+    archived: v.optional(v.boolean()),
+    color: vColor,
+    createdBy: v.id("users"),
+    icon: vTopicIcon,
+    /** A project of the hub it stands for, shown with its avatar and linked to. */
+    linkedProjectId: v.optional(v.id("projects")),
+    projectId: v.id("projects"),
+    title: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  /** A topic worked on during a day. A day it wasn't has no row. */
+  logEntries: defineTable({
+    /** `YYYY-MM-DD`. */
+    date: v.string(),
+    /** A line on what was done; empty when there's none. */
+    note: v.string(),
+    projectId: v.id("projects"),
+    topicId: v.id("logTopics"),
+  })
+    .index("by_topic_and_date", ["topicId", "date"])
     .index("by_project_and_date", ["projectId", "date"]),
 
   /** A brand a project keeps: its logos, colors, type, banners and links. */
