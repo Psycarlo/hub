@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { addDays } from "@/lib/habits";
 import type { Color } from "@/lib/palette";
 import type { Project } from "@/lib/project";
+import { canEdit, canManage } from "@/lib/project";
 
 export { addDays, isDay } from "@convex/shared/habits";
 export {
@@ -25,6 +26,26 @@ export function linkedProject(
   return topic.linkedProjectId
     ? projects.find((project) => project._id === topic.linkedProjectId)
     : undefined;
+}
+
+/** The hub's projects no topic stands for yet, archived ones included. */
+export function unlinkedProjects(
+  projects: readonly Project[],
+  topics: readonly Pick<LogTopic, "linkedProjectId">[]
+): Project[] {
+  const taken = new Set(topics.map((topic) => topic.linkedProjectId));
+  return projects.filter(
+    (project) => !(project.personalFor || taken.has(project._id))
+  );
+}
+
+/** Whether the person may change the topic: whoever made it, or manages the project. */
+export function canChangeTopic(
+  project: Project,
+  topic: Pick<LogTopic, "createdBy">,
+  userId: string
+): boolean {
+  return canEdit(project) && (canManage(project) || topic.createdBy === userId);
 }
 
 /** The log's own color, where it isn't one topic's: its widget, streak and year. */

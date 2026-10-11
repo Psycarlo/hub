@@ -1,20 +1,13 @@
-import type { Color, HexColor } from "@convex/shared/palette";
+import type { Color } from "@convex/shared/palette";
 
 export type { Color, HexColor } from "@convex/shared/palette";
-export { COLORS, isHexColor, parseColor } from "@convex/shared/palette";
-
-/** Each swatch as hex, where picking a custom color starts from. */
-export const HEX_COLORS: Record<Color, HexColor> = {
-  blue: "#2b7fff",
-  gray: "#a1a1a1",
-  green: "#00c950",
-  orange: "#ff6900",
-  pink: "#f6339a",
-  purple: "#8e51ff",
-  red: "#fb2c36",
-  teal: "#00bba7",
-  yellow: "#fdc700",
-};
+export {
+  COLORS,
+  HEX_COLORS,
+  isHexColor,
+  nearestColor,
+  parseColor,
+} from "@convex/shared/palette";
 
 /** Tinted background with readable text, for option chips. */
 export const CHIP_COLORS: Record<Color, string> = {

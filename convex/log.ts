@@ -21,6 +21,7 @@ import {
   MAX_TOPIC_TITLE,
 } from "./shared/log";
 import { canManageRole } from "./shared/model";
+import { nearestColor } from "./shared/palette";
 
 /** A topic worked on during a day, as the log reads it. */
 export interface LogDay {
@@ -264,6 +265,52 @@ export const updateTopic = mutation({
         : undefined;
     }
     await ctx.db.patch(topicId, patch);
+  },
+});
+
+/**
+ * Adds a topic for each of the hub's projects given, named and colored like
+ * it; ones with a topic already, or out of sight, are passed over.
+ */
+export const addProjects = mutation({
+  args: {
+    linkedProjectIds: v.array(v.id("projects")),
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { linkedProjectIds, projectId }) => {
+    const { project, user } = await requireProject(ctx, projectId, "edit");
+    if (!project.personalFor) {
+      throw new ConvexError("The log lives in personal projects.");
+    }
+    const existing = await ctx.db
+      .query("logTopics")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(MAX_TOPICS);
+    const wanted = [...new Set(linkedProjectIds)];
+    if (existing.length + wanted.length > MAX_TOPICS) {
+      throw new ConvexError(`A log can have up to ${MAX_TOPICS} topics.`);
+    }
+    const taken = new Set<string>(
+      existing.flatMap((topic) => topic.linkedProjectId ?? [])
+    );
+    let added = 0;
+    for (const linkedProjectId of wanted) {
+      const access = taken.has(linkedProjectId)
+        ? null
+        : await ifVisible(requireProject(ctx, linkedProjectId, "view"));
+      if (access && !access.project.personalFor) {
+        await ctx.db.insert("logTopics", {
+          color: nearestColor(access.project.color),
+          createdBy: user._id,
+          icon: "folder",
+          linkedProjectId,
+          projectId,
+          title: cleanTitle(access.project.title),
+        });
+        added += 1;
+      }
+    }
+    return added;
   },
 });
 

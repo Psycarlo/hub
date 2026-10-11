@@ -35,6 +35,7 @@ import { HabitDialog } from "@/features/habits/habit-dialog";
 import { DayComposer } from "@/features/log/day-composer";
 import { logPath } from "@/features/log/log-context";
 import { TopicDialog } from "@/features/log/topic-dialog";
+import { TopicsDialog } from "@/features/log/topics-dialog";
 import { PortfolioGrid } from "@/features/portfolios/portfolio-card";
 import { PortfolioDialog } from "@/features/portfolios/portfolio-dialog";
 import type { ProjectItem } from "@/features/projects/new-in-project";
@@ -294,23 +295,32 @@ function ProjectLog({
   projects,
   topics,
   onNew,
+  onManage,
 }: {
   project: Project;
   projects: Project[];
   topics: LogTopic[];
   onNew: () => void;
+  /** Opens every topic, to change or add. */
+  onManage: () => void;
 }) {
   const today = useToday();
   const days = useLogDays(project, addDays(today, -RECENT_DAYS), topics);
   return (
     <Section
       action={
-        <Link
-          className={buttonVariants({ variant: "outline" })}
-          href={logPath(project)}
-        >
-          Open log
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button onClick={onManage} variant="ghost">
+            <Settings2Icon />
+            Topics
+          </Button>
+          <Link
+            className={buttonVariants({ variant: "outline" })}
+            href={logPath(project)}
+          >
+            Open log
+          </Link>
+        </div>
       }
       title="Log"
     >
@@ -389,6 +399,7 @@ function ProjectSections({
   brands,
   files,
   onNew,
+  onManageTopics,
 }: {
   project: Project;
   /** The project's tables, shown as placeholders until `content` arrives. */
@@ -408,6 +419,7 @@ function ProjectSections({
   /** Files lately opened or added in the Drive. */
   files: DriveFile[];
   onNew: (kind: ProjectItem) => void;
+  onManageTopics: () => void;
 }) {
   const editable = canEdit(project);
   return (
@@ -430,6 +442,7 @@ function ProjectSections({
       )}
       {topics.length > 0 && (
         <ProjectLog
+          onManage={onManageTopics}
           onNew={() => onNew("log")}
           project={project}
           projects={projects}
@@ -569,7 +582,7 @@ function NoContent({
 }
 
 /** What the page can open: the project's settings, or a new thing in it. */
-type Dialog = "settings" | Exclude<ProjectItem, "page" | "files">;
+type Dialog = "settings" | "topics" | Exclude<ProjectItem, "page" | "files">;
 
 const NO_FILES: DriveFile[] = [];
 
@@ -671,6 +684,7 @@ export function ProjectPage({
       habits={habits}
       content={loaded ? content : undefined}
       members={members}
+      onManageTopics={() => setDialog("topics")}
       onNew={onNew}
       pages={docs.roots}
       portfolios={portfolios}
@@ -759,6 +773,12 @@ export function ProjectPage({
           <TopicDialog
             {...dialogProps("log")}
             project={project}
+            topics={topics}
+          />
+          <TopicsDialog
+            {...dialogProps("topics")}
+            project={project}
+            projects={projects}
             topics={topics}
           />
         </>

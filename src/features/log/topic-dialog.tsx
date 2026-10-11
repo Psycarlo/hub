@@ -48,7 +48,7 @@ import type { LogTopic, TopicIcon } from "@/lib/log";
 import { MAX_TOPIC_TITLE, TOPIC_ICONS } from "@/lib/log";
 import type { TopicDraft } from "@/lib/log-actions";
 import { createTopic, deleteTopic, updateTopic } from "@/lib/log-actions";
-import { isHexColor } from "@/lib/palette";
+import { nearestColor } from "@/lib/palette";
 import type { Project } from "@/lib/project";
 
 const NO_PROJECTS: Project[] = [];
@@ -166,6 +166,39 @@ function ProjectField({
   );
 }
 
+/** Asks before a topic goes, with every day logged on it. */
+function DeleteTopicContent({
+  topic,
+  onDeleted,
+}: {
+  topic: LogTopic;
+  onDeleted?: () => void;
+}) {
+  return (
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Delete {topic.title}?</AlertDialogTitle>
+        <AlertDialogDescription>
+          Every day logged on it disappears, notes included. To keep them,
+          archive it instead.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Cancel</AlertDialogCancel>
+        <AlertDialogAction
+          onClick={() => {
+            deleteTopic(topic);
+            onDeleted?.();
+          }}
+          variant="destructive"
+        >
+          Delete topic
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  );
+}
+
 function DeleteTopic({
   topic,
   onDeleted,
@@ -182,27 +215,24 @@ function DeleteTopic({
       >
         Delete topic
       </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete {topic.title}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Every day logged on it disappears, notes included. To keep them,
-            archive it instead.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              deleteTopic(topic);
-              onDeleted();
-            }}
-            variant="destructive"
-          >
-            Delete topic
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
+      <DeleteTopicContent onDeleted={onDeleted} topic={topic} />
+    </AlertDialog>
+  );
+}
+
+/** The ask before deleting a topic, opened from elsewhere, like a menu. */
+export function DeleteTopicAlert({
+  topic,
+  open,
+  onOpenChange,
+}: {
+  topic: LogTopic;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
+      <DeleteTopicContent topic={topic} />
     </AlertDialog>
   );
 }
@@ -260,7 +290,7 @@ function TopicForm({
     change({
       linkedProjectId: picked?._id,
       ...(picked && named ? { title: picked.title } : {}),
-      ...(picked && !isHexColor(picked.color) ? { color: picked.color } : {}),
+      ...(picked ? { color: nearestColor(picked.color) } : {}),
     });
   };
 

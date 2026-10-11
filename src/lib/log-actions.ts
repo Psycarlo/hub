@@ -7,7 +7,9 @@ import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import type { LogDay, LogTopic, TopicIcon } from "@/lib/log";
 import type { Color } from "@/lib/palette";
+import type { Project } from "@/lib/project";
 import { playSound } from "@/lib/sounds";
+import { plural } from "@/lib/utils";
 
 export interface TopicDraft {
   title: string;
@@ -58,6 +60,24 @@ function patchDays(
 /** Starts a topic in the person's log; resolves with its id. */
 export function createTopic(projectId: Id<"projects">, draft: TopicDraft) {
   return run(convex.mutation(api.log.createTopic, { projectId, ...draft }));
+}
+
+/** Adds the hub's projects to the person's log, a topic standing for each. */
+export async function addProjects(
+  projectId: Id<"projects">,
+  projects: readonly Pick<Project, "_id">[]
+) {
+  const added = await run(
+    convex.mutation(api.log.addProjects, {
+      linkedProjectIds: projects.map((project) => project._id),
+      projectId,
+    })
+  );
+  if (added) {
+    playSound("complete");
+    toast(`${plural(added, "project")} added to your log`);
+  }
+  return added;
 }
 
 export function updateTopic(topic: LogTopic, changes: TopicChanges) {

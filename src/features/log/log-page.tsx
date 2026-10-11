@@ -15,6 +15,7 @@ import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { StreakChip } from "@/features/habits/habit-card";
 import {
   DAY_SQUARE,
@@ -22,20 +23,32 @@ import {
   TODAY_RING,
   gridStart,
 } from "@/features/habits/heatmap";
+import { ProjectsNudge, useAddProjects } from "@/features/log/add-projects";
 import { DayComposer } from "@/features/log/day-composer";
 import { TopicDialog } from "@/features/log/topic-dialog";
 import { TopicBadge } from "@/features/log/topic-icon";
+import { TopicsDialog } from "@/features/log/topics-dialog";
 import type { LogDays } from "@/hooks/use-log";
 import { useLogDays, useLogOverview } from "@/hooks/use-log";
 import { useToday } from "@/hooks/use-today";
 import { useMe } from "@/hooks/use-users";
 import type { LogTopic } from "@/lib/log";
-import { LOG_COLOR, addDays, dayLabel, isDay, linkedProject } from "@/lib/log";
+import {
+  LOG_COLOR,
+  addDays,
+  canChangeTopic,
+  dayLabel,
+  isDay,
+  linkedProject,
+  unlinkedProjects,
+} from "@/lib/log";
 import type { Color } from "@/lib/palette";
 import { SWATCH_COLORS } from "@/lib/palette";
 import type { Project } from "@/lib/project";
-import { canEdit, canManage, projectPath } from "@/lib/project";
+import { canEdit, projectPath } from "@/lib/project";
 import { plural } from "@/lib/utils";
+
+const NO_TOPICS: LogTopic[] = [];
 
 /** Weeks the year's grid reaches back, to the same week a year ago. */
 const YEAR_WEEKS = 53;
@@ -368,14 +381,24 @@ function YearCard({
   );
 }
 
-/** A log with no topics yet, and the way to add the first. */
+/** A log with no topics yet: the hub's projects to add at once, or a first topic of its own. */
 function NoTopics({
-  editable,
+  project,
+  projects,
   onNew,
 }: {
-  editable: boolean;
+  project: Project;
+  projects: readonly Project[];
   onNew: () => void;
 }) {
+  const editable = canEdit(project);
+  const { add, adding } = useAddProjects(project, NO_TOPICS);
+  const unlinked = unlinkedProjects(projects, NO_TOPICS);
+  const [first] = unlinked;
+  let addLabel = `Add your ${unlinked.length} projects`;
+  if (unlinked.length === 1 && first) {
+    addLabel = `Add ${first.title}`;
+  }
   return (
     <Empty>
       <NotebookPenIcon
@@ -386,14 +409,22 @@ function NoTopics({
       <EmptyTitle>Nothing logged yet</EmptyTitle>
       <EmptyDescription>
         {editable
-          ? "Add what you work on, a project of the hub or anything else, then log it with a tap each day."
+          ? "Add your projects, or anything else you work on, then log it with a tap each day."
           : "What’s worked on shows up here, day by day."}
       </EmptyDescription>
       {editable && (
-        <Button onClick={onNew}>
-          <PlusIcon />
-          Add what you work on
-        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          {first && (
+            <Button disabled={adding} onClick={() => add(unlinked)}>
+              {adding && <Spinner />}
+              {addLabel}
+            </Button>
+          )}
+          <Button onClick={onNew} variant={first ? "outline" : "default"}>
+            <PlusIcon />
+            {first ? "New topic" : "Add what you work on"}
+          </Button>
+        </div>
       )}
     </Empty>
   );
@@ -402,11 +433,6 @@ function NoTopics({
 /** A day from the link, when it's one that's been. */
 function parseDayParam(value: string | null, today: string): string {
   return value && isDay(value) && value <= today ? value : today;
-}
-
-/** Whether the person may change the topic: whoever made it, or manages the project. */
-function canChange(project: Project, topic: LogTopic, userId: string): boolean {
-  return canEdit(project) && (canManage(project) || topic.createdBy === userId);
 }
 
 /** The day and topic the link opens, and a way to open others. */
@@ -447,7 +473,11 @@ export function LogPage({
   const me = useMe();
   const today = useToday();
   const { day, topic, go } = useLogParams(topics, today);
-  const [dialog, setDialog] = useState<"new" | "settings">();
+  const [dialog, setDialog] = useState<"new" | "settings" | "topics">();
+  const dialogProps = (name: "new" | "settings" | "topics") => ({
+    onOpenChange: (open: boolean) => setDialog(open ? name : undefined),
+    open: dialog === name,
+  });
   const [shown, setShown] = useState(HISTORY_PAGE);
   // A year back at first, further as the history is read.
   const [years, setYears] = useState(1);
@@ -456,7 +486,8 @@ export function LogPage({
   const days = useLogDays(project, day < reach ? day : reach, topics);
   const overview = useLogOverview(project, today);
   const editable = canEdit(project);
-  const manageable = topic !== undefined && canChange(project, topic, me._id);
+  const manageable =
+    topic !== undefined && canChangeTopic(project, topic, me._id);
   const linked = topic && linkedProject(topic, projects);
 
   const dated = topic
@@ -482,10 +513,22 @@ export function LogPage({
     </div>
   );
   if (loaded && topics.length === 0) {
-    body = <NoTopics editable={editable} onNew={() => setDialog("new")} />;
+    body = (
+      <NoTopics
+        onNew={() => setDialog("new")}
+        project={project}
+        projects={projects}
+      />
+    );
   } else if (loaded) {
     body = (
       <>
+        <ProjectsNudge
+          onChoose={() => setDialog("topics")}
+          project={project}
+          projects={projects}
+          topics={topics}
+        />
         <YearCard
           days={days}
           inYear={inYear}
@@ -548,31 +591,35 @@ export function LogPage({
           },
         ]}
       >
-        {editable && topics.length > 0 && (
-          <Button onClick={() => setDialog("new")} size="sm" variant="outline">
-            <PlusIcon />
-            New topic
+        {topics.length > 0 && (
+          <Button
+            onClick={() => setDialog("topics")}
+            size="sm"
+            variant="outline"
+          >
+            <Settings2Icon />
+            Topics
           </Button>
         )}
       </TopBar>
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 pt-4 pb-10 sm:px-6">
         {body}
       </main>
-      <TopicDialog
-        onOpenChange={(open) => setDialog(open ? "new" : undefined)}
-        open={dialog === "new"}
-        project={project}
-        topics={topics}
-      />
+      <TopicDialog {...dialogProps("new")} project={project} topics={topics} />
       {topic && (
         <TopicDialog
-          onOpenChange={(open) => setDialog(open ? "settings" : undefined)}
-          open={dialog === "settings"}
+          {...dialogProps("settings")}
           project={project}
           topic={topic}
           topics={topics}
         />
       )}
+      <TopicsDialog
+        {...dialogProps("topics")}
+        project={project}
+        projects={projects}
+        topics={topics}
+      />
     </>
   );
 }
