@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-10-11
+
+### Added
+
+- A work log in personal projects: add topics, your own or standing for a project of the hub, and tap what you worked on each day, with a line on what was done.
+- See your year of work at a glance, for every topic or one, with how many days in a row you've logged, and fill in any past day.
+- Log today from a personal project's page, or from a "Worked on" widget on your home.
+- Subscribe to a card or Drive file to hear about it, or unsubscribe, from its activity or the inbox; makers, assignees, uploaders, commenters and anyone mentioned are subscribed already.
+- The inbox tells you when a card you follow is commented on or changes status, assignees, priority or due date, and when you're added to a project.
+- Reminders at 9 in the morning your time, the day before a card of yours is due and the day after it was.
+- Push notifications, turned on per device with the bell in the inbox; on iPhone and iPad, add the hub to the Home Screen first.
+- The installed app's icon shows how many notifications are unread.
+
+### Fixed
+
+- A new brand's name field starts empty, without "Acme" suggested.
+
 ## [0.8.0] - 2026-10-11
 
 ### Added
