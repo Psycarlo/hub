@@ -216,7 +216,6 @@ function BrandForm({
           autoFocus={!brand}
           id={`${id}-title`}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Acme"
           value={title}
         />
       </div>
