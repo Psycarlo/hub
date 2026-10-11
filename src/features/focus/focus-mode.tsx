@@ -286,6 +286,26 @@ function useCurtainDown(open: boolean, setOpen: (open: boolean) => void) {
   }, [open, setOpen]);
 }
 
+/**
+ * Stops the page under the curtain scrolling while it's all covered, which
+ * also takes away its scrollbar: the curtain stops short of it, so it'd show
+ * beside the curtain's own. Only then, so the page widening as it goes happens
+ * out of sight.
+ */
+function useScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) {
+      return;
+    }
+    const root = document.documentElement;
+    const { overflow } = root.style;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = overflow;
+    };
+  }, [locked]);
+}
+
 function isTyping(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
@@ -447,13 +467,16 @@ export function FocusMode({
   const [down, setDown] = useState(false);
   const [risen, setRisen] = useState(false);
   const [onCurtain, setOnCurtain] = useState(false);
+  const [covered, setCovered] = useState(false);
   const rect = useAnchorRect(focus.anchor, open || down);
   useMotionValueEvent(drawn, "change", (value) => {
     setDown(value > 0);
     setRisen(value >= CONTENT_AT);
     setOnCurtain(value >= BUTTON_AT);
+    setCovered(value >= 1);
   });
   useCurtainDown(open, setOpen);
+  useScrollLock(covered);
   useShortcut(toggle);
 
   useEffect(() => {
