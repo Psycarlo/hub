@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-10-11
+
+### Added
+
+- Manage every log topic in one place: edit, archive or delete each, with archived ones kept apart.
+- Add the hub's projects to your log in one tap, all at once or one by one, each named and colored like its project.
+- The log suggests projects it doesn't have yet, until you wave them off.
+
 ## [0.9.0] - 2026-10-11
 
 ### Added
