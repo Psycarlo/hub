@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-10-13
+
+### Added
+
+- A gym in personal projects: log workouts set by set, for weight and reps, reps, time or distance, with warm-up, to-failure and drop sets.
+- Each exercise shows what you did last time, fills new sets from it, and compares your volume against it.
+- Records for every exercise, from heaviest and estimated one-rep max to most reps, longest and farthest.
+- A rest timer after each set that rings as it runs out, with the workout under way kept at hand anywhere in the hub.
+- Routines: start a workout from one, save a workout as one, or do a past workout again.
+- See your consistency, weekly volume, muscles worked and latest records on the gym's overview.
+- Track your body weight in the gym's Body tab, with its trend over a month, three months, a year or all time.
+- Gym and body weight widgets for your home, to resume a workout or log today's weight.
+- Kilograms or pounds, picked when you set up your gym.
+
 ## [0.10.1] - 2026-10-11
 
 ### Fixed
