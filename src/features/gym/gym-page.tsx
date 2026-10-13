@@ -297,7 +297,7 @@ function GymSetup({ project }: { project: Project }) {
     <>
       <TopBar crumbs={crumbsOf(project)} />
       <Empty>
-        <span className="flex size-14 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-sm">
+        <span className="bg-primary text-primary-foreground flex size-14 items-center justify-center rounded-2xl shadow-sm">
           <DumbbellIcon aria-hidden className="size-7" />
         </span>
         <EmptyTitle>Your gym</EmptyTitle>

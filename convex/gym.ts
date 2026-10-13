@@ -33,6 +33,7 @@ import {
   MAX_EXERCISES,
   MAX_EXERCISE_NAME,
   MIN_BODY_WEIGHT,
+  equipmentOf,
   exerciseKey,
 } from "./shared/gym";
 
@@ -161,7 +162,7 @@ function cleanMuscles(
 
 export const createExercise = mutation({
   args: {
-    equipment: v.optional(vEquipment),
+    equipment: v.optional(v.array(vEquipment)),
     kind: vExerciseKind,
     muscles: v.array(vMuscle),
     name: v.string(),
@@ -185,7 +186,7 @@ export const createExercise = mutation({
       ...(await cleanExerciseName(ctx, args.projectId, args.name)),
       ...cleanMuscles(args.muscles, args.secondary),
       createdBy: user._id,
-      equipment: args.equipment,
+      equipment: equipmentOf(args.equipment),
       kind: args.kind,
       note: cleanNote(args.note ?? ""),
       projectId: args.projectId,
@@ -198,8 +199,7 @@ export const createExercise = mutation({
 export const updateExercise = mutation({
   args: {
     archived: v.optional(v.boolean()),
-    /** null clears it. */
-    equipment: v.optional(v.union(vEquipment, v.null())),
+    equipment: v.optional(v.array(vEquipment)),
     exerciseId: v.id("gymExercises"),
     kind: v.optional(vExerciseKind),
     muscles: v.optional(v.array(vMuscle)),
@@ -233,7 +233,7 @@ export const updateExercise = mutation({
       );
     }
     if (changes.equipment !== undefined) {
-      patch.equipment = changes.equipment ?? undefined;
+      patch.equipment = equipmentOf(changes.equipment);
     }
     if (changes.rest !== undefined) {
       patch.rest = changes.rest === null ? undefined : cleanRest(changes.rest);

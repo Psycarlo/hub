@@ -29,6 +29,7 @@ export {
   MUSCLES,
   RECORDS_OF,
   bestsOf,
+  equipmentOf,
   exerciseKey,
   isFilled,
   isWorking,
@@ -55,7 +56,10 @@ export type Workout = Doc<"gymWorkouts">;
 export type Routine = Doc<"gymRoutines">;
 export type BodyWeight = Doc<"bodyWeights">;
 
-/** The gym's own color: its widget, its year and its streak. */
+/**
+ * The gym's own color, for what it charts: its widget, its year, its streak
+ * and its bars. What's tapped or under way takes the hub's primary, as in Log.
+ */
 export const GYM_COLOR: Color = "orange";
 /** Body weight's color, kept apart from training's. */
 export const BODY_COLOR: Color = "teal";
@@ -122,6 +126,7 @@ export const MUSCLE_INFO: Record<Muscle, { label: string; region: Region }> = {
 export const EQUIPMENT_LABELS: Record<Equipment, string> = {
   band: "Band",
   barbell: "Barbell",
+  bench: "Bench",
   bike: "Bike",
   bodyweight: "Bodyweight",
   cable: "Cable",

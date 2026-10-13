@@ -812,7 +812,12 @@ export default defineSchema({
     /** Kept, with its history, but no longer offered to pick. */
     archived: v.optional(v.boolean()),
     createdBy: v.id("users"),
-    equipment: v.optional(vEquipment),
+    /**
+     * What it's done with, none for none. A single one on exercises from before
+     * they took many, until `migrations:equipmentToLists` runs; read through
+     * `equipmentOf`.
+     */
+    equipment: v.optional(v.union(vEquipment, v.array(vEquipment))),
     kind: vExerciseKind,
     /** When a set of it was last done, in ms, to offer the latest first. */
     lastAt: v.optional(v.number()),

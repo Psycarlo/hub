@@ -5,6 +5,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { settle } from "./lib/finance";
+import { equipmentOf } from "./shared/gym";
 
 const BATCH = 100;
 /** A page and its text can each run to half a megabyte: a few per batch. */
@@ -115,6 +116,33 @@ export const settleAccounts = internalMutation({
     await settle(ctx, ...page.map(({ _id }) => _id));
     if (!isDone) {
       await ctx.scheduler.runAfter(0, internal.migrations.settleAccounts, {
+        cursor: continueCursor,
+      });
+    }
+  },
+});
+
+/**
+ * Makes each exercise's equipment a list, from the single one exercises took
+ * before they took many. Run once per deployment with
+ * `pnpm convex run migrations:equipmentToLists`; it works through every
+ * exercise by itself.
+ */
+export const equipmentToLists = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, { cursor }): Promise<void> => {
+    const { page, isDone, continueCursor } = await ctx.db
+      .query("gymExercises")
+      .paginate({ cursor: cursor ?? null, numItems: BATCH });
+    for (const exercise of page) {
+      if (!Array.isArray(exercise.equipment)) {
+        await ctx.db.patch(exercise._id, {
+          equipment: equipmentOf(exercise.equipment),
+        });
+      }
+    }
+    if (!isDone) {
+      await ctx.scheduler.runAfter(0, internal.migrations.equipmentToLists, {
         cursor: continueCursor,
       });
     }

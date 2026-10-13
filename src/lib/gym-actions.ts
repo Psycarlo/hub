@@ -26,17 +26,13 @@ export interface ExerciseDraft {
   kind: ExerciseKind;
   muscles: Muscle[];
   secondary: Muscle[];
-  equipment?: Equipment;
+  equipment: Equipment[];
   /** Seconds; missing takes the gym's. */
   rest?: number;
   note: string;
 }
 
-export interface ExerciseChanges extends Partial<
-  Omit<ExerciseDraft, "equipment" | "rest">
-> {
-  /** null clears it. */
-  equipment?: Equipment | null;
+export interface ExerciseChanges extends Partial<Omit<ExerciseDraft, "rest">> {
   /** null takes the gym's. */
   rest?: number | null;
   archived?: boolean;
@@ -206,10 +202,6 @@ export function updateExercise(exercise: Exercise, changes: ExerciseChanges) {
                     ...item,
                     ...changes,
                     archived: changes.archived ?? item.archived,
-                    equipment:
-                      changes.equipment === undefined
-                        ? item.equipment
-                        : (changes.equipment ?? undefined),
                     rest:
                       changes.rest === undefined
                         ? item.rest

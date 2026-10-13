@@ -35,7 +35,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { KIND_ICONS, REGION_COLORS } from "@/features/gym/gym-parts";
-import type { Exercise, Gym, Muscle } from "@/lib/gym";
+import type { Equipment, Exercise, Gym, Muscle } from "@/lib/gym";
 import {
   EQUIPMENT,
   EQUIPMENT_LABELS,
@@ -47,6 +47,7 @@ import {
   MUSCLE_INFO,
   REGIONS,
   REST_CHOICES,
+  equipmentOf,
   formatRest,
 } from "@/lib/gym";
 import type { ExerciseDraft } from "@/lib/gym-actions";
@@ -59,10 +60,9 @@ import { CHIP_COLORS } from "@/lib/palette";
 
 /** The rest select's value for taking the gym's. */
 const GYM_REST = "gym";
-/** The equipment select's value for none. */
-const NO_EQUIPMENT = "none";
 
 const BLANK: ExerciseDraft = {
+  equipment: [],
   kind: "weight",
   muscles: [],
   name: "",
@@ -210,6 +210,52 @@ function MusclesField({
   );
 }
 
+/** What it's done with, as pills to tap on and off; any number of them. */
+function EquipmentField({
+  value,
+  onChange,
+}: {
+  value: readonly Equipment[];
+  onChange: (equipment: Equipment[]) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 text-sm font-medium select-none">
+        Equipment
+      </legend>
+      <div className="flex flex-wrap gap-1.5">
+        {EQUIPMENT.map((item) => {
+          const picked = value.includes(item);
+          return (
+            <button
+              aria-pressed={picked}
+              className={cn(
+                "focus-visible:ring-ring/50 h-7 rounded-full px-2.5 text-xs font-medium transition-[background-color,color,box-shadow,scale] duration-150 ease-out outline-none focus-visible:ring-3 active:scale-[0.96]",
+                picked
+                  ? "bg-primary/8 text-primary inset-ring-primary/40 inset-ring"
+                  : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+              )}
+              key={item}
+              onClick={() =>
+                onChange(
+                  equipmentOf(
+                    picked
+                      ? value.filter((other) => other !== item)
+                      : [...value, item]
+                  )
+                )
+              }
+              type="button"
+            >
+              {EQUIPMENT_LABELS[item]}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function DeleteExercise({
   exercise,
   onDeleted,
@@ -276,7 +322,7 @@ export function ExerciseForm({
   const [draft, setDraft] = useState<ExerciseDraft>(() =>
     exercise
       ? {
-          equipment: exercise.equipment,
+          equipment: equipmentOf(exercise.equipment),
           kind: exercise.kind,
           muscles: exercise.muscles,
           name: exercise.name,
@@ -302,7 +348,6 @@ export function ExerciseForm({
       updateExercise(exercise, {
         ...cleaned,
         archived,
-        equipment: cleaned.equipment ?? null,
         rest: cleaned.rest ?? null,
       });
       onDone();
@@ -317,13 +362,6 @@ export function ExerciseForm({
     }
   };
 
-  const equipmentItems = [
-    { label: "None", value: NO_EQUIPMENT },
-    ...EQUIPMENT.map((item) => ({
-      label: EQUIPMENT_LABELS[item],
-      value: item,
-    })),
-  ];
   const restItems = [
     { label: `Gym’s (${formatRest(gym.rest)})`, value: GYM_REST },
     ...REST_CHOICES.map((seconds) => ({
@@ -359,31 +397,22 @@ export function ExerciseForm({
         secondary={draft.secondary}
       />
 
+      <EquipmentField
+        onChange={(equipment) => change({ equipment })}
+        value={draft.equipment}
+      />
+
       <div className="grid grid-cols-2 gap-3">
         <div className="flex min-w-0 flex-col gap-2">
-          <span className="text-sm font-medium select-none" id={`${id}-eq`}>
-            Equipment
-          </span>
-          <Select
-            items={equipmentItems}
-            onValueChange={(next: string | null) =>
-              change({
-                equipment: EQUIPMENT.find((item) => item === next),
-              })
-            }
-            value={draft.equipment ?? NO_EQUIPMENT}
-          >
-            <SelectTrigger aria-labelledby={`${id}-eq`} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {equipmentItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label htmlFor={`${id}-note`}>Setup</Label>
+          <Input
+            autoComplete="off"
+            id={`${id}-note`}
+            maxLength={MAX_GYM_NOTE}
+            onChange={(event) => change({ note: event.target.value })}
+            placeholder="Seat on 4, pins on 3"
+            value={draft.note}
+          />
         </div>
         <div className="flex min-w-0 flex-col gap-2">
           <span className="text-sm font-medium select-none" id={`${id}-rest`}>
@@ -411,18 +440,6 @@ export function ExerciseForm({
             </SelectContent>
           </Select>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-note`}>Setup</Label>
-        <Input
-          autoComplete="off"
-          id={`${id}-note`}
-          maxLength={MAX_GYM_NOTE}
-          onChange={(event) => change({ note: event.target.value })}
-          placeholder="Seat on 4, pins on 3"
-          value={draft.note}
-        />
       </div>
 
       {exercise && (

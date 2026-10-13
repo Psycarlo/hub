@@ -82,7 +82,7 @@ function RestRing({ share, over }: { share: number; over: boolean }) {
       <circle
         className={cn(
           "transition-[stroke-dashoffset,stroke] duration-1000 ease-linear",
-          over ? "stroke-green-500" : "stroke-orange-500"
+          over ? "stroke-green-500" : "stroke-primary"
         )}
         cx="18"
         cy="18"
@@ -109,7 +109,7 @@ interface RestState {
 function DockMark({ resting }: { resting?: RestState }) {
   if (!resting) {
     return (
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-orange-500/12 text-orange-700 dark:bg-orange-400/16 dark:text-orange-200">
+      <span className="bg-primary/12 text-primary dark:bg-primary/16 flex size-11 shrink-0 items-center justify-center rounded-xl">
         <DumbbellIcon aria-hidden className="size-5" />
       </span>
     );

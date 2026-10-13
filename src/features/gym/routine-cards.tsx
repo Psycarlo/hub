@@ -218,7 +218,7 @@ export function StartSection({
             onClick={() => onStart()}
             type="button"
           >
-            <span className="flex size-10 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm transition-transform duration-200 ease-out group-hover/empty:scale-105">
+            <span className="bg-primary text-primary-foreground flex size-10 items-center justify-center rounded-xl shadow-sm transition-transform duration-200 ease-out group-hover/empty:scale-105">
               <PlayIcon
                 aria-hidden
                 className="size-5 translate-x-px"

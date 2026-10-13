@@ -152,7 +152,7 @@ function UnderWay({
           {formatClock(workoutSeconds(workout, now))}
         </span>
         <span className="flex h-6 min-w-0 items-center gap-2 text-xs">
-          <span className="flex shrink-0 items-center gap-1.5 font-medium text-orange-700 dark:text-orange-300">
+          <span className="text-primary flex shrink-0 items-center gap-1.5 font-medium">
             <LiveDot className="size-1.5" />
             Under way
           </span>

@@ -30,10 +30,10 @@ export function UnderWay({
     >
       <span
         aria-hidden
-        className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-orange-500/3 to-transparent"
+        className="from-primary/10 via-primary/3 absolute inset-0 bg-gradient-to-r to-transparent"
       />
       <div className="relative flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-center gap-2 text-xs font-medium text-orange-700 dark:text-orange-300">
+        <span className="text-primary flex items-center gap-2 text-xs font-medium">
           <LiveDot />
           Under way
         </span>

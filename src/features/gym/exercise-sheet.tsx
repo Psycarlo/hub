@@ -1,11 +1,12 @@
 import { cn } from "cn";
 import { format } from "date-fns";
-import { PencilIcon, TrophyIcon } from "lucide-react";
+import { PencilIcon, TrophyIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
 import { Button } from "@/components/ui/button";
+import { FluidTooltip } from "@/components/ui/fluid-tooltip";
 import {
   Sheet,
   SheetContent,
@@ -34,6 +35,7 @@ import {
   RECORDS_OF,
   RECORD_LABELS,
   bestsOf,
+  equipmentOf,
   formatClock,
   formatRecord,
   formatSet,
@@ -274,22 +276,24 @@ function Detail({
   gym,
   project,
   onEdit,
+  onClose,
 }: {
   exercise: Exercise;
   gym: Gym;
   project: Project;
   onEdit: () => void;
+  onClose: () => void;
 }) {
   const history = useExerciseHistory(exercise);
-  const meta = [
-    KIND_INFO[exercise.kind].label,
-    exercise.equipment && EQUIPMENT_LABELS[exercise.equipment],
-  ]
+  const equipment = equipmentOf(exercise.equipment)
+    .map((item) => EQUIPMENT_LABELS[item])
+    .join(", ");
+  const meta = [KIND_INFO[exercise.kind].label, equipment]
     .filter(Boolean)
     .join(" · ");
   return (
-    <div className="flex flex-col gap-6 p-5 pt-6">
-      <header className="flex items-start gap-3 pr-8">
+    <div className="flex flex-col gap-6 p-5">
+      <header className="flex items-start gap-3">
         <ExerciseBadge exercise={exercise} size="md" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <SheetTitle className="text-lg leading-tight font-semibold tracking-tight">
@@ -300,11 +304,19 @@ function Detail({
             {exercise.archived && " · Archived"}
           </SheetDescription>
         </div>
-        {canEdit(project) && (
-          <IconButton label="Edit exercise" onClick={onEdit}>
-            <PencilIcon />
-          </IconButton>
-        )}
+        {/* Level with the badge, the close button's X lined up with the panels' edge. */}
+        <div className="-mr-2 flex h-9 shrink-0 items-center gap-0.5">
+          <FluidTooltip.Group>
+            {canEdit(project) && (
+              <IconButton label="Edit exercise" onClick={onEdit}>
+                <PencilIcon />
+              </IconButton>
+            )}
+            <IconButton label="Close" onClick={onClose}>
+              <XIcon />
+            </IconButton>
+          </FluidTooltip.Group>
+        </div>
       </header>
 
       {(exercise.muscles.length > 0 || exercise.secondary.length > 0) && (
@@ -390,11 +402,15 @@ export function ExerciseSheet({
         }}
         open={exercise !== undefined}
       >
-        <SheetContent className="overflow-y-auto sm:max-w-md">
+        <SheetContent
+          className="overflow-y-auto sm:max-w-md"
+          showCloseButton={false}
+        >
           {shown && (
             <Detail
               exercise={shown}
               gym={gym}
+              onClose={close}
               onEdit={() => setEditing(true)}
               project={project}
             />

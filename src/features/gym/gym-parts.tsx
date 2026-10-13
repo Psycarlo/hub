@@ -194,13 +194,13 @@ export function LiveDot({
       <span
         className={cn(
           "absolute inset-0 rounded-full motion-safe:animate-ping motion-reduce:scale-150 motion-reduce:opacity-40",
-          light ? "bg-white/60" : "bg-orange-500/60"
+          light ? "bg-white/60" : "bg-primary/60"
         )}
       />
       <span
         className={cn(
           "relative size-full rounded-full",
-          light ? "bg-white" : "bg-orange-500"
+          light ? "bg-white" : "bg-primary"
         )}
       />
     </span>

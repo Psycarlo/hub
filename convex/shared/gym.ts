@@ -61,6 +61,7 @@ export type Muscle = (typeof MUSCLES)[number];
 export const EQUIPMENT = [
   "barbell",
   "dumbbell",
+  "bench",
   "kettlebell",
   "cable",
   "machine",
@@ -77,6 +78,18 @@ export const EQUIPMENT = [
 ] as const;
 
 export type Equipment = (typeof EQUIPMENT)[number];
+
+/**
+ * An exercise's equipment as a list, once each and in the order offered.
+ * Exercises took a single one before they took many, and keep it until
+ * `migrations:equipmentToLists` runs.
+ */
+export function equipmentOf(
+  equipment: Equipment | readonly Equipment[] | undefined
+): Equipment[] {
+  const list = typeof equipment === "string" ? [equipment] : (equipment ?? []);
+  return EQUIPMENT.filter((item) => list.includes(item));
+}
 
 /**
  * The bests an exercise keeps: estimated one-rep max, heaviest weight, best

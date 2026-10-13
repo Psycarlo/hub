@@ -311,7 +311,10 @@ function Muscles({
               </span>
               <span className="bg-foreground/5 h-2 min-w-0 flex-1 overflow-hidden rounded-full">
                 <span
-                  className="block h-full rounded-full bg-orange-500 transition-[width] duration-500 ease-out"
+                  className={cn(
+                    "block h-full rounded-full transition-[width] duration-500 ease-out",
+                    SWATCH_COLORS[GYM_COLOR]
+                  )}
                   style={{ width: `${(count / top) * 100}%` }}
                 />
               </span>

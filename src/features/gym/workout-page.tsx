@@ -169,7 +169,7 @@ function StatCell({
       <span
         className={cn(
           "truncate text-lg font-semibold tracking-tight tabular-nums sm:text-xl",
-          live && "text-orange-600 dark:text-orange-400"
+          live && "text-primary"
         )}
       >
         {value}

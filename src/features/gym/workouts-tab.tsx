@@ -55,7 +55,7 @@ function WorkoutRow({
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate font-medium">{workout.title}</span>
             {live && (
-              <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-300">
+              <span className="text-primary flex shrink-0 items-center gap-1.5 text-xs font-medium">
                 <LiveDot className="size-1.5" />
                 Under way
               </span>
