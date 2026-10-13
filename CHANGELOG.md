@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-10-13
+
+### Added
+
+- Pick several pieces of equipment for an exercise, with bench among them.
+
+### Changed
+
+- The gym's buttons, live workout and rest timer use the hub's blue, keeping orange for its charts.
+- An exercise's edit and close buttons sit side by side.
+
 ## [0.11.0] - 2026-10-13
 
 ### Added
