@@ -33,6 +33,8 @@ import {
   parseAccountParam,
 } from "@/features/finance/finance-context";
 import { FinancePage } from "@/features/finance/finance-page";
+import { GYM_SEGMENT } from "@/features/gym/gym-context";
+import { GymRoute } from "@/features/gym/gym-page";
 import { HabitPage } from "@/features/habits/habit-page";
 import {
   HABITS_SEGMENT,
@@ -58,6 +60,8 @@ import type { NavTable } from "@/lib/crm";
 import type { DocsContent } from "@/lib/docs";
 import { EMPTY_DOCS } from "@/lib/docs";
 import type { Account } from "@/lib/finance";
+import type { Gym } from "@/lib/gym";
+import { gymOf } from "@/lib/gym";
 import type { Habit } from "@/lib/habits";
 import type { LogTopic } from "@/lib/log";
 import type { Board } from "@/lib/model";
@@ -115,6 +119,9 @@ interface ProjectViewProps {
   /** The project's log topics. */
   topics: LogTopic[];
   topicsLoaded: boolean;
+  /** The project's gym, once it's set up; only personal projects have one. */
+  gym?: Gym;
+  gymsLoaded: boolean;
   /** The project's brands. */
   brands: Brand[];
   brandsLoaded: boolean;
@@ -475,6 +482,7 @@ interface ProjectRouteProps extends Omit<
   | "accounts"
   | "habits"
   | "topics"
+  | "gym"
   | "brands"
 > {
   slug: string;
@@ -489,6 +497,8 @@ interface ProjectRouteProps extends Omit<
   habits: Habit[];
   /** Log topics in every project. */
   topics: LogTopic[];
+  /** Gyms in every project. */
+  gyms: Gym[];
   /** Brands in every project. */
   brands: Brand[];
 }
@@ -503,6 +513,7 @@ export function ProjectRoute({
   accounts,
   habits,
   topics,
+  gyms,
   brands,
   ...props
 }: ProjectRouteProps) {
@@ -512,6 +523,7 @@ export function ProjectRoute({
   const projectAccounts = ofProject(accounts, project);
   const projectHabits = ofProject(habits, project);
   const projectTopics = ofProject(topics, project);
+  const projectGym = gymOf(gyms, project);
   const projectBrands = ofProject(brands, project);
   const segment = props.tableSlug?.toLowerCase();
   if (!project) {
@@ -588,6 +600,20 @@ export function ProjectRoute({
       <Redirect replace to={projectPath(project)} />
     );
   }
+  if (segment === GYM_SEGMENT) {
+    // Only personal projects have a gym.
+    return project.personalFor ? (
+      <GymRoute
+        gym={projectGym}
+        key={project._id}
+        loaded={props.gymsLoaded}
+        project={project}
+        workoutParam={props.recordId}
+      />
+    ) : (
+      <Redirect replace to={projectPath(project)} />
+    );
+  }
   if (segment === BRANDS_SEGMENT) {
     return (
       <BrandsView
@@ -625,6 +651,7 @@ export function ProjectRoute({
       brands={projectBrands}
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       docsLoaded={docsLoaded}
+      gym={projectGym}
       habits={projectHabits}
       key={project._id}
       portfolios={projectPortfolios}

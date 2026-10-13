@@ -12,6 +12,7 @@ import type * as ai from "../ai.js";
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as boards from "../boards.js";
+import type * as bodyweight from "../bodyweight.js";
 import type * as brands from "../brands.js";
 import type * as cards from "../cards.js";
 import type * as cleanup from "../cleanup.js";
@@ -22,6 +23,7 @@ import type * as delivery from "../delivery.js";
 import type * as docs from "../docs.js";
 import type * as drive from "../drive.js";
 import type * as finance from "../finance.js";
+import type * as gym from "../gym.js";
 import type * as habits from "../habits.js";
 import type * as http from "../http.js";
 import type * as hub from "../hub.js";
@@ -36,6 +38,7 @@ import type * as lib_email from "../lib/email.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_files from "../lib/files.js";
 import type * as lib_finance from "../lib/finance.js";
+import type * as lib_gym from "../lib/gym.js";
 import type * as lib_history from "../lib/history.js";
 import type * as lib_media from "../lib/media.js";
 import type * as lib_notify from "../lib/notify.js";
@@ -54,6 +57,7 @@ import type * as push from "../push.js";
 import type * as r2 from "../r2.js";
 import type * as reactions from "../reactions.js";
 import type * as reminders from "../reminders.js";
+import type * as routines from "../routines.js";
 import type * as shared_ai from "../shared/ai.js";
 import type * as shared_brands from "../shared/brands.js";
 import type * as shared_character from "../shared/character.js";
@@ -61,6 +65,7 @@ import type * as shared_crm from "../shared/crm.js";
 import type * as shared_docs from "../shared/docs.js";
 import type * as shared_drive from "../shared/drive.js";
 import type * as shared_finance from "../shared/finance.js";
+import type * as shared_gym from "../shared/gym.js";
 import type * as shared_habits from "../shared/habits.js";
 import type * as shared_log from "../shared/log.js";
 import type * as shared_mentions from "../shared/mentions.js";
@@ -76,6 +81,7 @@ import type * as sprints from "../sprints.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as users from "../users.js";
 import type * as widgets from "../widgets.js";
+import type * as workouts from "../workouts.js";
 
 import type {
   ApiFromModules,
@@ -88,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
   auth: typeof auth;
   boards: typeof boards;
+  bodyweight: typeof bodyweight;
   brands: typeof brands;
   cards: typeof cards;
   cleanup: typeof cleanup;
@@ -98,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   docs: typeof docs;
   drive: typeof drive;
   finance: typeof finance;
+  gym: typeof gym;
   habits: typeof habits;
   http: typeof http;
   hub: typeof hub;
@@ -112,6 +120,7 @@ declare const fullApi: ApiFromModules<{
   "lib/env": typeof lib_env;
   "lib/files": typeof lib_files;
   "lib/finance": typeof lib_finance;
+  "lib/gym": typeof lib_gym;
   "lib/history": typeof lib_history;
   "lib/media": typeof lib_media;
   "lib/notify": typeof lib_notify;
@@ -130,6 +139,7 @@ declare const fullApi: ApiFromModules<{
   r2: typeof r2;
   reactions: typeof reactions;
   reminders: typeof reminders;
+  routines: typeof routines;
   "shared/ai": typeof shared_ai;
   "shared/brands": typeof shared_brands;
   "shared/character": typeof shared_character;
@@ -137,6 +147,7 @@ declare const fullApi: ApiFromModules<{
   "shared/docs": typeof shared_docs;
   "shared/drive": typeof shared_drive;
   "shared/finance": typeof shared_finance;
+  "shared/gym": typeof shared_gym;
   "shared/habits": typeof shared_habits;
   "shared/log": typeof shared_log;
   "shared/mentions": typeof shared_mentions;
@@ -152,6 +163,7 @@ declare const fullApi: ApiFromModules<{
   subscriptions: typeof subscriptions;
   users: typeof users;
   widgets: typeof widgets;
+  workouts: typeof workouts;
 }>;
 
 /**

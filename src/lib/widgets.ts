@@ -3,9 +3,11 @@ import type { WidgetSettings } from "@convex/lib/validators";
 
 export type { WidgetSettings } from "@convex/lib/validators";
 export {
+  BODY_WEIGHT_DEFAULTS,
   CLOCK_DEFAULTS,
   CLOCK_LOOKS,
   FINANCE_DEFAULTS,
+  GYM_DEFAULTS,
   HABITS_DEFAULTS,
   HOUR_CYCLES,
   isRepeatable,

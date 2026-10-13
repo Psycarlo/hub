@@ -1,6 +1,8 @@
 import { BITCOIN_PRICE } from "@/features/widgets/bitcoin-widget";
+import { BODY_WEIGHT } from "@/features/widgets/body-weight-widget";
 import { CLOCK } from "@/features/widgets/clock-widget";
 import { FINANCE } from "@/features/widgets/finance-widget";
+import { GYM } from "@/features/widgets/gym-widget";
 import { HABITS } from "@/features/widgets/habits-widget";
 import { LOG } from "@/features/widgets/log-widget";
 import { MY_TASKS } from "@/features/widgets/tasks-widget";
@@ -10,8 +12,10 @@ import type { SettingsOf, WidgetSettings, WidgetType } from "@/lib/widgets";
 /** Every kind of widget, in the order they're offered. */
 export const WIDGET_KINDS: { [T in WidgetType]: WidgetKind<SettingsOf<T>> } = {
   bitcoinPrice: BITCOIN_PRICE,
+  bodyWeight: BODY_WEIGHT,
   clock: CLOCK,
   finance: FINANCE,
+  gym: GYM,
   habits: HABITS,
   log: LOG,
   myTasks: MY_TASKS,

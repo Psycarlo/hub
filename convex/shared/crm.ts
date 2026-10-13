@@ -67,6 +67,7 @@ export const RESERVED_TABLE_SLUGS: readonly string[] = [
   "boards",
   "docs",
   "drive",
+  "gym",
   "log",
   "portfolios",
   "settings",

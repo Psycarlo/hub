@@ -26,6 +26,17 @@ export function playSound(sound: CueName, options?: PlayOptions): void {
   }
 }
 
+/**
+ * A timer running out, like a rest between sets. It rings even with sounds
+ * off, as a timer someone set should, and buzzes phones that can.
+ */
+export function ringAlarm(): void {
+  play("bell");
+  if ("vibrate" in navigator) {
+    navigator.vibrate([180, 80, 180]);
+  }
+}
+
 /** Turns sounds on or off on this device, with a cue for turning them on. */
 export function setSounds(on: boolean): void {
   if (on === current) {

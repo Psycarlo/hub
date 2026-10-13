@@ -32,6 +32,7 @@ import {
   FocusMode,
   useFocusState,
 } from "@/features/focus/focus-mode";
+import { WorkoutDock } from "@/features/gym/workout-dock";
 import { HomePage } from "@/features/home/home-page";
 import { INBOX_PATH, InboxPage } from "@/features/inbox/inbox-page";
 import {
@@ -55,6 +56,7 @@ import { docsByProject } from "@/lib/docs";
 import type { DriveFolder } from "@/lib/drive";
 import { driveByProject } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
+import type { Gym } from "@/lib/gym";
 import type { Habit } from "@/lib/habits";
 import type { LogTopic } from "@/lib/log";
 import type { Board } from "@/lib/model";
@@ -79,6 +81,7 @@ const NO_PORTFOLIOS: Portfolio[] = [];
 const NO_ACCOUNTS: Account[] = [];
 const NO_HABITS: Habit[] = [];
 const NO_TOPICS: LogTopic[] = [];
+const NO_GYMS: Gym[] = [];
 const NO_BRANDS: Brand[] = [];
 
 // Projects carry the CRM and its table library, which board-only visits never need.
@@ -136,6 +139,7 @@ function Workspace() {
   const accountList = useQuery(api.finance.accounts);
   const habitList = useQuery(api.habits.list);
   const topicList = useQuery(api.log.topics);
+  const gymList = useQuery(api.gym.list);
   const brandList = useQuery(api.brands.list);
   const widgets = useQuery(api.widgets.list);
   const inbox = useInbox();
@@ -152,6 +156,7 @@ function Workspace() {
   const accounts = accountList ?? NO_ACCOUNTS;
   const habits = habitList ?? NO_HABITS;
   const topics = topicList ?? NO_TOPICS;
+  const gyms = gymList ?? NO_GYMS;
   const brands = brandList ?? NO_BRANDS;
   const [creatingProject, setCreatingProject] = useState(false);
   const focus = useFocusState();
@@ -169,6 +174,7 @@ function Workspace() {
             brands={brands}
             docs={docs}
             drive={drive}
+            gyms={gyms}
             habits={habits}
             onNewProject={newProject}
             portfolios={portfolios}
@@ -216,6 +222,8 @@ function Workspace() {
                         brandsLoaded={brandList !== undefined}
                         docs={docs}
                         docsLoaded={pages !== undefined}
+                        gyms={gyms}
+                        gymsLoaded={gymList !== undefined}
                         habits={habits}
                         habitsLoaded={habitList !== undefined}
                         loaded={projectsLoaded}
@@ -270,6 +278,7 @@ function Workspace() {
           />
           <FocusMode focus={focus} widgets={widgets} />
           <UploadTray />
+          <WorkoutDock />
           <ExportTray />
         </SidebarProvider>
       </CornerDock>

@@ -18,23 +18,32 @@ import {
   vDriveChange,
   vEmote,
   vEntryKind,
+  vEquipment,
+  vExerciseKind,
   vField,
   vFiat,
   vFileNews,
+  vGymRecord,
+  vGymSet,
   vHabitIcon,
   vLogoMode,
+  vMuscle,
   vPriority,
   vProjectColor,
   vProjectRole,
   vSprintStatus,
   vStageMove,
+  vRecordKind,
   vStatus,
   vTableIcon,
+  vTargetSet,
   vTile,
   vTopicIcon,
   vTransactionKind,
+  vUnitSystem,
   vValues,
   vWidgetSettings,
+  vWorkoutSummary,
 } from "./lib/validators";
 
 // Tables follow the app's own order, from accounts to projects to what's in them.
@@ -782,6 +791,114 @@ export default defineSchema({
   })
     .index("by_topic_and_date", ["topicId", "date"])
     .index("by_project_and_date", ["projectId", "date"]),
+
+  /**
+   * A personal project's gym: how it reads weights and how long it rests.
+   * One per project, made when it's set up; everything below hangs off it.
+   */
+  gyms: defineTable({
+    createdBy: v.id("users"),
+    /** Body weight to reach, in kilograms; missing for none. */
+    goalWeight: v.optional(v.number()),
+    projectId: v.id("projects"),
+    /** Seconds of rest after a set, for exercises without their own. */
+    rest: v.number(),
+    /** How weights and distances read; they're kept metric either way. */
+    units: vUnitSystem,
+  }).index("by_project", ["projectId"]),
+
+  /** Exercises a gym knows: made the first time they're typed, then offered to pick. */
+  gymExercises: defineTable({
+    /** Kept, with its history, but no longer offered to pick. */
+    archived: v.optional(v.boolean()),
+    createdBy: v.id("users"),
+    equipment: v.optional(vEquipment),
+    kind: vExerciseKind,
+    /** When a set of it was last done, in ms, to offer the latest first. */
+    lastAt: v.optional(v.number()),
+    /** The library exercise it was picked from; missing for one typed in. */
+    libraryId: v.optional(v.string()),
+    /** Muscles it trains most: the ones lit up on the body. */
+    muscles: v.array(vMuscle),
+    name: v.string(),
+    /** The name as names are compared, so an exercise is never made twice. */
+    nameKey: v.string(),
+    /** How to set it up, like a seat's height; empty for none. */
+    note: v.string(),
+    projectId: v.id("projects"),
+    /** Its bests, kept as sets are done so lists needn't read every workout. */
+    records: v.array(vGymRecord),
+    /** Seconds of rest after its sets, 0 for none; missing takes the gym's. */
+    rest: v.optional(v.number()),
+    /** Muscles it works along the way. */
+    secondary: v.array(vMuscle),
+  }).index("by_project_and_name", ["projectId", "nameKey"]),
+
+  /** A session at the gym: under way until it ends, then in the history. */
+  gymWorkouts: defineTable({
+    createdBy: v.id("users"),
+    /** `YYYY-MM-DD` it started on, where the person was. */
+    date: v.string(),
+    /** When it ended, in ms; missing while it's under way. */
+    endedAt: v.optional(v.number()),
+    note: v.string(),
+    projectId: v.id("projects"),
+    /**
+     * The rest between sets, on a workout under way: when it ends, in ms, and
+     * how long it was set for in seconds.
+     */
+    rest: v.optional(v.object({ endsAt: v.number(), seconds: v.number() })),
+    /** The routine it was started from. */
+    routineId: v.optional(v.id("gymRoutines")),
+    /** In ms. */
+    startedAt: v.number(),
+    summary: vWorkoutSummary,
+    title: v.string(),
+  })
+    .index("by_project_and_date", ["projectId", "date"])
+    .index("by_project_and_ended", ["projectId", "endedAt"]),
+
+  /** An exercise done in a workout, with its sets in order. */
+  gymEntries: defineTable({
+    /** When its workout started, in ms, so an exercise's history reads in order. */
+    at: v.number(),
+    exerciseId: v.id("gymExercises"),
+    note: v.string(),
+    projectId: v.id("projects"),
+    /** The records it beat; kept as its exercise's entries change. */
+    prs: v.array(vRecordKind),
+    /** Order in the workout. */
+    rank: v.number(),
+    sets: v.array(vGymSet),
+    workoutId: v.id("gymWorkouts"),
+  })
+    .index("by_workout", ["workoutId"])
+    .index("by_exercise_and_at", ["exerciseId", "at"]),
+
+  /** A workout kept to start again, like a push day: its exercises and the sets to aim for. */
+  gymRoutines: defineTable({
+    createdBy: v.id("users"),
+    exercises: v.array(
+      v.object({
+        exerciseId: v.id("gymExercises"),
+        sets: v.array(vTargetSet),
+      })
+    ),
+    /** When a workout last started from it, in ms. */
+    lastAt: v.optional(v.number()),
+    projectId: v.id("projects"),
+    rank: v.number(),
+    title: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  /** What someone weighed, one weighing a day. */
+  bodyWeights: defineTable({
+    /** `YYYY-MM-DD`. */
+    date: v.string(),
+    projectId: v.id("projects"),
+    /** Kilograms. */
+    weight: v.number(),
+  }).index("by_project_and_date", ["projectId", "date"]),
 
   /** A brand a project keeps: its logos, colors, type, banners and links. */
   brands: defineTable({

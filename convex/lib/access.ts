@@ -350,6 +350,92 @@ export async function requireTopic(
   return { ...(await requireProject(ctx, topic.projectId, need)), topic };
 }
 
+export async function requireGym(
+  ctx: QueryCtx,
+  gymId: Id<"gyms">,
+  need: Need
+): Promise<ProjectAccess & { gym: Doc<"gyms"> }> {
+  const gym = await ctx.db.get(gymId);
+  if (!gym) {
+    throw new ConvexError("This gym doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, gym.projectId, need)), gym };
+}
+
+export async function requireExercise(
+  ctx: QueryCtx,
+  exerciseId: Id<"gymExercises">,
+  need: Need
+): Promise<ProjectAccess & { exercise: Doc<"gymExercises"> }> {
+  const exercise = await ctx.db.get(exerciseId);
+  if (!exercise) {
+    throw new ConvexError("This exercise doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, exercise.projectId, need)), exercise };
+}
+
+export async function requireWorkout(
+  ctx: QueryCtx,
+  workoutId: Id<"gymWorkouts">,
+  need: Need
+): Promise<ProjectAccess & { workout: Doc<"gymWorkouts"> }> {
+  const workout = await ctx.db.get(workoutId);
+  if (!workout) {
+    throw new ConvexError("This workout doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, workout.projectId, need)), workout };
+}
+
+/** An exercise done in a workout, with the workout and the exercise. */
+export async function requireGymEntry(
+  ctx: QueryCtx,
+  entryId: Id<"gymEntries">,
+  need: Need
+): Promise<
+  ProjectAccess & {
+    entry: Doc<"gymEntries">;
+    workout: Doc<"gymWorkouts">;
+    exercise: Doc<"gymExercises">;
+  }
+> {
+  const entry = await ctx.db.get(entryId);
+  const workout = entry && (await ctx.db.get(entry.workoutId));
+  const exercise = entry && (await ctx.db.get(entry.exerciseId));
+  if (!(entry && workout && exercise)) {
+    throw new ConvexError("This exercise isn’t in the workout anymore.");
+  }
+  return {
+    ...(await requireProject(ctx, entry.projectId, need)),
+    entry,
+    exercise,
+    workout,
+  };
+}
+
+export async function requireRoutine(
+  ctx: QueryCtx,
+  routineId: Id<"gymRoutines">,
+  need: Need
+): Promise<ProjectAccess & { routine: Doc<"gymRoutines"> }> {
+  const routine = await ctx.db.get(routineId);
+  if (!routine) {
+    throw new ConvexError("This routine doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, routine.projectId, need)), routine };
+}
+
+export async function requireBodyWeight(
+  ctx: QueryCtx,
+  weightId: Id<"bodyWeights">,
+  need: Need
+): Promise<ProjectAccess & { weighing: Doc<"bodyWeights"> }> {
+  const weighing = await ctx.db.get(weightId);
+  if (!weighing) {
+    throw new ConvexError("This weighing doesn’t exist anymore.");
+  }
+  return { ...(await requireProject(ctx, weighing.projectId, need)), weighing };
+}
+
 export async function requireBrand(
   ctx: QueryCtx,
   brandId: Id<"brands">,

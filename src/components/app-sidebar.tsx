@@ -3,6 +3,7 @@ import {
   CalendarCheckIcon,
   CameraIcon,
   ChevronRightIcon,
+  DumbbellIcon,
   HouseIcon,
   InboxIcon,
   NotebookPenIcon,
@@ -53,6 +54,7 @@ import { SidebarDocs } from "@/features/docs/sidebar-docs";
 import { SidebarDrive } from "@/features/drive/sidebar-drive";
 import { accountPath } from "@/features/finance/finance-context";
 import { FocusButton } from "@/features/focus/focus-mode";
+import { gymPath } from "@/features/gym/gym-context";
 import { habitsPath } from "@/features/habits/habits-context";
 import { INBOX_PATH } from "@/features/inbox/inbox-page";
 import { logPath } from "@/features/log/log-context";
@@ -67,6 +69,7 @@ import { EMPTY_DOCS } from "@/lib/docs";
 import type { DriveTree } from "@/lib/drive";
 import { EMPTY_TREE } from "@/lib/drive";
 import type { Account } from "@/lib/finance";
+import type { Gym } from "@/lib/gym";
 import type { Habit } from "@/lib/habits";
 import type { LogTopic } from "@/lib/log";
 import type { Board } from "@/lib/model";
@@ -143,6 +146,8 @@ interface ProjectItemProps {
   hasHabits: boolean;
   /** Whether the project keeps a log, which has one page. */
   hasLog: boolean;
+  /** Whether the project has a gym, which has pages of its own. */
+  hasGym: boolean;
   openBoard?: Board;
   location: string;
   open: boolean;
@@ -162,6 +167,7 @@ function ProjectItem({
   brands,
   hasHabits,
   hasLog,
+  hasGym,
   openBoard,
   location,
   open,
@@ -171,6 +177,7 @@ function ProjectItem({
   const base = projectPath(project);
   const habits = habitsPath(project);
   const log = logPath(project);
+  const gym = gymPath(project);
   return (
     <Collapsible
       onOpenChange={onOpenChange}
@@ -221,6 +228,17 @@ function ProjectItem({
               >
                 <NotebookPenIcon />
                 <span>Log</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          )}
+          {hasGym && (
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                isActive={location === gym || location.startsWith(`${gym}/`)}
+                render={<NavLink href={gym} />}
+              >
+                <DumbbellIcon />
+                <span>Gym</span>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
           )}
@@ -333,6 +351,8 @@ interface AppSidebarProps {
   brands: Brand[];
   /** Log topics in every project. */
   topics: LogTopic[];
+  /** Gyms in every project. */
+  gyms: Gym[];
   /** Unread notifications in the inbox. */
   unread: number;
   onNewProject: () => void;
@@ -349,6 +369,7 @@ export function AppSidebar({
   habits,
   brands,
   topics,
+  gyms,
   unread,
   onNewProject,
 }: AppSidebarProps) {
@@ -388,6 +409,7 @@ export function AppSidebar({
       docs={docs.get(project._id) ?? EMPTY_DOCS}
       drive={drive.get(project._id) ?? EMPTY_TREE}
       hasHabits={habits.some((habit) => habit.projectId === project._id)}
+      hasGym={gyms.some((gym) => gym.projectId === project._id)}
       hasLog={topics.some((topic) => topic.projectId === project._id)}
       key={project._id}
       location={location}

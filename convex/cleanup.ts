@@ -1,8 +1,8 @@
 /**
  * What's left once a project, board, card, table, page, portfolio, finance
- * account, habit, log topic, brand, or Drive file or folder is deleted. The
- * parent goes first, so nobody sees it anymore; the rest is cleared here in
- * batches that stay well within a mutation's limits.
+ * account, habit, log topic, gym or gym exercise, brand, or Drive file or
+ * folder is deleted. The parent goes first, so nobody sees it anymore; the
+ * rest is cleared here in batches that stay well within a mutation's limits.
  */
 import { v } from "convex/values";
 
@@ -12,6 +12,7 @@ import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { dropFile } from "./lib/files";
 import { releaseBuy } from "./lib/finance";
+import { resummarize } from "./lib/gym";
 
 const BATCH = 100;
 
@@ -398,6 +399,91 @@ export const logTopic = internalMutation({
   },
 });
 
+/** Workouts summed again read all their exercises, so fewer are taken at a time. */
+const WORKOUT_BATCH = 25;
+
+/**
+ * Every time a deleted exercise was done, summing again the workouts it was
+ * in, then its place in routines.
+ */
+export const gymExercise = internalMutation({
+  args: { exerciseId: v.id("gymExercises"), projectId: v.id("projects") },
+  handler: async (ctx, { exerciseId, projectId }) => {
+    const entries = await ctx.db
+      .query("gymEntries")
+      .withIndex("by_exercise_and_at", (q) => q.eq("exerciseId", exerciseId))
+      .take(WORKOUT_BATCH);
+    for (const entry of entries) {
+      await ctx.db.delete(entry._id);
+    }
+    for (const workoutId of new Set(entries.map((entry) => entry.workoutId))) {
+      await resummarize(ctx, workoutId);
+    }
+    if (entries.length === WORKOUT_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.gymExercise, {
+        exerciseId,
+        projectId,
+      });
+      return;
+    }
+    const routines = await ctx.db
+      .query("gymRoutines")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    for (const routine of routines) {
+      const exercises = routine.exercises.filter(
+        (item) => item.exerciseId !== exerciseId
+      );
+      if (exercises.length !== routine.exercises.length) {
+        await ctx.db.patch(routine._id, { exercises });
+      }
+    }
+  },
+});
+
+/** A deleted project's gym: its workouts and what was done in them, exercises, routines and weighings. */
+export const gym = internalMutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const workouts = await ctx.db
+      .query("gymWorkouts")
+      .withIndex("by_project_and_date", (q) => q.eq("projectId", projectId))
+      .take(WORKOUT_BATCH);
+    for (const workout of workouts) {
+      const entries = await ctx.db
+        .query("gymEntries")
+        .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
+        .collect();
+      for (const entry of entries) {
+        await ctx.db.delete(entry._id);
+      }
+      await ctx.db.delete(workout._id);
+    }
+    const exercises = await ctx.db
+      .query("gymExercises")
+      .withIndex("by_project_and_name", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    const routines = await ctx.db
+      .query("gymRoutines")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    const weighings = await ctx.db
+      .query("bodyWeights")
+      .withIndex("by_project_and_date", (q) => q.eq("projectId", projectId))
+      .take(BATCH);
+    for (const row of [...exercises, ...routines, ...weighings]) {
+      await ctx.db.delete(row._id);
+    }
+    if (
+      [workouts, exercises, routines, weighings].some(
+        (batch) => batch.length > 0
+      )
+    ) {
+      await ctx.scheduler.runAfter(0, internal.cleanup.gym, { projectId });
+    }
+  },
+});
+
 export const brand = internalMutation({
   args: { brandId: v.id("brands") },
   handler: async (ctx, { brandId }) => {
@@ -492,6 +578,14 @@ export const project = internalMutation({
         topicId: item._id,
       });
     }
+    const gyms = await ctx.db
+      .query("gyms")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    for (const item of gyms) {
+      await ctx.db.delete(item._id);
+      await ctx.scheduler.runAfter(0, internal.cleanup.gym, { projectId });
+    }
     const brands = await ctx.db
       .query("brands")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -545,6 +639,7 @@ export const project = internalMutation({
       accounts,
       habits,
       topics,
+      gyms,
       brands,
       files,
       folders,

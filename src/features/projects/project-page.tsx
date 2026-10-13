@@ -4,7 +4,7 @@ import { useQuery } from "convex/react";
 import { LockIcon, PlusIcon, Settings2Icon, UploadIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
 import { ProjectAvatar } from "@/components/project-avatar";
@@ -30,6 +30,8 @@ import { drivePath } from "@/features/drive/drive-context";
 import { RecentFiles } from "@/features/drive/recent-files";
 import { AccountGrid } from "@/features/finance/account-card";
 import { AccountDialog } from "@/features/finance/account-dialog";
+import { gymPath } from "@/features/gym/gym-context";
+import { GymSnapshot } from "@/features/gym/gym-snapshot";
 import { HabitGrid } from "@/features/habits/habit-card";
 import { HabitDialog } from "@/features/habits/habit-dialog";
 import { DayComposer } from "@/features/log/day-composer";
@@ -52,6 +54,9 @@ import type { DocPage, DocsContent } from "@/lib/docs";
 import type { DriveFile } from "@/lib/drive";
 import { uploadFiles } from "@/lib/drive-upload";
 import type { Account } from "@/lib/finance";
+import type { Gym } from "@/lib/gym";
+import { unitsForLocale } from "@/lib/gym";
+import { setupGym } from "@/lib/gym-actions";
 import type { Habit } from "@/lib/habits";
 import type { LogTopic } from "@/lib/log";
 import { addDays } from "@/lib/log";
@@ -192,6 +197,9 @@ interface ProjectPageProps {
   /** The project's log topics; only personal projects have them. */
   topics: LogTopic[];
   topicsLoaded: boolean;
+  /** The project's gym, once it's set up; only personal projects have one. */
+  gym?: Gym;
+  gymsLoaded: boolean;
   /** The project's brands. */
   brands: Brand[];
   brandsLoaded: boolean;
@@ -395,6 +403,7 @@ function ProjectSections({
   accounts,
   habits,
   topics,
+  gym,
   projects,
   brands,
   files,
@@ -413,6 +422,7 @@ function ProjectSections({
   accounts: Account[];
   habits: Habit[];
   topics: LogTopic[];
+  gym?: Gym;
   /** The projects the person can see, for log topics standing for one. */
   projects: Project[];
   brands: Brand[];
@@ -448,6 +458,21 @@ function ProjectSections({
           projects={projects}
           topics={topics}
         />
+      )}
+      {gym && (
+        <Section
+          action={
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              href={gymPath(project)}
+            >
+              Open gym
+            </Link>
+          }
+          title="Gym"
+        >
+          <GymSnapshot gym={gym} project={project} />
+        </Section>
       )}
       {tables.length > 0 && (
         <ProjectTables
@@ -567,7 +592,7 @@ function NoContent({
     "Boards, tables, docs, files, brands, portfolios and accounts in this project show up here.";
   if (editable && personal) {
     description =
-      "Build habits, log what you work on, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
+      "Build habits, log what you work on, train at the gym, plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
   } else if (editable) {
     description =
       "Plan work on boards, track deals in CRM tables, write docs, keep files in the Drive and brands in one place, follow bitcoin portfolios and the money in your accounts.";
@@ -582,7 +607,10 @@ function NoContent({
 }
 
 /** What the page can open: the project's settings, or a new thing in it. */
-type Dialog = "settings" | "topics" | Exclude<ProjectItem, "page" | "files">;
+type Dialog =
+  | "settings"
+  | "topics"
+  | Exclude<ProjectItem, "page" | "files" | "gym">;
 
 const NO_FILES: DriveFile[] = [];
 
@@ -616,11 +644,14 @@ export function ProjectPage({
   habitsLoaded,
   topics,
   topicsLoaded,
+  gym,
+  gymsLoaded,
   brands,
   brandsLoaded,
   content,
   loaded,
 }: ProjectPageProps) {
+  const [, navigate] = useLocation();
   const [dialog, setDialog] = useState<Dialog>();
   useReadProjectNews(project._id);
   const newPage = useNewPage(project);
@@ -641,11 +672,20 @@ export function ProjectPage({
     onOpenChange: (open: boolean) => setDialog(open ? name : undefined),
     open: dialog === name,
   });
+  // Set up in place, in the units of the person's region; its settings change them.
+  const openGym = async () => {
+    const gymId = await setupGym(project._id, unitsForLocale());
+    if (gymId) {
+      navigate(gymPath(project));
+    }
+  };
   const onNew = (kind: ProjectItem) => {
     if (kind === "page") {
       newPage();
     } else if (kind === "files") {
       filePicker.current?.click();
+    } else if (kind === "gym") {
+      openGym();
     } else {
       setDialog(kind);
     }
@@ -660,6 +700,7 @@ export function ProjectPage({
     accounts,
     habits,
     topics,
+    gym ? [gym] : [],
     brands,
     files,
   ].some((items) => items.length > 0);
@@ -671,6 +712,7 @@ export function ProjectPage({
     accountsLoaded,
     habitsLoaded,
     topicsLoaded,
+    gymsLoaded,
     brandsLoaded,
     recent !== undefined,
   ].every(Boolean);
@@ -681,6 +723,7 @@ export function ProjectPage({
       boards={projectBoards}
       brands={brands}
       files={files}
+      gym={gym}
       habits={habits}
       content={loaded ? content : undefined}
       members={members}
@@ -720,6 +763,7 @@ export function ProjectPage({
       >
         {editable && hasAny && (
           <NewInProject
+            hasGym={gym !== undefined}
             onNew={onNew}
             personal={project.personalFor !== undefined}
             size="sm"

@@ -22,6 +22,14 @@ import {
   TABLE_ICONS,
 } from "../shared/crm";
 import { CARD_NETWORKS, ENTRY_KINDS } from "../shared/finance";
+import {
+  EQUIPMENT,
+  EXERCISE_KINDS,
+  MUSCLES,
+  RECORD_KINDS,
+  SET_TYPES,
+  UNIT_SYSTEMS,
+} from "../shared/gym";
 import { HABIT_ICONS } from "../shared/habits";
 import { TOPIC_ICONS } from "../shared/log";
 import {
@@ -76,6 +84,12 @@ export const vEntryKind = oneOf(ENTRY_KINDS);
 export const vCardNetwork = oneOf(CARD_NETWORKS);
 export const vHabitIcon = oneOf(HABIT_ICONS);
 export const vTopicIcon = oneOf(TOPIC_ICONS);
+export const vUnitSystem = oneOf(UNIT_SYSTEMS);
+export const vExerciseKind = oneOf(EXERCISE_KINDS);
+export const vSetType = oneOf(SET_TYPES);
+export const vMuscle = oneOf(MUSCLES);
+export const vEquipment = oneOf(EQUIPMENT);
+export const vRecordKind = oneOf(RECORD_KINDS);
 export const vTimeframe = oneOf(TIMEFRAMES);
 export const vTaskScope = oneOf(TASK_SCOPES);
 export const vClockLook = oneOf(CLOCK_LOOKS);
@@ -249,6 +263,69 @@ export const vMember = v.object({
 });
 
 /**
+ * One set of an exercise in a workout. Its numbers are metric: kilograms,
+ * seconds and meters. Which it has goes by the exercise's kind.
+ */
+export const vGymSet = v.object({
+  /** Done in the gym. One not done yet is still to do, and counts toward nothing. */
+  done: v.boolean(),
+  /** Lighter weights taken straight after it, without rest, and the reps of each. */
+  drops: v.optional(
+    v.array(v.object({ reps: v.number(), weight: v.number() }))
+  ),
+  /** Stays with the set through edits, so what's kept or said about it finds it. */
+  id: v.string(),
+  meters: v.optional(v.number()),
+  reps: v.optional(v.number()),
+  seconds: v.optional(v.number()),
+  type: vSetType,
+  /** Lifted, or added to the body on a reps exercise. */
+  weight: v.optional(v.number()),
+});
+
+export type GymSet = Infer<typeof vGymSet>;
+
+/** A set a routine aims for, before it's done. */
+export const vTargetSet = v.object({
+  meters: v.optional(v.number()),
+  reps: v.optional(v.number()),
+  seconds: v.optional(v.number()),
+  type: vSetType,
+  weight: v.optional(v.number()),
+});
+
+export type TargetSet = Infer<typeof vTargetSet>;
+
+/** The best an exercise has done of one kind, and when. */
+export const vGymRecord = v.object({
+  /** When the workout it was done in started, in ms. */
+  at: v.number(),
+  kind: vRecordKind,
+  /** The set's reps, to say how an estimated max came about. */
+  reps: v.optional(v.number()),
+  value: v.number(),
+  /** The set's weight, in kilograms. */
+  weight: v.optional(v.number()),
+  workoutId: v.id("gymWorkouts"),
+});
+
+export type GymRecord = Infer<typeof vGymRecord>;
+
+/** What a workout's sets add up to, kept on it so lists needn't read them. */
+export const vWorkoutSummary = v.object({
+  /** Its exercises in order, with the sets of each that count. */
+  exercises: v.array(
+    v.object({ exerciseId: v.id("gymExercises"), sets: v.number() })
+  ),
+  /** Records beaten, across its exercises. */
+  prs: v.number(),
+  /** Sets done that count: warm-ups don't. */
+  sets: v.number(),
+  /** Kilograms moved in them. */
+  volume: v.number(),
+});
+
+/**
  * What a widget shows and how. Each kind of widget has settings of its own,
  * told apart by `type`; a new kind adds its object here.
  */
@@ -275,6 +352,8 @@ export const vWidgetSettings = v.union(
     type: v.literal("habits"),
   }),
   v.object({ type: v.literal("log") }),
+  v.object({ type: v.literal("gym") }),
+  v.object({ type: v.literal("bodyWeight") }),
   v.object({
     /** Missing follows the person's locale. */
     hours: v.optional(vHourCycle),

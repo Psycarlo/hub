@@ -31,6 +31,12 @@ export const HABITS_DEFAULTS = { type: "habits" } as const;
 /** A new Worked on widget, showing today in the person's own log. */
 export const LOG_DEFAULTS = { type: "log" } as const;
 
+/** A new Gym widget: the week so far, or the workout under way. */
+export const GYM_DEFAULTS = { type: "gym" } as const;
+
+/** A new Weight widget, following the person’s body weight. */
+export const BODY_WEIGHT_DEFAULTS = { type: "bodyWeight" } as const;
+
 /** How a clock shows the time: in numerals, or with hands on a face. */
 export const CLOCK_LOOKS = ["digital", "analog"] as const;
 
