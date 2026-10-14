@@ -122,6 +122,85 @@ export function dayIn(month: string, day: number): string {
   return `${month}-${String(clamped).padStart(2, "0")}`;
 }
 
+/** The days an entry keeps, as its form shows them. */
+export interface EntryDays {
+  /** `YYYY-MM-DD` its bill or invoice is dated. */
+  issued: string;
+  /** `YYYY-MM-DD` it must be paid or received by, if it says. */
+  due?: string;
+  /** `YYYY-MM-DD` it was paid or received, once it is. */
+  paidOn?: string;
+}
+
+/** How an entry stores its days. */
+export interface StoredDays {
+  /** When the money moves. */
+  date: string;
+  due: string | undefined;
+  /** Only when it's another day than `date`. */
+  issued: string | undefined;
+  paid: boolean;
+}
+
+/** An entry's days, from how it stores them. */
+export function entryDays(entry: {
+  date: string;
+  due?: string;
+  issued?: string;
+  paid: boolean;
+}): EntryDays {
+  return {
+    due: entry.due,
+    issued: entry.issued ?? entry.date,
+    paidOn: entry.paid ? entry.date : undefined,
+  };
+}
+
+/** What changes an entry's days: null takes its due day away, or leaves it waiting again. */
+export interface DayChanges {
+  issued?: string;
+  due?: string | null;
+  paidOn?: string | null;
+}
+
+/** The entry's days with the changes; undefined when none of them changes. */
+export function changedDays(
+  entry: Parameters<typeof entryDays>[0],
+  { issued, due, paidOn }: DayChanges
+): EntryDays | undefined {
+  if (issued === undefined && due === undefined && paidOn === undefined) {
+    return undefined;
+  }
+  const days = entryDays(entry);
+  return {
+    due: due === undefined ? days.due : (due ?? undefined),
+    issued: issued ?? days.issued,
+    paidOn: paidOn === undefined ? days.paidOn : (paidOn ?? undefined),
+  };
+}
+
+/**
+ * How an entry stores its days. It falls on the day the money moves: when
+ * it was paid, or while it waits, its due day, or the day it was issued.
+ */
+export function storedDays({ issued, due, paidOn }: EntryDays): StoredDays {
+  const date = paidOn ?? due ?? issued;
+  return {
+    date,
+    due,
+    issued: issued === date ? undefined : issued,
+    paid: paidOn !== undefined,
+  };
+}
+
+/**
+ * The day a waiting entry is ticked paid on unless it says: today, or its own
+ * day once that's past, as one ticked late was most likely paid on time.
+ */
+export function payDay(entry: { date: string }, today: string): string {
+  return entry.date < today ? entry.date : today;
+}
+
 /** What an entry adds to the month: positive for credits, negative for debits. */
 export function signedCents(entry: { kind: EntryKind; cents: number }): number {
   return entry.kind === "credit" ? entry.cents : -entry.cents;

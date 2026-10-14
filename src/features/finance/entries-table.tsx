@@ -14,11 +14,28 @@ import { LabelChip, LabelDot } from "@/features/card/card-parts";
 import {
   Amount,
   BuyBadge,
+  DueBadge,
   FilesBadge,
   PaidToggle,
 } from "@/features/finance/finance-parts";
 import type { Account, Category, Entry } from "@/lib/finance";
-import { categoryOf, isOverdue } from "@/lib/finance";
+import { categoryOf, entryDays, isOverdue, statusLabel } from "@/lib/finance";
+
+function shortDay(date: string): string {
+  return format(parseISO(date), "MMM d");
+}
+
+/** Every day the entry keeps, for its date's tooltip: "Dated Oct 1 · Due Oct 31 · Paid Oct 15". */
+function daysTitle(entry: Entry): string {
+  const { issued, due, paidOn } = entryDays(entry);
+  return [
+    `Dated ${shortDay(issued)}`,
+    due && `Due ${shortDay(due)}`,
+    paidOn && `${statusLabel(entry.kind, true)} ${shortDay(paidOn)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 interface EntriesTableProps {
   account: Account;
@@ -78,8 +95,8 @@ export function EntriesTable({
             entry.transfer &&
             (accountTitles.get(entry.transfer.accountId) ?? "another account");
           const date = (
-            <time dateTime={entry.date}>
-              {format(parseISO(entry.date), "MMM d")}
+            <time dateTime={entry.date} title={daysTitle(entry)}>
+              {shortDay(entry.date)}
             </time>
           );
           return (
@@ -135,6 +152,7 @@ export function EntriesTable({
                   {entry.fileCount ? (
                     <FilesBadge count={entry.fileCount} />
                   ) : null}
+                  <DueBadge entry={entry} today={today} />
                 </span>
               </TableCell>
               <TableCell className="max-sm:hidden">

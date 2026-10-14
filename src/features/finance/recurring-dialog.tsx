@@ -2,7 +2,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "cn";
 import { useQuery } from "convex/react";
-import { PlusIcon } from "lucide-react";
+import { BellIcon, PlusIcon } from "lucide-react";
 import type { FormEvent } from "react";
 import { useId, useMemo, useState } from "react";
 
@@ -40,7 +40,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { LabelChip } from "@/features/card/card-parts";
 import { CategoryPicker } from "@/features/finance/category-picker";
-import { KindTabs, MoneyField } from "@/features/finance/entry-fields";
+import {
+  KindTabs,
+  MoneyField,
+  SwitchRow,
+} from "@/features/finance/entry-fields";
 import { CREDIT_TEXT } from "@/features/finance/finance-parts";
 import {
   DestinationField,
@@ -86,12 +90,15 @@ interface Fields {
   day: number;
   category?: string;
   note: string;
+  /** Its entries come due on their day, with reminders as it nears. */
+  remind: boolean;
   /** The account a transfer goes to. */
   to?: Id<"financeAccounts">;
   /** What arrives there, when its currency differs. */
   received: string;
 }
 
+/** Off at first: most monthly entries, like subscriptions, pay themselves. */
 function initialFields(item?: Recurring): Fields {
   if (!item) {
     return {
@@ -101,6 +108,7 @@ function initialFields(item?: Recurring): Fields {
       name: "",
       note: "",
       received: "",
+      remind: false,
     };
   }
   const { transfer } = item;
@@ -112,8 +120,15 @@ function initialFields(item?: Recurring): Fields {
     name: item.name,
     note: item.note,
     received: transfer?.cents ? moneyText(transfer.cents) : "",
+    remind: item.remind ?? false,
     to: transfer?.accountId,
   };
+}
+
+/** What the reminder switch says under it, for the kind of entry. */
+function remindHint(kind: EntryType): string {
+  const verb = kind === "credit" ? "receive" : "pay";
+  return `Due on its day, with reminders 3 days before, the day before and on the day, in months already started too. Leave off for ones you don’t ${verb} by hand.`;
 }
 
 function DeleteRecurring({
@@ -198,6 +213,7 @@ function RecurringForm({
       kind: entryKind(fields.kind),
       name: fields.name.trim(),
       note: fields.note.trim(),
+      remind: fields.remind,
       transfer:
         transferring && fields.to
           ? { accountId: fields.to, cents: received }
@@ -316,6 +332,14 @@ function RecurringForm({
         />
       </div>
 
+      <SwitchRow
+        checked={fields.remind}
+        hint={remindHint(fields.kind)}
+        id={`${id}-remind`}
+        label="Remind me"
+        onChange={(remind) => change({ remind })}
+      />
+
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-note`}>Note</Label>
         <Textarea
@@ -379,6 +403,15 @@ function RecurringRow({
               <span className="text-muted-foreground truncate text-sm">
                 to {to}
               </span>
+            )}
+            {item.remind && (
+              <>
+                <BellIcon
+                  aria-hidden
+                  className="text-muted-foreground size-3.5 shrink-0 self-center"
+                />
+                <span className="sr-only">Reminds as it comes due</span>
+              </>
             )}
           </span>
           {category ? (

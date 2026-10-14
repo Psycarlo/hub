@@ -76,6 +76,9 @@ function tagOf(item: InboxItem): string {
     case "file": {
       return `file:${item.file._id}`;
     }
+    case "entry": {
+      return `entry:${item.entry._id}`;
+    }
     default: {
       return `project:${item.project._id}`;
     }

@@ -9,11 +9,12 @@ import type {
   Account,
   AccountLook,
   Category,
+  DayChanges,
   Entry,
   EntryKind,
   Recurring,
 } from "@/lib/finance";
-import { monthOf } from "@/lib/finance";
+import { changedDays, monthOf, storedDays } from "@/lib/finance";
 import { sortLabels } from "@/lib/model";
 import type { Fiat } from "@/lib/portfolio";
 import { playSound } from "@/lib/sounds";
@@ -42,11 +43,19 @@ export interface EntryDraft {
   kind: EntryKind;
   name: string;
   cents: number;
-  date: string;
+  /** The day its bill or invoice is dated, or it was made. */
+  issued: string;
+  /** The day it must be paid or received by, if it says. */
+  due?: string;
+  /** The day it was paid or received; left out while it waits. */
+  paidOn?: string;
   category?: string;
   note: string;
-  paid: boolean;
 }
+
+/** What changes on an entry: null takes away its due day, or leaves it waiting again. */
+export type EntryChanges = Partial<Omit<EntryDraft, keyof DayChanges>> &
+  DayChanges;
 
 /** How an entry's bitcoin changes: linked to a buy, a new buy, or let go. */
 export type BuyChange =
@@ -75,6 +84,8 @@ export interface RecurringDraft {
   day: number;
   category?: string;
   note: string;
+  /** Its entries come due on their day, with reminders as it nears. */
+  remind: boolean;
   /** On a debit, the account it moves to every month. */
   transfer?: Recurring["transfer"];
 }
@@ -231,6 +242,24 @@ export function updateCategories(
   );
 }
 
+/** Turns the account's bill reminders on or off for the signed-in person, shown at once. */
+export function setAccountReminders(account: Account, subscribed: boolean) {
+  return run(
+    convex.mutation(
+      api.subscriptions.setAccount,
+      { accountId: account._id, subscribed },
+      {
+        optimisticUpdate: (store) =>
+          store.setQuery(
+            api.subscriptions.account,
+            { accountId: account._id },
+            subscribed
+          ),
+      }
+    )
+  );
+}
+
 export function startMonth(account: Account, month: string) {
   return run(
     convex.mutation(api.finance.startMonth, { accountId: account._id, month })
@@ -276,18 +305,39 @@ export function addEntry(
   );
 }
 
+/** Puts a changed entry where it falls now among the loaded months. */
+function moveEntry(
+  store: OptimisticLocalStore,
+  before: Entry,
+  next: Entry
+): void {
+  const from = monthOf(before.date);
+  const to = monthOf(next.date);
+  patchMonth(store, before.projectId, from, (entries) =>
+    from === to
+      ? entries.map((item) => (item._id === next._id ? next : item))
+      : entries.filter((item) => item._id !== next._id)
+  );
+  if (from !== to) {
+    patchMonth(store, before.projectId, to, (entries) => [
+      ...entries.filter((item) => item._id !== next._id),
+      next,
+    ]);
+  }
+}
+
 /**
  * Changes an entry, shown at once: ticking it paid shouldn't wait on the
  * server. A transfer's other side follows where it's loaded alongside.
  */
 export function updateEntry(
   entry: Entry,
-  changes: Partial<EntryDraft>,
+  changes: EntryChanges,
   buy?: BuyChange,
   transfer?: TransferDraft,
   files?: FileChanges
 ) {
-  const { category, ...rest } = changes;
+  const { category, due, issued, paidOn, ...rest } = changes;
   const other = entry.transfer?.entryId;
   const fileCount =
     (entry.fileCount ?? 0) +
@@ -299,6 +349,9 @@ export function updateEntry(
       {
         entryId: entry._id,
         ...rest,
+        ...(due === undefined ? {} : { due }),
+        ...(issued === undefined ? {} : { issued }),
+        ...(paidOn === undefined ? {} : { paidOn }),
         ...("category" in changes ? { category: category ?? null } : {}),
         ...buy,
         ...transfer,
@@ -307,34 +360,28 @@ export function updateEntry(
       },
       {
         optimisticUpdate: (store) => {
+          const changed = changedDays(entry, changes);
+          const days = changed && storedDays(changed);
           const next: Entry = {
             ...entry,
-            ...changes,
+            ...rest,
+            ...("category" in changes ? { category } : {}),
+            ...days,
             fileCount: fileCount > 0 ? fileCount : undefined,
             updatedAt: Date.now(),
           };
           if (buy && "buyId" in buy) {
             next.buyId = buy.buyId ?? undefined;
           }
-          const from = monthOf(entry.date);
-          const to = monthOf(next.date);
-          patchMonth(store, entry.projectId, from, (entries) =>
-            from === to
-              ? entries.map((item) => (item._id === entry._id ? next : item))
-              : entries.filter((item) => item._id !== entry._id)
-          );
-          if (from !== to) {
-            patchMonth(store, entry.projectId, to, (entries) => [
-              ...entries,
-              next,
-            ]);
-          }
-          if (other && changes.paid !== undefined) {
-            patchMonth(store, entry.projectId, from, (entries) =>
-              entries.map((item) =>
-                item._id === other ? { ...item, paid: next.paid } : item
-              )
-            );
+          moveEntry(store, entry, next);
+          const mirrored = store
+            .getQuery(api.finance.inMonth, {
+              month: monthOf(entry.date),
+              projectId: entry.projectId,
+            })
+            ?.entries.find((item) => item._id === other);
+          if (mirrored && days) {
+            moveEntry(store, mirrored, { ...mirrored, ...days });
           }
         },
       }

@@ -9,7 +9,7 @@ import { playSound } from "@/lib/sounds";
 
 export type { InboxItem } from "@convex/inbox";
 
-/** A card, page, file or project's notifications, which the inbox shows as one row. */
+/** A card, page, file, finance entry or project's notifications, which the inbox shows as one row. */
 export interface InboxGroup {
   /** What they're about, as `card:<id>` and the like. */
   subject: string;
@@ -49,6 +49,9 @@ export function subjectOf(item: InboxItem): string {
     }
     case "file": {
       return `file:${item.file._id}`;
+    }
+    case "entry": {
+      return `entry:${item.entry._id}`;
     }
     default: {
       return `project:${item.project._id}`;

@@ -19,6 +19,7 @@ import {
   vDriveChange,
   vEmote,
   vEntryKind,
+  vEntryNews,
   vEquipment,
   vExerciseKind,
   vField,
@@ -289,6 +290,8 @@ export default defineSchema({
    * Who follows a card or a Drive file, past who would anyway: a card's maker
    * and assignees, and a file's uploader, unless they unsubscribed. Making a
    * card, being assigned it, commenting or being mentioned subscribes them.
+   * On a finance account, whether someone who'd hear of its bills coming due
+   * turned that off.
    */
   subscriptions: defineTable(
     v.union(
@@ -301,15 +304,21 @@ export default defineSchema({
         fileId: v.id("driveFiles"),
         subscribed: v.boolean(),
         userId: v.id("users"),
+      }),
+      v.object({
+        accountId: v.id("financeAccounts"),
+        subscribed: v.boolean(),
+        userId: v.id("users"),
       })
     )
   )
     .index("by_card_and_user", ["cardId", "userId"])
-    .index("by_file_and_user", ["fileId", "userId"]),
+    .index("by_file_and_user", ["fileId", "userId"])
+    .index("by_account_and_user", ["accountId", "userId"]),
 
   /**
    * News for someone: a mention, a comment or a change on what they follow,
-   * a card coming due, or being added to a project.
+   * a card or a bill coming due, or being added to a project.
    */
   notifications: defineTable(
     v.union(
@@ -364,6 +373,17 @@ export default defineSchema({
         pushAt: v.optional(v.number()),
         read: v.boolean(),
         userId: v.id("users"),
+      }),
+      /** A reminder of a finance entry still to pay or receive; it goes once it's settled. */
+      v.object({
+        archived: v.boolean(),
+        /** The day it was due when the reminder went out, `YYYY-MM-DD`. */
+        due: v.string(),
+        entryId: v.id("financeEntries"),
+        pushAt: v.optional(v.number()),
+        read: v.boolean(),
+        reason: vEntryNews,
+        userId: v.id("users"),
       })
     )
   )
@@ -373,7 +393,8 @@ export default defineSchema({
     .index("by_page_and_user", ["pageId", "userId"])
     .index("by_drive_comment", ["driveCommentId"])
     .index("by_file_and_user", ["fileId", "userId"])
-    .index("by_project_and_user", ["projectId", "userId"]),
+    .index("by_project_and_user", ["projectId", "userId"])
+    .index("by_entry_and_user", ["entryId", "userId"]),
 
   /** Browsers someone turned notifications on in, which news is pushed to. */
   pushDevices: defineTable({
@@ -665,6 +686,12 @@ export default defineSchema({
     name: v.string(),
     note: v.string(),
     projectId: v.id("projects"),
+    /**
+     * Its entries come due on their day, so the project hears as it nears:
+     * the ones waiting in months already started, and every month after.
+     * Missing for ones that pay themselves, like a direct debit.
+     */
+    remind: v.optional(v.boolean()),
     /** On a debit, the account it moves to every month, which gets it as a credit. */
     transfer: v.optional(
       v.object({
@@ -690,21 +717,29 @@ export default defineSchema({
     /** Positive, in cents of the account's currency. */
     cents: v.number(),
     createdBy: v.id("users"),
-    /** `YYYY-MM-DD`. */
+    /**
+     * `YYYY-MM-DD` the money moves, which months, balances and statements go
+     * by: the day it was paid or received, or while it waits, its due day,
+     * or the day it was issued without one.
+     */
     date: v.string(),
+    /** `YYYY-MM-DD` it must be paid or received by; reminders go out as it nears. */
+    due: v.optional(v.string()),
     /** How many files it keeps, so lists can show it without reading them. */
     fileCount: v.optional(v.number()),
+    /** `YYYY-MM-DD` its bill or invoice is dated; missing when that's `date`. */
+    issued: v.optional(v.string()),
     kind: vEntryKind,
     name: v.string(),
     note: v.string(),
-    /** Paid on a debit, received on a credit. The month's sums count only these. */
+    /** Paid on a debit, received on a credit, on `date`. The month's sums count only these. */
     paid: v.boolean(),
     projectId: v.id("projects"),
     /** The monthly entry it was added from, when its month started. */
     recurringId: v.optional(v.id("financeRecurring")),
     /**
      * The other side of a transfer between accounts: a debit's credit, or a
-     * credit's debit. Both keep the same day and paid, and the same amount
+     * credit's debit. Both keep the same days and paid, and the same amount
      * unless the accounts' currencies differ.
      */
     transfer: v.optional(
@@ -718,7 +753,9 @@ export default defineSchema({
     .index("by_account_and_date", ["accountId", "date"])
     .index("by_account_and_paid_and_date", ["accountId", "paid", "date"])
     .index("by_project_and_date", ["projectId", "date"])
-    .index("by_project_and_buy", ["projectId", "buyId"]),
+    .index("by_project_and_buy", ["projectId", "buyId"])
+    .index("by_paid_and_due", ["paid", "due"])
+    .index("by_recurring_and_paid", ["recurringId", "paid"]),
 
   /** Files an entry keeps, like its invoice or receipt. */
   financeFiles: defineTable({

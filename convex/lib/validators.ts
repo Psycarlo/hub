@@ -39,7 +39,7 @@ import {
   SPRINT_STATUSES,
   STATUSES,
 } from "../shared/model";
-import { CARD_NEWS, FILE_NEWS } from "../shared/notifications";
+import { CARD_NEWS, ENTRY_NEWS, FILE_NEWS } from "../shared/notifications";
 import { EMOTES } from "../shared/office";
 import type { HexColor } from "../shared/palette";
 import { COLORS } from "../shared/palette";
@@ -222,6 +222,7 @@ export type CardChange = Infer<typeof vCardChange>;
 
 export const vCardNews = oneOf(CARD_NEWS);
 export const vFileNews = oneOf(FILE_NEWS);
+export const vEntryNews = oneOf(ENTRY_NEWS);
 
 /** A file just uploaded to R2, described by the app that uploaded it. */
 export const vUpload = v.object({

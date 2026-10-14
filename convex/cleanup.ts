@@ -11,7 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { dropFile } from "./lib/files";
-import { releaseBuy } from "./lib/finance";
+import { dropReminders, releaseBuy } from "./lib/finance";
 import { resummarize } from "./lib/gym";
 
 const BATCH = 100;
@@ -324,6 +324,7 @@ export const financeAccount = internalMutation({
       .take(BATCH);
     for (const entry of entries) {
       await ctx.db.delete(entry._id);
+      await dropReminders(ctx, entry._id);
       // The other side of a transfer stays, now money out or in on its own.
       if (entry.transfer) {
         const other = await ctx.db.get(entry.transfer.entryId);
@@ -345,6 +346,14 @@ export const financeAccount = internalMutation({
       .take(BATCH);
     for (const month of months) {
       await ctx.db.delete(month._id);
+    }
+    // Who turned its reminders off: one each at most, so few.
+    const choices = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_account_and_user", (q) => q.eq("accountId", accountId))
+      .collect();
+    for (const choice of choices) {
+      await ctx.db.delete(choice._id);
     }
     const files = await ctx.db
       .query("financeFiles")

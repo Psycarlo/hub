@@ -22,7 +22,7 @@ import {
   ownedFile,
   signedLink,
 } from "./lib/files";
-import { balanceOf, paidSince, settle } from "./lib/finance";
+import { balanceOf, dropReminders, paidSince, settle } from "./lib/finance";
 import { mediaUrl } from "./lib/media";
 import type { Upload } from "./lib/validators";
 import {
@@ -35,7 +35,12 @@ import {
 import { insertBuy } from "./portfolios";
 import { r2 } from "./r2";
 import { shortId } from "./shared/crm";
-import type { Category, EntryKind } from "./shared/finance";
+import type {
+  Category,
+  EntryDays,
+  EntryKind,
+  StoredDays,
+} from "./shared/finance";
 import {
   MAX_ACCOUNT_TITLE,
   MAX_CATEGORIES,
@@ -47,11 +52,14 @@ import {
   MAX_EXPORT_LINKS,
   MAX_EXPORT_MONTHS,
   STARTER_CATEGORIES,
+  changedDays,
   dayIn,
+  entryDays,
   isDate,
   isInternalTransfer,
   isMonth,
   nextMonth,
+  storedDays,
 } from "./shared/finance";
 import { LABEL_ID, canManageRole, labelKey, sortLabels } from "./shared/model";
 import { isHexColor } from "./shared/palette";
@@ -406,6 +414,18 @@ function cleanDate(date: string): string {
   return date;
 }
 
+/** The entry's days, checked, as it stores them. */
+function cleanDays({ issued, due, paidOn }: EntryDays): StoredDays {
+  cleanDate(issued);
+  if (due !== undefined && cleanDate(due) < issued) {
+    throw new ConvexError("Pick a due date on or after the day it’s dated.");
+  }
+  if (paidOn !== undefined) {
+    cleanDate(paidOn);
+  }
+  return storedDays({ due, issued, paidOn });
+}
+
 function cleanDay(day: number): number {
   if (!Number.isInteger(day) || day < 1 || day > 31) {
     throw new ConvexError("Pick a day of the month, 1 to 31.");
@@ -540,6 +560,8 @@ async function linkCredit(
     cents,
     createdBy: userId,
     date: debit.date,
+    due: debit.due,
+    issued: debit.issued,
     kind: "credit",
     name: debit.name,
     note: debit.note,
@@ -589,6 +611,7 @@ async function dropTransfer(ctx: MutationCtx, entry: Entry): Promise<void> {
   }
   await ctx.db.delete(other._id);
   await dropFiles(ctx, other._id);
+  await dropReminders(ctx, other._id);
 }
 
 /**
@@ -608,7 +631,7 @@ function mirroredCents(
 }
 
 /**
- * Keeps the other side of a transfer on the same day and paid, and on the
+ * Keeps the other side of a transfer on the same days and paid, and on the
  * same amount in the same currency; `received` changes it in another one.
  * One the person can't edit anymore is unlinked instead.
  */
@@ -633,8 +656,14 @@ async function mirrorTransfer(
     mine?.currency === theirs.currency,
     received
   );
-  const { date, paid } = entry;
-  if (other.cents === cents && other.date === date && other.paid === paid) {
+  const { date, due, issued, paid } = entry;
+  if (
+    other.cents === cents &&
+    other.date === date &&
+    other.due === due &&
+    other.issued === issued &&
+    other.paid === paid
+  ) {
     return;
   }
   // One the person can't edit anymore goes its own way, as a delete leaves it.
@@ -643,7 +672,14 @@ async function mirrorTransfer(
     await ctx.db.patch(other._id, { transfer: undefined });
     return;
   }
-  await ctx.db.patch(other._id, { cents, date, paid, updatedAt: Date.now() });
+  await ctx.db.patch(other._id, {
+    cents,
+    date,
+    due,
+    issued,
+    paid,
+    updatedAt: Date.now(),
+  });
 }
 
 interface TransferSync {
@@ -992,7 +1028,7 @@ async function transferMonthly(
   await linkCredit(ctx, debit, access.account, { cents, userId });
 }
 
-/** Each monthly entry as it lands in `month`, not paid yet. */
+/** Each monthly entry as it lands in `month`, not paid yet: due on its day, should it remind. */
 async function addRecurring(
   ctx: MutationCtx,
   { account, user }: { account: Doc<"financeAccounts">; user: Doc<"users"> },
@@ -1003,13 +1039,15 @@ async function addRecurring(
   const known = new Set(owned.map(({ id }) => id));
   const now = Date.now();
   for (const item of items) {
+    const date = dayIn(month, item.day);
     const entryId = await ctx.db.insert("financeEntries", {
       accountId: item.accountId,
       category:
         item.category && known.has(item.category) ? item.category : undefined,
       cents: item.cents,
       createdBy: user._id,
-      date: dayIn(month, item.day),
+      date,
+      due: item.remind ? date : undefined,
       kind: item.kind,
       name: item.name,
       note: item.note,
@@ -1368,13 +1406,17 @@ export const addEntry = mutation({
     buyId: v.optional(v.id("portfolioTransactions")),
     category: v.optional(v.string()),
     cents: v.number(),
-    date: v.string(),
+    /** The day it must be paid or received by, if it says. */
+    due: v.optional(v.string()),
     /** Uploads to keep with it, like its invoice. */
     files: v.optional(v.array(vUpload)),
+    /** The day its bill or invoice is dated, or it was made. */
+    issued: v.string(),
     kind: vEntryKind,
     name: v.string(),
     note: v.string(),
-    paid: v.boolean(),
+    /** The day it was paid or received; left out while it waits. */
+    paidOn: v.optional(v.string()),
     /** What arrives in the account it transfers to, in its cents, when its currency differs. */
     receivedCents: v.optional(v.number()),
     /** Where a debit transfers to: another account, which gets it as a credit. */
@@ -1407,12 +1449,11 @@ export const addEntry = mutation({
       buyId,
       category: await cleanCategory(ctx, account.projectId, args.category),
       createdBy: user._id,
-      date: cleanDate(args.date),
       kind: args.kind,
       note: cleanNote(args.note),
-      paid: args.paid,
       projectId: account.projectId,
       updatedAt: Date.now(),
+      ...cleanDays({ due: args.due, issued: args.issued, paidOn: args.paidOn }),
       ...entry,
     });
     const added = await ctx.db.get(entryId);
@@ -1437,6 +1478,17 @@ export const addEntry = mutation({
   },
 });
 
+/** Whether the change settles the entry or moves its due day, so what it reminded of no longer holds. */
+function outdatesReminders(
+  entry: Entry,
+  patch: Partial<Doc<"financeEntries">>
+): boolean {
+  return (
+    (patch.paid === true && !entry.paid) ||
+    ("due" in patch && patch.due !== entry.due)
+  );
+}
+
 export const updateEntry = mutation({
   args: {
     /** Uploads to keep with it as well. */
@@ -1447,12 +1499,15 @@ export const updateEntry = mutation({
     /** Null files it under no category. */
     category: v.optional(v.union(v.string(), v.null())),
     cents: v.optional(v.number()),
-    date: v.optional(v.string()),
+    /** Null takes the due day away. */
+    due: v.optional(v.union(v.string(), v.null())),
     entryId: v.id("financeEntries"),
+    issued: v.optional(v.string()),
     kind: v.optional(vEntryKind),
     name: v.optional(v.string()),
     note: v.optional(v.string()),
-    paid: v.optional(v.boolean()),
+    /** Null leaves it waiting to be paid or received again. */
+    paidOn: v.optional(v.union(v.string(), v.null())),
     /** What arrives where it transfers to, in its cents, when its currency differs. */
     receivedCents: v.optional(v.number()),
     /** Files it keeps to delete. */
@@ -1477,17 +1532,15 @@ export const updateEntry = mutation({
     if (changes.cents !== undefined) {
       patch.cents = cleanCents(changes.cents);
     }
-    if (changes.date !== undefined) {
-      patch.date = cleanDate(changes.date);
+    const days = changedDays(entry, changes);
+    if (days) {
+      Object.assign(patch, cleanDays(days));
     }
     if (changes.kind !== undefined) {
       patch.kind = changes.kind;
     }
     if (changes.note !== undefined) {
       patch.note = cleanNote(changes.note);
-    }
-    if (changes.paid !== undefined) {
-      patch.paid = changes.paid;
     }
     if (changes.category !== undefined) {
       patch.category = await cleanCategory(
@@ -1522,6 +1575,9 @@ export const updateEntry = mutation({
       throw new ConvexError("Only a debit can pay for bitcoin.");
     }
     await ctx.db.patch(entryId, patch);
+    if (outdatesReminders(entry, patch)) {
+      await dropReminders(ctx, entryId);
+    }
     await syncTransfer(ctx, entry, {
       account,
       entry: { ...entry, ...patch },
@@ -1543,6 +1599,7 @@ export const removeEntry = mutation({
     const { entry } = await requireEntry(ctx, entryId, "edit");
     await ctx.db.delete(entryId);
     await dropFiles(ctx, entryId);
+    await dropReminders(ctx, entryId);
     await dropTransfer(ctx, entry);
     await settleEntry(ctx, entry);
   },
@@ -1571,6 +1628,8 @@ export const createRecurring = mutation({
     kind: vEntryKind,
     name: v.string(),
     note: v.string(),
+    /** Its entries come due on their day, with reminders as it nears. */
+    remind: v.optional(v.boolean()),
     /** On a debit, the account it moves to every month. */
     transfer: v.optional(vRecurringTransfer),
   },
@@ -1586,6 +1645,7 @@ export const createRecurring = mutation({
       name: cleanName(args.name),
       note: cleanNote(args.note),
       projectId: account.projectId,
+      remind: args.remind || undefined,
       transfer: await cleanRecurringTransfer(
         ctx,
         account,
@@ -1596,7 +1656,44 @@ export const createRecurring = mutation({
   },
 });
 
-/** Changes what's added to months started from now on; ones started keep theirs. */
+/**
+ * Brings the monthly entry's waiting entries in months already started in
+ * line with its reminders: due on their day once it reminds, and no longer
+ * once it doesn't. One given another due day by hand keeps it.
+ */
+async function remindStarted(
+  ctx: MutationCtx,
+  recurringId: Id<"financeRecurring">,
+  remind: boolean
+): Promise<void> {
+  const waiting = await ctx.db
+    .query("financeEntries")
+    .withIndex("by_recurring_and_paid", (q) =>
+      q.eq("recurringId", recurringId).eq("paid", false)
+    )
+    .collect();
+  for (const entry of waiting) {
+    const days = entryDays(entry);
+    const ours = remind ? days.due === undefined : days.due === days.issued;
+    if (!ours) {
+      continue;
+    }
+    const patch = {
+      ...storedDays({ ...days, due: remind ? days.issued : undefined }),
+      updatedAt: Date.now(),
+    };
+    await ctx.db.patch(entry._id, patch);
+    if (!remind) {
+      await dropReminders(ctx, entry._id);
+    }
+    await mirrorTransfer(ctx, { ...entry, ...patch });
+  }
+}
+
+/**
+ * Changes what's added to months started from now on; ones started keep
+ * theirs, but for whether it reminds, which reaches what they still wait on.
+ */
 export const updateRecurring = mutation({
   args: {
     category: v.optional(v.union(v.string(), v.null())),
@@ -1606,6 +1703,7 @@ export const updateRecurring = mutation({
     name: v.optional(v.string()),
     note: v.optional(v.string()),
     recurringId: v.id("financeRecurring"),
+    remind: v.optional(v.boolean()),
     /** Where a debit moves every month: another account, null for none, or left out to keep it. */
     transfer: v.optional(v.union(vRecurringTransfer, v.null())),
   },
@@ -1643,6 +1741,9 @@ export const updateRecurring = mutation({
     if (changes.note !== undefined) {
       patch.note = cleanNote(changes.note);
     }
+    if (changes.remind !== undefined) {
+      patch.remind = changes.remind || undefined;
+    }
     if (changes.category !== undefined) {
       patch.category = await cleanCategory(
         ctx,
@@ -1651,6 +1752,12 @@ export const updateRecurring = mutation({
       );
     }
     await ctx.db.patch(recurringId, patch);
+    if (
+      changes.remind !== undefined &&
+      changes.remind !== Boolean(item.remind)
+    ) {
+      await remindStarted(ctx, recurringId, changes.remind);
+    }
   },
 });
 

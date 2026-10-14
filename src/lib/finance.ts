@@ -1,7 +1,12 @@
 import type { Doc } from "@convex/_generated/dataModel";
 import type { Category, EntryKind } from "@convex/shared/finance";
 import { isMonth } from "@convex/shared/finance";
-import { addMonths, format, parseISO } from "date-fns";
+import {
+  addMonths,
+  differenceInCalendarDays,
+  format,
+  parseISO,
+} from "date-fns";
 
 import type { Fiat } from "@/lib/portfolio";
 import { formatFiat, parsePrice } from "@/lib/portfolio";
@@ -14,14 +19,25 @@ export {
   MAX_CATEGORY_NAME,
   MAX_ENTRY_FILES,
   MAX_ENTRY_NAME,
+  changedDays,
   dayIn,
+  entryDays,
   isInternalTransfer,
   isMonth,
   monthOf,
   nextMonth,
+  payDay,
   signedCents,
+  storedDays,
 } from "@convex/shared/finance";
-export type { CardNetwork, Category, EntryKind } from "@convex/shared/finance";
+export type {
+  CardNetwork,
+  Category,
+  DayChanges,
+  EntryDays,
+  EntryKind,
+  StoredDays,
+} from "@convex/shared/finance";
 export type {
   BuyLink,
   Carried,
@@ -173,6 +189,11 @@ export function monthTotals(entries: Entry[], today: string): MonthTotals {
 /** Whether an entry waits past its day. */
 export function isOverdue(entry: Pick<Entry, "paid" | "date">, today: string) {
   return !entry.paid && entry.date < today;
+}
+
+/** Days from `today` to `date`, both `YYYY-MM-DD`; below zero once it's past. */
+export function daysUntil(date: string, today: string): number {
+  return differenceInCalendarDays(parseISO(date), parseISO(today));
 }
 
 /** The category an entry is filed under, unless it's none or was deleted. */

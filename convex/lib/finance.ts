@@ -19,6 +19,70 @@ export async function releaseBuy(
   }
 }
 
+function reminderChoice(
+  ctx: QueryCtx,
+  accountId: Id<"financeAccounts">,
+  userId: Id<"users">
+) {
+  return ctx.db
+    .query("subscriptions")
+    .withIndex("by_account_and_user", (q) =>
+      q.eq("accountId", accountId).eq("userId", userId)
+    )
+    .unique();
+}
+
+/** Whether they hear of the account's bills coming due: they do, unless they turned it off. */
+export async function remindsOf(
+  ctx: QueryCtx,
+  accountId: Id<"financeAccounts">,
+  userId: Id<"users">
+): Promise<boolean> {
+  const choice = await reminderChoice(ctx, accountId, userId);
+  return choice?.subscribed ?? true;
+}
+
+/** Who turned the account's reminders off. */
+export async function mutedOn(
+  ctx: QueryCtx,
+  accountId: Id<"financeAccounts">
+): Promise<Set<Id<"users">>> {
+  const rows = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_account_and_user", (q) => q.eq("accountId", accountId))
+    .collect();
+  return new Set(rows.flatMap((row) => (row.subscribed ? [] : [row.userId])));
+}
+
+/** Turns the account's reminders on or off for someone. */
+export async function setReminding(
+  ctx: MutationCtx,
+  accountId: Id<"financeAccounts">,
+  userId: Id<"users">,
+  subscribed: boolean
+): Promise<void> {
+  const row = await reminderChoice(ctx, accountId, userId);
+  if (!row) {
+    await ctx.db.insert("subscriptions", { accountId, subscribed, userId });
+  } else if (row.subscribed !== subscribed) {
+    await ctx.db.patch(row._id, { subscribed });
+  }
+}
+
+/** Takes back the reminders an entry sent, once it's settled, gone or due another day. */
+export async function dropReminders(
+  ctx: MutationCtx,
+  entryId: Id<"financeEntries">
+): Promise<void> {
+  const reminders = await ctx.db
+    .query("notifications")
+    .withIndex("by_entry_and_user", (q) => q.eq("entryId", entryId))
+    .collect();
+  for (const reminder of reminders) {
+    await ctx.db.delete(reminder._id);
+  }
+}
+
 /**
  * What the account's paid and received entries add up to from `from` on, a
  * date or a `YYYY-MM` month; every one without it.

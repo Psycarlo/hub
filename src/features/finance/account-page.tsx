@@ -2,6 +2,8 @@ import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
+  BellIcon,
+  BellOffIcon,
   CalendarPlusIcon,
   DownloadIcon,
   FileUpIcon,
@@ -15,6 +17,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useSearchParams } from "wouter";
 
 import { IconButton } from "@/components/icon-button";
@@ -42,7 +45,7 @@ import {
   FilterButton,
 } from "@/features/finance/entry-filters";
 import { ExportDialog } from "@/features/finance/export-dialog";
-import { financePath } from "@/features/finance/finance-context";
+import { ENTRY_PARAM, financePath } from "@/features/finance/finance-context";
 import type { FinanceView } from "@/features/finance/finance-parts";
 import { useFinanceView } from "@/features/finance/finance-parts";
 import { InvoiceTray, toReview } from "@/features/finance/invoice-tray";
@@ -69,7 +72,11 @@ import {
   monthTotals,
   parseMonth,
 } from "@/lib/finance";
-import { addToMonth, startMonth } from "@/lib/finance-actions";
+import {
+  addToMonth,
+  setAccountReminders,
+  startMonth,
+} from "@/lib/finance-actions";
 import type { InvoiceJob } from "@/lib/invoice-jobs";
 import { addJobs, skipJob, useInvoiceJobs } from "@/lib/invoice-jobs";
 import type { Portfolio, Transaction } from "@/lib/portfolio";
@@ -457,7 +464,41 @@ function MonthEntries(props: MonthEntriesProps) {
   );
 }
 
-/** The account's name, and its monthly entries, categories, export and settings. */
+/**
+ * Whether the person hears of the account's bills coming due, and a switch:
+ * only for those who can settle them.
+ */
+function RemindersButton({ account }: { account: Account }) {
+  const reminding = useQuery(api.subscriptions.account, {
+    accountId: account._id,
+  });
+  if (typeof reminding !== "boolean") {
+    return null;
+  }
+  const toggle = () => {
+    setAccountReminders(account, !reminding);
+    toast(
+      reminding
+        ? `Bill reminders off for ${account.title}`
+        : `Bill reminders on for ${account.title}`,
+      {
+        description: reminding
+          ? "You won’t hear when its bills come due."
+          : "You’ll hear 3 days before its bills are due, the day before and on the day.",
+      }
+    );
+  };
+  return (
+    <IconButton
+      label={reminding ? "Turn off bill reminders" : "Turn on bill reminders"}
+      onClick={toggle}
+    >
+      {reminding ? <BellIcon /> : <BellOffIcon />}
+    </IconButton>
+  );
+}
+
+/** The account's name, and its reminders, monthly entries, categories, export and settings. */
 function AccountHeader({
   account,
   recurring,
@@ -485,6 +526,7 @@ function AccountHeader({
       </div>
       <FluidTooltip.Group>
         <div className="flex items-center gap-1">
+          {editable && <RemindersButton account={account} />}
           <IconButton
             label={recurring > 0 ? `Every month · ${recurring}` : "Every month"}
             onClick={() => onOpen("recurring")}
@@ -747,6 +789,27 @@ function AddTransaction({
   );
 }
 
+/**
+ * Opens the entry a reminder's link names, once the month loads; says which
+ * that is, so closing it can let go of the link.
+ */
+function useLinkedEntry(
+  entries: Entry[] | undefined,
+  onOpen: ((entry: Entry) => void) | undefined
+): string | null {
+  const [params] = useSearchParams();
+  const linked = params.get(ENTRY_PARAM);
+  const [opened, setOpened] = useState<string | null>(null);
+  if (entries && linked !== opened) {
+    setOpened(linked);
+    const found = entries.find((entry) => entry._id === linked);
+    if (found) {
+      onOpen?.(found);
+    }
+  }
+  return linked;
+}
+
 /** One account's month: what it adds up to, then every entry in it. */
 export function AccountPage({
   project,
@@ -793,6 +856,7 @@ export function AccountPage({
     setDropped(NO_JOBS);
     setDialog("entry");
   };
+  const linked = useLinkedEntry(entries, editable ? openEntry : undefined);
   /** One invoice opens a new entry with it; several queue up in the tray, to review one by one. */
   const takeInvoices = (files: File[]) => {
     if (files.length === 1) {
@@ -913,6 +977,15 @@ export function AccountPage({
             entry={editing}
             jobs={dropped}
             key={editing?._id ?? `new-${newDate ?? month}-${dropped.join(",")}`}
+            onOpenChange={(open) => {
+              setDialog(open ? "entry" : undefined);
+              // Closed, a reminder's link would open it again on reload.
+              if (!open && linked) {
+                setParams(month === current ? {} : { month }, {
+                  replace: true,
+                });
+              }
+            }}
             portfolios={portfolios}
           />
           <InvoiceReview

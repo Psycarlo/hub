@@ -9,6 +9,7 @@ export type FillableField =
   | "name"
   | "amount"
   | "date"
+  | "due"
   | "paid"
   | "category"
   | "note";
@@ -17,22 +18,14 @@ export type FillableField =
 export interface InvoiceSuggestion {
   name?: string;
   amount?: string;
+  /** The day it's dated; its due day when it says only that. */
   date?: string;
+  due?: string;
   paid?: boolean;
   category?: string;
   note?: string;
   /** Its total, when it's in another currency than the account's: said, not filled in. */
   foreign?: { cents: number; currency: string };
-}
-
-/**
- * The day the entry falls on: when it was paid, for a receipt, or when it's
- * due, for a bill still to pay; when it was issued if it doesn't say.
- */
-function dayOf(reading: InvoiceReading): string | undefined {
-  return reading.paid
-    ? (reading.issued ?? reading.due)
-    : (reading.due ?? reading.issued);
 }
 
 /** How the form would take what the invoice says, in the account it goes to. */
@@ -41,12 +34,16 @@ export function suggest(
   account: Account,
   today: string
 ): InvoiceSuggestion {
-  const date = dayOf(reading);
+  const date = reading.issued ?? reading.due;
+  // A due day before the invoice's own is misread; it's left out.
+  const due =
+    reading.due && date && reading.due >= date ? reading.due : undefined;
   const sameMoney =
     reading.currency === undefined || reading.currency === account.currency;
   const suggestion: InvoiceSuggestion = {
     category: reading.category,
     date,
+    due,
     name: reading.name,
     note: reading.number ? `Invoice ${reading.number}` : undefined,
   };
@@ -55,11 +52,12 @@ export function suggest(
   } else if (reading.cents !== undefined && reading.currency) {
     suggestion.foreign = { cents: reading.cents, currency: reading.currency };
   }
+  const settles = due ?? date;
   if (reading.paid !== undefined) {
     suggestion.paid = reading.paid;
-  } else if (date) {
+  } else if (settles) {
     // Settled once its day has come, like any entry typed in.
-    suggestion.paid = date <= today;
+    suggestion.paid = settles <= today;
   }
   return suggestion;
 }

@@ -1,13 +1,21 @@
 /**
  * Following cards and Drive files, as their activity shows it: whether you
- * do, who else does, and a button to change your mind.
+ * do, who else does, and a button to change your mind. And whether you hear
+ * of a finance account's bills coming due.
  */
 import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { canSee, ifVisible, requireCard, requireDriveFile } from "./lib/access";
+import {
+  canSee,
+  ifVisible,
+  requireAccount,
+  requireCard,
+  requireDriveFile,
+} from "./lib/access";
+import { remindsOf, setReminding } from "./lib/finance";
 import type { Followable } from "./lib/notify";
 import { followers, follows, setFollowing } from "./lib/notify";
 
@@ -65,5 +73,22 @@ export const setFile = mutation({
   handler: async (ctx, { fileId, subscribed }) => {
     const access = await requireDriveFile(ctx, fileId, "view");
     await setFollowing(ctx, access.file, access.user._id, subscribed);
+  },
+});
+
+/** Whether you hear of the account's bills coming due; null once it's out of reach. */
+export const account = query({
+  args: { accountId: v.id("financeAccounts") },
+  handler: async (ctx, { accountId }): Promise<boolean | null> => {
+    const access = await ifVisible(requireAccount(ctx, accountId, "view"));
+    return access && remindsOf(ctx, accountId, access.user._id);
+  },
+});
+
+export const setAccount = mutation({
+  args: { accountId: v.id("financeAccounts"), subscribed: v.boolean() },
+  handler: async (ctx, { accountId, subscribed }) => {
+    const { user } = await requireAccount(ctx, accountId, "view");
+    await setReminding(ctx, accountId, user._id, subscribed);
   },
 });

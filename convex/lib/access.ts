@@ -488,16 +488,34 @@ export async function ifVisible<T>(check: Promise<T>): Promise<T | null> {
   }
 }
 
+/** The user's role on the project while they're active, or null. */
+async function activeRole(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  projectId: Id<"projects">
+): Promise<ProjectRole | null> {
+  const user = await ctx.db.get(userId);
+  if (!user || user.deactivated) {
+    return null;
+  }
+  const project = await ctx.db.get(projectId);
+  return project ? await roleIn(ctx, user, project) : null;
+}
+
 /** Whether the user, active and on the project, may read it. */
 export async function canSee(
   ctx: QueryCtx,
   userId: Id<"users">,
   projectId: Id<"projects">
 ): Promise<boolean> {
-  const user = await ctx.db.get(userId);
-  if (!user || user.deactivated) {
-    return false;
-  }
-  const project = await ctx.db.get(projectId);
-  return project !== null && (await roleIn(ctx, user, project)) !== null;
+  return (await activeRole(ctx, userId, projectId)) !== null;
+}
+
+/** Whether the user, active and on the project, may change what's in it. */
+export async function canChange(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  projectId: Id<"projects">
+): Promise<boolean> {
+  return allows(await activeRole(ctx, userId, projectId), "edit");
 }

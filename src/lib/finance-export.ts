@@ -9,6 +9,7 @@ import { format, parseISO } from "date-fns";
 import { toCsv } from "@/lib/csv";
 import type { EntryKind, MonthTotals } from "@/lib/finance";
 import {
+  entryDays,
   monthName,
   monthOf,
   monthStart,
@@ -169,7 +170,12 @@ export function filePaths(
 
 /** One entry as the statement and the CSV list it. */
 export interface StatementRow {
+  /** The day the money moved, or is to. */
   date: string;
+  /** The day its bill or invoice is dated. */
+  issued: string;
+  /** The day it must be paid or received by, if it says. */
+  due?: string;
   name: string;
   note: string;
   kind: EntryKind;
@@ -310,9 +316,11 @@ export function buildStatement({
       },
       cents: entry.cents,
       date: entry.date,
+      due: entry.due,
       files: (filesOf.get(entry._id) ?? []).map(
         (file) => paths?.get(file._id) ?? file.name
       ),
+      issued: entryDays(entry).issued,
       kind: entry.kind,
       name: entry.name,
       note: entry.note,
@@ -368,6 +376,8 @@ export function buildStatement({
 
 const CSV_HEADERS = [
   "Date",
+  "Dated",
+  "Due",
   "Name",
   "Category",
   "Status",
@@ -387,6 +397,8 @@ function decimal(cents: number): string {
 export function statementCsv(statement: Statement): string {
   const rows = statement.rows.map((row) => [
     row.date,
+    row.issued,
+    row.due ?? "",
     row.name,
     row.category?.name ?? "",
     statusLabel(row.kind, row.paid),

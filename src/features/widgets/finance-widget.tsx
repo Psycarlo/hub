@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { accountPath } from "@/features/finance/finance-context";
+import { entryPath } from "@/features/finance/finance-context";
 import { CREDIT_TEXT } from "@/features/finance/finance-parts";
 import type { WidgetKind } from "@/features/widgets/widget-kind";
 import { WidgetBleed } from "@/features/widgets/widget-parts";
@@ -77,7 +77,7 @@ function WaitingChip({
   );
 }
 
-/** One entry still to pay or receive, opening its account on its month. */
+/** One entry still to pay or receive, opening it on its account. */
 function UnpaidRow({ entry, today }: { entry: UnpaidEntry; today: string }) {
   const overdue = entry.date < today;
   return (
@@ -85,10 +85,10 @@ function UnpaidRow({ entry, today }: { entry: UnpaidEntry; today: string }) {
       <Link
         className="hover:bg-foreground/5 focus-visible:bg-foreground/5 focus-visible:ring-ring/50 flex items-center gap-3 rounded-xl px-4 text-sm transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-inset"
         draggable={false}
-        href={accountPath(
+        href={entryPath(
           { slug: entry.slug },
           { _id: entry.accountId, title: entry.accountTitle },
-          monthOf(entry.date)
+          entry
         )}
         style={{ height: ROW_HEIGHT }}
       >

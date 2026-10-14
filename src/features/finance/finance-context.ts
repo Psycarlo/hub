@@ -1,4 +1,5 @@
 import type { Account } from "@/lib/finance";
+import { monthOf } from "@/lib/finance";
 import type { Project } from "@/lib/project";
 import { projectPath, slugify } from "@/lib/project";
 
@@ -23,6 +24,18 @@ export function accountPath(
   const slug = slugify(account.title);
   const path = `${financePath(project)}/${slug ? `${slug}-` : ""}${account._id}`;
   return month ? `${path}?month=${month}` : path;
+}
+
+/** Opens an entry on its account's page, as a link from the inbox does. */
+export const ENTRY_PARAM = "entry";
+
+/** An entry's link: its account at the month it falls in, with the entry open. */
+export function entryPath(
+  project: Pick<Project, "slug">,
+  account: Pick<Account, "_id" | "title">,
+  entry: { _id: string; date: string }
+): string {
+  return `${accountPath(project, account, monthOf(entry.date))}&${ENTRY_PARAM}=${entry._id}`;
 }
 
 /** The account id at the end of an account link, whatever name came before it. */

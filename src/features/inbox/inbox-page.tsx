@@ -1,4 +1,5 @@
 import { api } from "@convex/_generated/api";
+import type { CardNotification, EntryNotification } from "@convex/inbox";
 import {
   notificationQuote,
   notificationWords,
@@ -13,6 +14,7 @@ import {
   CalendarClockIcon,
   CalendarIcon,
   CheckCheckIcon,
+  CircleCheckIcon,
   InboxIcon,
   MailIcon,
   MailOpenIcon,
@@ -46,6 +48,7 @@ import { useMe, useUsers } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import { pageTitle } from "@/lib/docs";
+import { payDay, statusLabel } from "@/lib/finance";
 import type { UserId } from "@/lib/model";
 import { cardKey } from "@/lib/model";
 
@@ -77,27 +80,13 @@ function today(): string {
   return format(new Date(), "yyyy-MM-dd");
 }
 
-/** The icon on the avatar's corner: what kind of news it is. */
-function newsIcon(
-  item: InboxItem,
-  me: UserId
-): { icon: LucideIcon; className?: string } {
-  switch (item.kind) {
-    case "page": {
-      return { icon: AtSignIcon };
-    }
-    case "file": {
-      return {
-        icon: item.reason === "comment" ? MessageSquareIcon : AtSignIcon,
-      };
-    }
-    case "project": {
-      return { icon: UserPlusIcon };
-    }
-    default: {
-      break;
-    }
-  }
+interface NewsIcon {
+  icon: LucideIcon;
+  className?: string;
+}
+
+/** A card's news: why they heard, or for a change, what changed that matters most to them. */
+function cardIcon(item: CardNotification, me: UserId): NewsIcon {
   switch (item.reason) {
     case "comment": {
       return { icon: MessageSquareIcon };
@@ -140,6 +129,31 @@ function newsIcon(
     }
     default: {
       return { icon: PencilIcon };
+    }
+  }
+}
+
+/** The icon on the avatar's corner: what kind of news it is. */
+function newsIcon(item: InboxItem, me: UserId): NewsIcon {
+  switch (item.kind) {
+    case "page": {
+      return { icon: AtSignIcon };
+    }
+    case "file": {
+      return {
+        icon: item.reason === "comment" ? MessageSquareIcon : AtSignIcon,
+      };
+    }
+    case "project": {
+      return { icon: UserPlusIcon };
+    }
+    case "entry": {
+      return item.due < today()
+        ? { className: "text-destructive", icon: CalendarClockIcon }
+        : { icon: CalendarClockIcon };
+    }
+    default: {
+      return cardIcon(item, me);
     }
   }
 }
@@ -192,6 +206,16 @@ function Subject({ item, read }: { item: InboxItem; read: boolean }) {
         </span>
       );
     }
+    case "entry": {
+      return (
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className={title}>{item.entry.name}</span>
+          <span className="text-muted-foreground truncate text-xs">
+            {item.account.title}
+          </span>
+        </span>
+      );
+    }
     default: {
       return (
         <span className="flex min-w-0 items-baseline gap-2">
@@ -223,7 +247,7 @@ function Said({ item, me }: { item: InboxItem; me: UserId }) {
   );
 }
 
-/** Subscribes to the card or file again, or stops. */
+/** Subscribes to the card, file or account's bills again, or stops. */
 function follow(item: InboxItem, subscribed: boolean): Promise<unknown> | null {
   if (item.kind === "card") {
     return convex.mutation(api.subscriptions.setCard, {
@@ -237,7 +261,58 @@ function follow(item: InboxItem, subscribed: boolean): Promise<unknown> | null {
       subscribed,
     });
   }
+  if (item.kind === "entry") {
+    return convex.mutation(api.subscriptions.setAccount, {
+      accountId: item.account._id,
+      subscribed,
+    });
+  }
   return null;
+}
+
+/** What unsubscribing means for the news it's about. */
+function unsubscribedText(item: InboxItem): string {
+  return item.kind === "entry"
+    ? `No more reminders of bills in ${item.account.title}.`
+    : "You won’t hear about it unless someone mentions you.";
+}
+
+/** How wide the time is, so the buttons that show over it on hover fit. */
+const TIME_WIDTHS = ["w-16", "w-16", "w-16", "w-24", "w-32"];
+
+/**
+ * Ticks the entry paid or received, today or on its own day once that's
+ * past, which takes its reminders away; undone, it waits again.
+ */
+function markPaid(item: EntryNotification): void {
+  const { entry } = item;
+  const settle = (paidOn: string | null) =>
+    run(
+      convex.mutation(
+        api.finance.updateEntry,
+        { entryId: entry._id, paidOn },
+        {
+          optimisticUpdate: (store) => {
+            const current = store.getQuery(api.inbox.list, {});
+            if (current && paidOn) {
+              store.setQuery(
+                api.inbox.list,
+                {},
+                current.filter(
+                  (other) =>
+                    !(other.kind === "entry" && other.entry._id === entry._id)
+                )
+              );
+            }
+          },
+        }
+      )
+    );
+  settle(payDay(entry, today()));
+  toast(`Marked ${statusLabel(entry.kind, true).toLowerCase()}`, {
+    action: { label: "Undo", onClick: () => settle(null) },
+    description: entry.name,
+  });
 }
 
 function Row({
@@ -252,7 +327,13 @@ function Row({
   const { latest, items, read } = group;
   const date = new Date(latest._creationTime);
   const canUnsubscribe =
-    (latest.kind === "card" || latest.kind === "file") && latest.following;
+    (latest.kind === "card" ||
+      latest.kind === "file" ||
+      latest.kind === "entry") &&
+    latest.following;
+  const payable = latest.kind === "entry" && latest.editable ? latest : null;
+  // Read and archive always, then unsubscribe and paid where they fit.
+  const buttons = 2 + Number(canUnsubscribe) + Number(payable !== null);
 
   const archive = () => {
     inbox.setArchived(items, true);
@@ -279,7 +360,7 @@ function Row({
           inbox.setArchived(items, false);
         },
       },
-      description: "You won’t hear about it unless someone mentions you.",
+      description: unsubscribedText(latest),
     });
   };
 
@@ -310,7 +391,7 @@ function Row({
         <time
           className={cn(
             "text-muted-foreground shrink-0 text-right text-xs tabular-nums group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible",
-            canUnsubscribe ? "w-24" : "w-16"
+            TIME_WIDTHS[buttons]
           )}
           dateTime={date.toISOString()}
           title={format(date, "PPpp")}
@@ -327,8 +408,23 @@ function Row({
             {read ? <MailIcon /> : <MailOpenIcon />}
           </IconButton>
           {canUnsubscribe && (
-            <IconButton label="Unsubscribe" onClick={unsubscribe}>
+            <IconButton
+              label={
+                latest.kind === "entry"
+                  ? `Stop reminders for ${latest.account.title}`
+                  : "Unsubscribe"
+              }
+              onClick={unsubscribe}
+            >
               <BellOffIcon />
+            </IconButton>
+          )}
+          {payable && (
+            <IconButton
+              label={`Mark ${statusLabel(payable.entry.kind, true).toLowerCase()}`}
+              onClick={() => markPaid(payable)}
+            >
+              <CircleCheckIcon />
             </IconButton>
           )}
           <IconButton label="Archive" onClick={archive}>

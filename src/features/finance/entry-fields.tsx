@@ -1,9 +1,10 @@
 import { cn } from "cn";
-import { addYears, format, parseISO } from "date-fns";
+import { addDays, addYears, format, parseISO } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { FIELD, Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -190,6 +191,106 @@ export function DayField({
           />
         </PopoverContent>
       </Popover>
+    </div>
+  );
+}
+
+/** Days after an invoice's date it's commonly due, to pick in one go. */
+const TERMS = [7, 15, 30];
+
+/**
+ * A day that can be left out, from a calendar, as `YYYY-MM-DD`; none before
+ * `from`, which its terms count from.
+ */
+export function OptionalDayField({
+  id,
+  label,
+  value,
+  from,
+  placeholder = "None",
+  hint,
+  pending = false,
+  onChange,
+}: {
+  id: string;
+  label: ReactNode;
+  value?: string;
+  from: string;
+  placeholder?: string;
+  hint?: ReactNode;
+  /** Waiting on an invoice being read, which may fill it in. */
+  pending?: boolean;
+  onChange: (date: string | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const day = value ? parseISO(value) : undefined;
+  const start = parseISO(from);
+  const pick = (next?: string) => {
+    onChange(next);
+    setOpen(false);
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Popover onOpenChange={setOpen} open={open}>
+        <PopoverTrigger
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          className={cn(
+            FIELD,
+            "flex h-9 items-center justify-between gap-2 text-left select-none",
+            pending && "invoice-pending"
+          )}
+          id={id}
+        >
+          <span className={cn("truncate", !day && "text-muted-foreground")}>
+            {day ? format(day, "EEE, MMM d, yyyy") : placeholder}
+          </span>
+          <CalendarIcon className="text-muted-foreground size-4 shrink-0" />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="p-2">
+          <Calendar
+            captionLayout="dropdown"
+            defaultMonth={day ?? start}
+            disabled={{ before: start }}
+            endMonth={LAST_MONTH}
+            mode="single"
+            onSelect={(next) =>
+              pick(next ? format(next, "yyyy-MM-dd") : undefined)
+            }
+            selected={day}
+            startMonth={FIRST_MONTH}
+          />
+          <div className="flex items-center gap-1 border-t px-1 pt-2">
+            {TERMS.map((days) => (
+              <Button
+                key={days}
+                onClick={() => pick(format(addDays(start, days), "yyyy-MM-dd"))}
+                size="xs"
+                type="button"
+                variant="ghost"
+              >
+                {days} days
+              </Button>
+            ))}
+            {value && (
+              <Button
+                className="ml-auto"
+                onClick={() => pick()}
+                size="xs"
+                type="button"
+                variant="ghost"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+      {hint && (
+        <p className={cn(HINT, "text-muted-foreground")} id={`${id}-hint`}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

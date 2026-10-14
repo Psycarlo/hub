@@ -17,8 +17,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useToday } from "@/hooks/use-today";
 import type { Entry } from "@/lib/finance";
-import { formatMoney, signedCents, statusLabel } from "@/lib/finance";
+import {
+  daysUntil,
+  formatMoney,
+  payDay,
+  signedCents,
+  statusLabel,
+} from "@/lib/finance";
 import { updateEntry } from "@/lib/finance-actions";
 import type { Fiat } from "@/lib/portfolio";
 import { readStorage, writeStorage } from "@/lib/utils";
@@ -53,7 +60,10 @@ export function Amount({
   );
 }
 
-/** Ticks an entry paid or received, or back; read-only without `editable`. */
+/**
+ * Ticks an entry paid or received, today or on its own day once that's past,
+ * or back; read-only without `editable`.
+ */
 export function PaidToggle({
   entry,
   editable,
@@ -61,6 +71,7 @@ export function PaidToggle({
   entry: Entry;
   editable: boolean;
 }) {
+  const today = useToday();
   const label = entry.paid
     ? statusLabel(entry.kind, true)
     : `Mark ${statusLabel(entry.kind, true).toLowerCase()}`;
@@ -70,7 +81,9 @@ export function PaidToggle({
       checked={entry.paid}
       className="border-input bg-card focus-visible:ring-ring/50 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground dark:bg-input/30 dark:data-checked:bg-primary relative flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none after:absolute after:-inset-2.5 focus-visible:ring-3 active:scale-[0.9] disabled:cursor-default"
       disabled={!editable}
-      onCheckedChange={(paid) => updateEntry(entry, { paid })}
+      onCheckedChange={(paid) =>
+        updateEntry(entry, { paidOn: paid ? payDay(entry, today) : null })
+      }
     >
       <CheckboxPrimitive.Indicator className="grid place-content-center transition-[opacity,scale] duration-150 ease-out data-ending-style:scale-50 data-ending-style:opacity-0 data-starting-style:scale-50 data-starting-style:opacity-0">
         <CheckIcon className="size-3" strokeWidth={3} />
@@ -85,6 +98,47 @@ export function PaidToggle({
       <TooltipTrigger render={toggle} />
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Days ahead a waiting entry's due day is pointed out. */
+const DUE_AHEAD = 7;
+
+/**
+ * Points out an entry still waiting that's due within the week: amber on the
+ * day itself. One past due says so by its red date instead.
+ */
+export function DueBadge({
+  entry,
+  today,
+}: {
+  entry: Pick<Entry, "due" | "paid">;
+  today: string;
+}) {
+  if (entry.paid || !entry.due) {
+    return null;
+  }
+  const days = daysUntil(entry.due, today);
+  if (days < 0 || days > DUE_AHEAD) {
+    return null;
+  }
+  let label = `Due in ${days} days`;
+  if (days === 0) {
+    label = "Due today";
+  } else if (days === 1) {
+    label = "Due tomorrow";
+  }
+  return (
+    <span
+      className={cn(
+        "inline-flex h-5 shrink-0 items-center rounded-full px-2 text-xs font-medium whitespace-nowrap",
+        days === 0
+          ? "bg-amber-500/12 text-amber-800 dark:bg-amber-400/16 dark:text-amber-300"
+          : "bg-foreground/6 text-muted-foreground"
+      )}
+    >
+      {label}
+    </span>
   );
 }
 

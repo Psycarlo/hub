@@ -55,6 +55,7 @@ import {
   HINT_ACTION,
   KindTabs,
   MoneyField,
+  OptionalDayField,
   SwitchRow,
 } from "@/features/finance/entry-fields";
 import {
@@ -95,11 +96,14 @@ import { useBtcPrices } from "@/lib/bitcoin-price";
 import type { Account, Category, Entry, EntryType } from "@/lib/finance";
 import {
   MAX_ENTRY_NAME,
+  entryDays,
   entryKind,
   formatMoney,
   moneyText,
   parseMoney,
+  payDay,
   statusLabel,
+  storedDays,
 } from "@/lib/finance";
 import type {
   BuyChange,
@@ -144,10 +148,15 @@ interface Fields {
   kind: EntryType;
   name: string;
   amount: string;
+  /** The day its bill or invoice is dated, or it was made. */
   date: string;
+  /** The day it must be paid or received by, if it says. */
+  due?: string;
   category?: string;
   note: string;
   paid: boolean;
+  /** The day it was paid or received, once picked; it follows from the rest till then. */
+  paidOn?: string;
   bitcoin: BitcoinFields;
   /** The account a transfer goes to. */
   to?: Id<"financeAccounts">;
@@ -181,16 +190,42 @@ function initialFields(
     };
   }
   const transfers = entry.kind === "debit" && entry.transfer !== undefined;
+  const days = entryDays(entry);
   return {
     amount: moneyText(entry.cents),
     bitcoin,
     category: entry.category,
-    date: entry.date,
+    date: days.issued,
+    due: days.due,
     kind: transfers ? "transfer" : entry.kind,
     name: entry.name,
     note: entry.note,
     paid: entry.paid,
+    // Paid the day it's dated, it moves along with that day.
+    paidOn: days.paidOn === days.issued ? undefined : days.paidOn,
     to: transfers ? entry.transfer?.accountId : undefined,
+  };
+}
+
+/**
+ * The day it's paid on unless the form says: one ticked now is paid today,
+ * or on its due day once that's past; any other, the day it's dated.
+ */
+function paidOnOf(fields: Fields, entry: Entry | undefined, today: string) {
+  if (fields.paidOn) {
+    return fields.paidOn;
+  }
+  return entry && !entry.paid
+    ? payDay({ date: fields.due ?? fields.date }, today)
+    : fields.date;
+}
+
+/** The days as the entry keeps them, from the form. */
+function daysOf(fields: Fields, entry: Entry | undefined, today: string) {
+  return {
+    due: fields.due,
+    issued: fields.date,
+    paidOn: fields.paid ? paidOnOf(fields, entry, today) : undefined,
   };
 }
 
@@ -227,12 +262,14 @@ function buyChange(
       : { buyId: bitcoin.buyId };
   }
   const sats = parseAmount(bitcoin.amount, bitcoin.unit);
-  if (!(bitcoin.portfolioId && sats && sats > 0) || fields.date > today) {
+  // Bought the day the money went out.
+  const day = storedDays(daysOf(fields, entry, today)).date;
+  if (!(bitcoin.portfolioId && sats && sats > 0) || day > today) {
     return "invalid";
   }
   return {
     buy: {
-      at: buyMoment(fields.date, today),
+      at: buyMoment(day, today),
       portfolioId: bitcoin.portfolioId,
       sats,
     },
@@ -260,8 +297,8 @@ function TransferSource({
   const from = accounts?.find((item) => item._id === entry.transfer?.accountId);
   const follows =
     from && from.currency !== account.currency
-      ? "The day and paid"
-      : "The day, amount and paid";
+      ? "The days and paid"
+      : "The days, amount and paid";
   return (
     <p className="bg-muted/60 text-muted-foreground rounded-xl px-4 py-3 text-sm">
       Transferred from{" "}
@@ -711,6 +748,7 @@ function fillFields(
   take("name", suggestion.name);
   take("amount", suggestion.amount);
   take("date", suggestion.date);
+  take("due", suggestion.due);
   take("paid", suggestion.paid);
   take("category", suggestion.category);
   if (!fields.note.trim()) {
@@ -723,6 +761,7 @@ const FILLABLE: ReadonlySet<string> = new Set<FillableField>([
   "name",
   "amount",
   "date",
+  "due",
   "paid",
   "category",
   "note",
@@ -1032,6 +1071,94 @@ function DateField({ id, fields, fill }: FieldProps) {
   );
 }
 
+/** Whether the due date comes before the day it's dated, which can't be. */
+function dueEarly(fields: Fields): boolean {
+  return fields.due !== undefined && fields.due < fields.date;
+}
+
+/** When it must be paid or received by, which the project's reminders count down to. */
+function DueField({ id, fields, fill }: FieldProps) {
+  const said = fill.suggestion?.due;
+  const offered =
+    said && fill.offers("due") && said !== fields.due ? said : undefined;
+  const early = dueEarly(fields);
+  let hint = "Set one to be reminded as it nears.";
+  if (early) {
+    hint = "";
+  } else if (fields.due) {
+    hint = "Reminders go out 3 days before, the day before and on the day.";
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <OptionalDayField
+        from={fields.date}
+        hint={hint}
+        id={`${id}-due`}
+        label={
+          <FieldLabel filled={fill.filled.has("due")}>Due date</FieldLabel>
+        }
+        onChange={(due) => fill.change({ due })}
+        pending={fill.pending("due")}
+        value={fields.due}
+      />
+      {early && (
+        <p className={cn(HINT, "text-destructive")}>
+          Pick a due date on or after its date.
+        </p>
+      )}
+      {offered && (
+        <InvoiceHint action="Use" onAction={() => fill.use({ due: offered })}>
+          The invoice says it’s due {dayText(offered)}
+        </InvoiceHint>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The day it's due while it waits, or the day it was paid once it is: shown
+ * when that's another day than it's dated, or asked for.
+ */
+function SettleField({
+  id,
+  fields,
+  fill,
+  paidOn,
+}: FieldProps & { paidOn: string }) {
+  const [asked, setAsked] = useState(false);
+  const status = statusLabel(entryKind(fields.kind), true);
+  if (!fields.paid) {
+    return (
+      <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
+        <DueField fields={fields} fill={fill} id={id} />
+      </div>
+    );
+  }
+  if (!asked && paidOn === fields.date) {
+    return (
+      <p className={cn(HINT, "text-muted-foreground")}>
+        <button
+          className={HINT_ACTION}
+          onClick={() => setAsked(true)}
+          type="button"
+        >
+          {status} on another day
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
+      <DayField
+        id={`${id}-paid-on`}
+        label={`${status} on`}
+        onChange={(next) => fill.change({ paidOn: next })}
+        value={paidOn}
+      />
+    </div>
+  );
+}
+
 const ASIDE =
   "bg-muted/70 animate-in fade-in relative h-80 shrink-0 duration-300 md:h-auto";
 
@@ -1269,12 +1396,14 @@ function EntryForm({
   const { add: addFiles } = files;
   const drop = useFileDrop(addFiles);
   const cents = parseMoney(fields.amount);
+  const days = daysOf(fields, entry, today);
   const buy = buyChange(fields, entry, today);
   const transferring = fields.kind === "transfer";
   const transfer = useTransfer(account, entry, fields);
   const valid =
     fields.name.trim() !== "" &&
     cents !== undefined &&
+    !dueEarly(fields) &&
     buy !== "invalid" &&
     transfer.valid;
   // Only a debit buys bitcoin; one already linked keeps the part so it can let go.
@@ -1299,16 +1428,21 @@ function EntryForm({
     const draft: EntryDraft = {
       category: fields.category,
       cents,
-      date: fields.date,
       kind: entryKind(fields.kind),
       name: fields.name.trim(),
       note: fields.note.trim(),
-      paid: fields.paid,
+      ...days,
     };
     const moved = transferChange(fields, entry, transfer.received);
     setSaving(true);
     const saved = entry
-      ? await updateEntry(entry, draft, buy, moved, files.changes)
+      ? await updateEntry(
+          entry,
+          { ...draft, due: days.due ?? null, paidOn: days.paidOn ?? null },
+          buy,
+          moved,
+          files.changes
+        )
       : await addEntry(account, draft, buy, moved, files.changes.add);
     setSaving(false);
     if (saved === undefined) {
@@ -1403,13 +1537,21 @@ function EntryForm({
             </div>
           </div>
 
-          <SwitchRow
-            checked={fields.paid}
-            hint={paidHint(fields, fill)}
-            id={`${id}-paid`}
-            label={statusLabel(entryKind(fields.kind), true)}
-            onChange={(paid) => change({ paid })}
-          />
+          <div className="flex flex-col gap-3">
+            <SwitchRow
+              checked={fields.paid}
+              hint={paidHint(fields, fill)}
+              id={`${id}-paid`}
+              label={statusLabel(entryKind(fields.kind), true)}
+              onChange={(paid) => change({ paid })}
+            />
+            <SettleField
+              fields={fields}
+              fill={fill}
+              id={id}
+              paidOn={paidOnOf(fields, entry, today)}
+            />
+          </div>
 
           {showBitcoin && (
             <BitcoinPart
@@ -1417,7 +1559,7 @@ function EntryForm({
               cents={cents}
               entry={entry}
               fields={fields}
-              future={fields.date > today}
+              future={storedDays(days).date > today}
               id={id}
               onAmountChange={(amount) => change({ amount })}
               onChange={changeBitcoin}

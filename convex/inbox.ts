@@ -3,13 +3,15 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { requireUser, roleIn } from "./lib/access";
+import { allows, requireUser, roleIn } from "./lib/access";
 import { hasText } from "./lib/docs";
+import { remindsOf } from "./lib/finance";
 import type { Followable } from "./lib/notify";
 import { follows } from "./lib/notify";
 import type { CardChange } from "./lib/validators";
+import type { EntryKind } from "./shared/finance";
 import type { ProjectRole } from "./shared/model";
-import type { CardNews, FileNews } from "./shared/notifications";
+import type { CardNews, EntryNews, FileNews } from "./shared/notifications";
 
 /** Newest notifications shown. */
 const LIMIT = 200;
@@ -82,11 +84,39 @@ export interface ProjectNotification extends Notification {
   };
 }
 
+/** A finance entry still to pay or receive, coming due. */
+export interface EntryNotification extends Notification {
+  kind: "entry";
+  /** Nobody sends a reminder. */
+  actorId?: undefined;
+  reason: EntryNews;
+  /** The day it was due when reminded, `YYYY-MM-DD`. */
+  due: string;
+  /** Whether they can tick it paid from here. */
+  editable: boolean;
+  /** Whether they still hear of the account's bills, so they can turn that off from here. */
+  following: boolean;
+  entry: {
+    _id: Id<"financeEntries">;
+    cents: number;
+    /** The day it falls on, which its month is opened at. */
+    date: string;
+    kind: EntryKind;
+    name: string;
+  };
+  account: {
+    _id: Id<"financeAccounts">;
+    currency: Doc<"financeAccounts">["currency"];
+    title: string;
+  };
+}
+
 export type InboxItem =
   | CardNotification
   | PageNotification
   | FileNotification
-  | ProjectNotification;
+  | ProjectNotification
+  | EntryNotification;
 
 /** The person's role on a project, or null when they can't see it. */
 type RoleOf = (project: Doc<"projects">) => Promise<ProjectRole | null>;
@@ -246,12 +276,51 @@ async function cardItem(
   };
 }
 
+async function entryItem(
+  ctx: QueryCtx,
+  { roleOf }: Lookups,
+  notification: RowAbout<"entryId">
+): Promise<EntryNotification | null> {
+  const entry = await ctx.db.get(notification.entryId);
+  const account = entry ? await ctx.db.get(entry.accountId) : null;
+  const project = account ? await ctx.db.get(account.projectId) : null;
+  const role = project ? await roleOf(project) : null;
+  // Settled since, or on a project the person has since left, it drops out.
+  if (!(entry && account && project && role) || entry.paid) {
+    return null;
+  }
+  return {
+    ...commonOf(notification),
+    account: {
+      _id: account._id,
+      currency: account.currency,
+      title: account.title,
+    },
+    due: notification.due,
+    editable: allows(role, "edit"),
+    entry: {
+      _id: entry._id,
+      cents: entry.cents,
+      date: entry.date,
+      kind: entry.kind,
+      name: entry.name,
+    },
+    following: await remindsOf(ctx, account._id, notification.userId),
+    kind: "entry",
+    project: { slug: project.slug, title: project.title },
+    reason: notification.reason,
+  };
+}
+
 /** What a notification is about, or null once that's gone or out of sight. */
 export function itemOf(
   ctx: QueryCtx,
   lookups: Lookups,
   notification: Doc<"notifications">
 ): Promise<InboxItem | null> {
+  if ("entryId" in notification) {
+    return entryItem(ctx, lookups, notification);
+  }
   if ("pageId" in notification) {
     return pageItem(ctx, lookups, notification);
   }
