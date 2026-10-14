@@ -27,7 +27,8 @@ import { monthOf, monthStart, shiftMonth } from "@/lib/finance";
 import { playCount } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import { isDone, isDue } from "@/lib/habits";
-import { CHIP_COLORS, SWATCH_COLORS } from "@/lib/palette";
+import type { Paint } from "@/lib/palette";
+import { paint } from "@/lib/palette";
 
 const WEEK = { weekStartsOn: 1 } as const;
 
@@ -41,20 +42,24 @@ interface DayProps {
 }
 
 /** How a day looks: done in the habit's color, part done with a bar, muted when it isn't due. */
-function dayClass({ habit, date, count, today }: DayProps): string {
-  let tone = "enabled:hover:bg-foreground/5";
+function dayLook({ habit, date, count, today }: DayProps): Paint {
+  let tone: Paint = { className: "enabled:hover:bg-foreground/5" };
   if (isDone(count, habit.goal)) {
-    tone = cn(CHIP_COLORS[habit.color], "font-medium");
+    const chip = paint(habit.color, "chip");
+    tone = { ...chip, className: cn(chip.className, "font-medium") };
   } else if (date > today || date < habit.start) {
-    tone = "text-muted-foreground/40";
+    tone = { className: "text-muted-foreground/40" };
   } else if (!isDue(habit, date)) {
-    tone = "enabled:hover:bg-foreground/5 text-muted-foreground";
+    tone = { className: "enabled:hover:bg-foreground/5 text-muted-foreground" };
   }
-  return cn(
-    "focus-visible:ring-ring/50 relative flex h-11 w-full items-center justify-center rounded-xl text-sm tabular-nums transition-[background-color,color,scale] duration-150 ease-out outline-none focus-visible:ring-3 enabled:active:scale-[0.96] disabled:cursor-default sm:h-12",
-    tone,
-    date === today && "ring-foreground/20 font-semibold ring-1 ring-inset"
-  );
+  return {
+    className: cn(
+      "focus-visible:ring-ring/50 relative flex h-11 w-full items-center justify-center rounded-xl text-sm tabular-nums transition-[background-color,color,scale] duration-150 ease-out outline-none focus-visible:ring-3 enabled:active:scale-[0.96] disabled:cursor-default sm:h-12",
+      tone.className,
+      date === today && "ring-foreground/20 font-semibold ring-1 ring-inset"
+    ),
+    style: tone.style,
+  };
 }
 
 /** A day part way to the goal, as a short bar under its number. */
@@ -62,6 +67,7 @@ function Progress({ habit, count }: Pick<DayProps, "habit" | "count">) {
   if (count === 0 || isDone(count, habit.goal)) {
     return null;
   }
+  const bar = paint(habit.color, "swatch");
   return (
     <span
       aria-hidden
@@ -70,9 +76,9 @@ function Progress({ habit, count }: Pick<DayProps, "habit" | "count">) {
       <span
         className={cn(
           "block h-full rounded-full transition-[width] duration-200 ease-out",
-          SWATCH_COLORS[habit.color]
+          bar.className
         )}
-        style={{ width: `${(count / habit.goal) * 100}%` }}
+        style={{ ...bar.style, width: `${(count / habit.goal) * 100}%` }}
       />
     </span>
   );
@@ -86,7 +92,7 @@ function CountedDay(props: DayProps & { label: string }) {
     <Popover>
       <PopoverTrigger
         aria-label={`${label}, ${clamped} of ${habit.goal}`}
-        className={dayClass(props)}
+        {...dayLook(props)}
       >
         {Number(date.slice(8))}
         <Progress count={count} habit={habit} />
@@ -137,7 +143,7 @@ function Day(props: DayProps) {
     <button
       aria-label={label}
       aria-pressed={open ? done : undefined}
-      className={dayClass(props)}
+      {...dayLook(props)}
       disabled={!open}
       onClick={() => onCount?.(done ? 0 : 1)}
       type="button"

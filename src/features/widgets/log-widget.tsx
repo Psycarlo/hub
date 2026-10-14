@@ -13,7 +13,6 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ON_SWATCH } from "@/features/habits/check-button";
 import { logPath } from "@/features/log/log-context";
 import { TopicBadge } from "@/features/log/topic-icon";
 import type { WidgetKind } from "@/features/widgets/widget-kind";
@@ -24,7 +23,7 @@ import { useMe } from "@/hooks/use-users";
 import type { LogDay, LogTopic } from "@/lib/log";
 import { LOG_COLOR, linkedProject } from "@/lib/log";
 import { checkTopic, unlogTopic } from "@/lib/log-actions";
-import { CHIP_COLORS, SWATCH_COLORS } from "@/lib/palette";
+import { CHIP_COLORS, ON_SWATCH, SWATCH_COLORS } from "@/lib/palette";
 import type { Project } from "@/lib/project";
 import { canEdit, splitPersonal } from "@/lib/project";
 import { plural } from "@/lib/utils";

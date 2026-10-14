@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useId, useState } from "react";
 import { useLocation } from "wouter";
 
-import { ColorPicker } from "@/components/color-picker";
+import { ColorPicker, CustomColorPicker } from "@/components/color-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,7 +90,10 @@ function LookPicker({
         aria-label="Icon and color"
         className="flex w-auto flex-col gap-3"
       >
-        <ColorPicker aria-label="Color" onChange={onColor} value={color} />
+        <div className="flex items-center gap-2">
+          <ColorPicker aria-label="Color" onChange={onColor} value={color} />
+          <CustomColorPicker onChange={onColor} value={color} />
+        </div>
         <ToggleGroup
           aria-label="Icon"
           className="grid grid-cols-8 gap-1 border-t pt-3"

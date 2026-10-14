@@ -20,8 +20,8 @@ import { useToday } from "@/hooks/use-today";
 import { logHabit } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import { addDays, describeHabit } from "@/lib/habits";
-import type { Color } from "@/lib/palette";
-import { CHIP_COLORS } from "@/lib/palette";
+import type { Color, HexColor } from "@/lib/palette";
+import { paint } from "@/lib/palette";
 import type { Project } from "@/lib/project";
 import { canEdit } from "@/lib/project";
 import { plural } from "@/lib/utils";
@@ -40,12 +40,13 @@ export function StreakChip({
 }: {
   /** Undefined while it loads. */
   days?: number;
-  color: Color;
+  color: Color | HexColor;
 }) {
   if (days === undefined) {
     return <Skeleton className="h-6 w-11 rounded-full" />;
   }
   const label = plural(days, "day");
+  const tone = days > 0 ? paint(color, "chip") : undefined;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -53,10 +54,9 @@ export function StreakChip({
           <span
             className={cn(
               "inline-flex h-6 shrink-0 items-center gap-1 rounded-full pr-2 pl-1.5 text-xs font-medium tabular-nums transition-colors duration-150 ease-out",
-              days > 0
-                ? CHIP_COLORS[color]
-                : "bg-foreground/[0.06] text-muted-foreground"
+              tone?.className ?? "bg-foreground/[0.06] text-muted-foreground"
             )}
+            style={tone?.style}
           />
         }
       >

@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import {
   vAccountLook,
   vActivityType,
+  vAnyColor,
   vAppRole,
   vBoardLabel,
   vBrandColor,
@@ -29,7 +30,6 @@ import {
   vLogoMode,
   vMuscle,
   vPriority,
-  vProjectColor,
   vProjectRole,
   vSprintStatus,
   vStageMove,
@@ -151,7 +151,7 @@ export default defineSchema({
   }).index("by_email", ["email"]),
 
   projects: defineTable({
-    color: vProjectColor,
+    color: vAnyColor,
     createdBy: v.id("users"),
     description: v.string(),
     /** Links the project went by before, so old links still find it. Kept from other projects. */
@@ -741,7 +741,7 @@ export default defineSchema({
 
   /** Something someone means to do on certain days; only in personal projects. */
   habits: defineTable({
-    color: vColor,
+    color: vAnyColor,
     createdBy: v.id("users"),
     /** Days of the week it's due, Sunday as 0; all seven for every day. */
     days: v.array(v.number()),

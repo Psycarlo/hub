@@ -12,10 +12,10 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
+import { cleanColor } from "./lib/color";
 import { notify } from "./lib/notify";
-import { vMember, vProjectColor } from "./lib/validators";
+import { vAnyColor, vMember } from "./lib/validators";
 import type { ProjectRole } from "./shared/model";
-import { COLORS, isHexColor } from "./shared/palette";
 import { slugify, uniqueSlug } from "./shared/slug";
 
 const MAX_TITLE = 80;
@@ -210,21 +210,6 @@ function cleanTitle(title: string): string {
   return trimmed;
 }
 
-/** A palette color as it is, or a picked one as lowercase `#rrggbb`. */
-function cleanColor(color: string): Doc<"projects">["color"] {
-  const hex = color.toLowerCase();
-  if (isHexColor(hex)) {
-    return hex;
-  }
-  const named = COLORS.find((item) => item === color);
-  if (!named) {
-    throw new ConvexError(
-      "Pick a color from the palette, or a hex like #2b7fff."
-    );
-  }
-  return named;
-}
-
 async function freeSlug(
   ctx: QueryCtx,
   raw: string,
@@ -293,7 +278,7 @@ export const create = mutation({
   args: {
     /** A board the project starts with. */
     board: v.optional(v.object({ code: v.string(), title: v.string() })),
-    color: vProjectColor,
+    color: vAnyColor,
     description: v.string(),
     members: v.array(vMember),
     slug: v.string(),
@@ -327,7 +312,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    color: v.optional(vProjectColor),
+    color: v.optional(vAnyColor),
     description: v.optional(v.string()),
     members: v.optional(v.array(vMember)),
     projectId: v.id("projects"),

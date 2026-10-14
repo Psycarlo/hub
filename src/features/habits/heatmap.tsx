@@ -7,7 +7,8 @@ import type { HabitCounts } from "@/hooks/use-habits";
 import { useWidth } from "@/hooks/use-width";
 import type { Habit } from "@/lib/habits";
 import { addDays, isDue, weekdayOf } from "@/lib/habits";
-import { SWATCH_COLORS } from "@/lib/palette";
+import type { Paint } from "@/lib/palette";
+import { paint } from "@/lib/palette";
 
 /** Between days, in pixels. */
 const GAP = 3;
@@ -58,23 +59,23 @@ function Day({
   style: CSSProperties;
 }) {
   const share = Math.min(count, habit.goal) / habit.goal;
-  let tone = "bg-foreground/[0.04]";
+  let tone: Paint = { className: "bg-foreground/[0.04]" };
   if (date > today) {
-    tone = "";
+    tone = { className: "" };
   } else if (share > 0) {
-    tone = SWATCH_COLORS[habit.color];
+    tone = paint(habit.color, "swatch");
   } else if (date >= habit.start && isDue(habit, date)) {
-    tone = "bg-foreground/[0.09]";
+    tone = { className: "bg-foreground/[0.09]" };
   }
   return (
     <span
-      className={cn(DAY_SQUARE, tone, date === today && TODAY_RING)}
-      // A day partly done shows lighter, deepening as it nears the goal.
-      style={
-        share > 0 && share < 1
-          ? { ...style, opacity: 0.3 + share * 0.45 }
-          : style
-      }
+      className={cn(DAY_SQUARE, tone.className, date === today && TODAY_RING)}
+      style={{
+        ...style,
+        ...tone.style,
+        // A day partly done shows lighter, deepening as it nears the goal.
+        ...(share > 0 && share < 1 && { opacity: 0.3 + share * 0.45 }),
+      }}
     />
   );
 }

@@ -11,7 +11,8 @@ import {
   requireUser,
   visibleProjects,
 } from "./lib/access";
-import { vColor, vHabitIcon } from "./lib/validators";
+import { cleanColor } from "./lib/color";
+import { vAnyColor, vHabitIcon } from "./lib/validators";
 import {
   MAX_GOAL,
   MAX_HABITS,
@@ -190,7 +191,7 @@ function canManageHabit(
 
 export const create = mutation({
   args: {
-    color: vColor,
+    color: vAnyColor,
     days: v.array(v.number()),
     description: v.string(),
     goal: v.number(),
@@ -213,7 +214,7 @@ export const create = mutation({
       throw new ConvexError(`A project can have up to ${MAX_HABITS} habits.`);
     }
     return await ctx.db.insert("habits", {
-      color: args.color,
+      color: cleanColor(args.color),
       createdBy: user._id,
       days: cleanDays(args.days),
       description: args.description.trim().slice(0, MAX_HABIT_DESCRIPTION),
@@ -228,7 +229,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    color: v.optional(vColor),
+    color: v.optional(vAnyColor),
     days: v.optional(v.array(v.number())),
     description: v.optional(v.string()),
     goal: v.optional(v.number()),
@@ -256,7 +257,7 @@ export const update = mutation({
       patch.icon = changes.icon;
     }
     if (changes.color !== undefined) {
-      patch.color = changes.color;
+      patch.color = cleanColor(changes.color);
     }
     if (changes.days !== undefined) {
       patch.days = cleanDays(changes.days);

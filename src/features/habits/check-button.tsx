@@ -9,21 +9,8 @@ import {
 import { playCount } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import { isDone, nextCount } from "@/lib/habits";
-import type { Color } from "@/lib/palette";
-import { SWATCH_COLORS, TEXT_COLORS } from "@/lib/palette";
-
-/** What reads on each swatch: white, but dark on yellow, which is too light for it. */
-export const ON_SWATCH: Record<Color, string> = {
-  blue: "text-white",
-  gray: "text-white",
-  green: "text-white",
-  orange: "text-white",
-  pink: "text-white",
-  purple: "text-white",
-  red: "text-white",
-  teal: "text-white",
-  yellow: "text-yellow-950",
-};
+import type { Color, HexColor } from "@/lib/palette";
+import { paint } from "@/lib/palette";
 
 const SIZES = {
   lg: {
@@ -54,9 +41,10 @@ function ProgressRing({
 }: {
   share: number;
   size: number;
-  color: Color;
+  color: Color | HexColor;
 }) {
   const radius = (size - 3) / 2;
+  const stroke = paint(color, "text");
   const circumference = 2 * Math.PI * radius;
   return (
     <svg
@@ -77,7 +65,7 @@ function ProgressRing({
       <circle
         className={cn(
           "stroke-current transition-[stroke-dashoffset] duration-300 ease-out",
-          TEXT_COLORS[color]
+          stroke.className
         )}
         cx={size / 2}
         cy={size / 2}
@@ -87,6 +75,7 @@ function ProgressRing({
         strokeDashoffset={circumference * (1 - share)}
         strokeLinecap="round"
         strokeWidth={2}
+        style={stroke.style}
       />
     </svg>
   );
@@ -116,6 +105,7 @@ export function CheckButton({
   const done = isDone(count, habit.goal);
   const counted = habit.goal > 1;
   const { button, icon, plus, ring } = SIZES[size];
+  const swatch = paint(habit.color, "onSwatch");
   let label = done ? `Undo ${habit.title}` : `Done ${habit.title}`;
   if (counted) {
     label = `${habit.title}: ${Math.min(count, habit.goal)} of ${habit.goal}`;
@@ -128,7 +118,7 @@ export function CheckButton({
         "focus-visible:ring-ring/50 relative flex shrink-0 items-center justify-center transition-[background-color,color,scale] duration-150 ease-out outline-none after:absolute after:-inset-1 focus-visible:ring-3 active:scale-[0.92] disabled:cursor-default disabled:active:scale-100",
         button,
         done
-          ? cn(SWATCH_COLORS[habit.color], ON_SWATCH[habit.color])
+          ? swatch.className
           : "bg-foreground/[0.06] text-muted-foreground enabled:hover:bg-foreground/10 enabled:hover:text-foreground",
         className
       )}
@@ -138,6 +128,7 @@ export function CheckButton({
         playCount(habit, count, next);
         onCount?.(next);
       }}
+      style={done ? swatch.style : undefined}
       type="button"
     >
       {counted && !done && (

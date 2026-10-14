@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 
 import type { Habit, HabitIcon as HabitIconName } from "@/lib/habits";
-import { CHIP_COLORS } from "@/lib/palette";
+import { paint } from "@/lib/palette";
 
 export const HABIT_ICON_COMPONENTS: Record<HabitIconName, LucideIcon> = {
   alcoholOff: WineOffIcon,
@@ -90,14 +90,16 @@ export function HabitBadge({
   className?: string;
 }) {
   const Icon = HABIT_ICON_COMPONENTS[habit.icon];
+  const tone = paint(habit.color, "chip");
   return (
     <span
       className={cn(
         "flex shrink-0 items-center justify-center transition-colors duration-150 ease-out",
         SIZES[size],
-        CHIP_COLORS[habit.color],
+        tone.className,
         className
       )}
+      style={tone.style}
     >
       <Icon aria-hidden />
     </span>

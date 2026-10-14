@@ -6,14 +6,14 @@ import { run } from "@/lib/actions";
 import { convex } from "@/lib/convex";
 import type { Habit, HabitIcon } from "@/lib/habits";
 import { isDone } from "@/lib/habits";
-import type { Color } from "@/lib/palette";
+import type { Color, HexColor } from "@/lib/palette";
 import { playSound } from "@/lib/sounds";
 
 export interface HabitDraft {
   title: string;
   description: string;
   icon: HabitIcon;
-  color: Color;
+  color: Color | HexColor;
   /** Days of the week it's due, Sunday as 0. */
   days: number[];
   /** Times a day that make the day done. */
