@@ -12,6 +12,7 @@ import type { ChangeEvent, KeyboardEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 
+import { EmojiPicker } from "@/components/emoji-picker";
 import { IconButton } from "@/components/icon-button";
 import { MarkdownView } from "@/components/markdown-editor";
 import type { BlockCommand } from "@/components/markdown-editor/blocks";
@@ -22,7 +23,6 @@ import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { docsPath, pagePath } from "@/features/docs/docs-context";
-import { IconPicker } from "@/features/docs/icon-picker";
 import type { PageEditorHandle } from "@/features/docs/page-editor";
 import { PageEditor } from "@/features/docs/page-editor";
 import { PageIcon } from "@/features/docs/page-icon";
@@ -186,9 +186,12 @@ function EditablePage({
   return (
     <>
       <div className="group/title flex flex-col gap-2">
-        <IconPicker
-          icon={page.icon}
-          onChange={(icon) => updatePage(page, { icon })}
+        <EmojiPicker
+          kind="page"
+          onPick={(icon) => updatePage(page, { icon })}
+          onRemove={
+            page.icon ? () => updatePage(page, { icon: "" }) : undefined
+          }
           trigger={
             page.icon ? (
               <button

@@ -9,6 +9,7 @@ import { EmojiPicker as Picker } from "frimousse";
 import type { ReactElement, RefObject } from "react";
 import { useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -17,11 +18,30 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { readStorage, writeStorage } from "@/lib/utils";
 
-const RECENT_KEY = "hub-emoji-recent";
 const TONE_KEY = "hub-emoji-tone";
 const COLUMNS = 9;
-/** Offered before any have been picked, and after those that have. */
-const STARTERS = ["👍", "❤️", "😄", "🎉", "👀", "🚀", "🙏", "✅", "🔥"];
+
+/**
+ * What the emoji is for: where its recent picks are kept, and the starters
+ * offered before any have been picked, and after those that have.
+ */
+const KINDS = {
+  folder: {
+    key: "hub-emoji-recent-folder",
+    starters: ["📁", "📦", "📚", "📷", "🎨", "🎵", "💰", "💼", "⭐"],
+  },
+  page: {
+    key: "hub-emoji-recent-page",
+    starters: ["📄", "📝", "📌", "💡", "✅", "🚀", "📚", "🎯", "⭐"],
+  },
+  reaction: {
+    key: "hub-emoji-recent",
+    starters: ["👍", "❤️", "😄", "🎉", "👀", "🚀", "🙏", "✅", "🔥"],
+  },
+} as const;
+
+type Kind = keyof typeof KINDS;
+
 const TONES: SkinTone[] = [
   "none",
   "light",
@@ -35,9 +55,9 @@ const EMOJI_BUTTON =
   "flex size-8 items-center justify-center rounded-lg text-xl leading-none transition-colors duration-100 outline-none";
 const HEADER = "text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium";
 
-function readRecent(): string[] {
+function readRecent(kind: Kind): string[] {
   try {
-    const value: unknown = JSON.parse(readStorage(RECENT_KEY) ?? "[]");
+    const value: unknown = JSON.parse(readStorage(KINDS[kind].key) ?? "[]");
     return Array.isArray(value)
       ? value.filter((item) => typeof item === "string")
       : [];
@@ -47,13 +67,16 @@ function readRecent(): string[] {
 }
 
 /** The emoji picked last, then the starters, a row's worth. */
-function quickRow(): string[] {
-  return [...new Set([...readRecent(), ...STARTERS])].slice(0, COLUMNS);
+function quickRow(kind: Kind): string[] {
+  return [...new Set([...readRecent(kind), ...KINDS[kind].starters])].slice(
+    0,
+    COLUMNS
+  );
 }
 
-function remember(emoji: string) {
-  const recent = [emoji, ...readRecent().filter((item) => item !== emoji)];
-  writeStorage(RECENT_KEY, JSON.stringify(recent.slice(0, COLUMNS)));
+function remember(kind: Kind, emoji: string) {
+  const recent = [emoji, ...readRecent(kind).filter((item) => item !== emoji)];
+  writeStorage(KINDS[kind].key, JSON.stringify(recent.slice(0, COLUMNS)));
 }
 
 function readTone(): SkinTone {
@@ -128,16 +151,20 @@ function ToneButton() {
 
 /** Every emoji there is, searchable by name, with the ones used lately first. */
 function EmojiList({
+  kind,
   onPick,
+  onRemove,
   search,
 }: {
+  kind: Kind;
   onPick: (emoji: string) => void;
+  onRemove?: () => void;
   search: RefObject<HTMLInputElement | null>;
 }) {
   const [query, setQuery] = useState("");
 
   const pick = (emoji: string) => {
-    remember(emoji);
+    remember(kind, emoji);
     onPick(emoji);
   };
 
@@ -160,13 +187,18 @@ function EmojiList({
           spellCheck={false}
           value={query}
         />
+        {onRemove && (
+          <Button className="mr-1" onClick={onRemove} size="xs" variant="ghost">
+            Remove
+          </Button>
+        )}
         <ToneButton />
       </div>
       {query.trim() === "" && (
         <div className="shrink-0">
           <div className={HEADER}>Frequently used</div>
           <div className="flex px-1.5">
-            {quickRow().map((emoji) => (
+            {quickRow(kind).map((emoji) => (
               <button
                 aria-label={emoji}
                 className={cn(
@@ -198,13 +230,18 @@ function EmojiList({
 
 /**
  * Picks an emoji from a popover that `trigger` opens, and closes. The search
- * takes focus, except on touch, where a keyboard would cover the list.
+ * takes focus, except on touch, where a keyboard would cover the list. With
+ * `onRemove`, it also offers to take the current one away.
  */
 export function EmojiPicker({
+  kind = "reaction",
   onPick,
+  onRemove,
   trigger,
 }: {
+  kind?: Kind;
   onPick: (emoji: string) => void;
+  onRemove?: () => void;
   trigger: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
@@ -218,10 +255,18 @@ export function EmojiPicker({
         initialFocus={(type) => type === "touch" || (search.current ?? true)}
       >
         <EmojiList
+          kind={kind}
           onPick={(emoji) => {
             setOpen(false);
             onPick(emoji);
           }}
+          onRemove={
+            onRemove &&
+            (() => {
+              setOpen(false);
+              onRemove();
+            })
+          }
           search={search}
         />
       </PopoverContent>

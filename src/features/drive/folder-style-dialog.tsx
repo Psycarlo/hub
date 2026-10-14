@@ -1,7 +1,8 @@
-import { cn } from "cn";
+import { SmilePlusIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import { ColorPicker } from "@/components/color-picker";
+import { EmojiPicker } from "@/components/emoji-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,13 +15,6 @@ import { FolderIcon } from "@/features/drive/file-icon";
 import type { DriveFolder } from "@/lib/drive";
 import { updateFolder } from "@/lib/drive-actions";
 import type { Color } from "@/lib/palette";
-
-/** Emoji for folders, roughly by what they hold. */
-const EMOJI = [
-  "📁 📂 🗂️ 📦 🗃️ 🗄️ 📚 📖 📝 📄 📑 🧾 📊 📈 💼 🏷️ 🔖 📌 📎 🗓️",
-  "📷 🎞️ 🎬 🎥 🎨 🖼️ 🎵 🎧 🎙️ 🎤 🖌️ ✏️ 🧩 💡 🚀 ⭐ 🔥 ✨ 🎯 🏆",
-  "💰 💳 🧮 🏦 🧑‍💻 💻 🖥️ 🛠️ ⚙️ 🔒 🔑 🧪 📣 💬 ✉️ 📞 🤝 👥 🌍 ❤️",
-].flatMap((row) => row.split(" "));
 
 function StyleForm({
   folder,
@@ -58,32 +52,29 @@ function StyleForm({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <div className="flex h-6 items-center justify-between">
-          <span className="text-muted-foreground text-xs font-medium">
-            Emoji
-          </span>
+        <span className="text-muted-foreground text-xs font-medium">Emoji</span>
+        <div className="flex items-center gap-1">
+          <EmojiPicker
+            kind="folder"
+            onPick={setIcon}
+            trigger={
+              <Button variant="outline">
+                {icon ? (
+                  <span aria-hidden className="text-lg leading-none">
+                    {icon}
+                  </span>
+                ) : (
+                  <SmilePlusIcon />
+                )}
+                {icon ? "Change emoji" : "Choose emoji"}
+              </Button>
+            }
+          />
           {icon && (
-            <Button onClick={() => setIcon("")} size="xs" variant="ghost">
+            <Button onClick={() => setIcon("")} variant="ghost">
               Remove
             </Button>
           )}
-        </div>
-        <div className="grid grid-cols-10 gap-0.5">
-          {EMOJI.map((item) => (
-            <button
-              aria-label={item}
-              aria-pressed={icon === item}
-              className={cn(
-                "hover:bg-accent focus-visible:bg-accent flex aspect-square items-center justify-center rounded-lg text-xl leading-none transition-colors duration-150 outline-none",
-                icon === item && "bg-primary/15 hover:bg-primary/20"
-              )}
-              key={item}
-              onClick={() => setIcon(icon === item ? "" : item)}
-              type="button"
-            >
-              {item}
-            </button>
-          ))}
         </div>
       </div>
       <DialogFooter>
