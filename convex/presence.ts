@@ -1,9 +1,16 @@
 import { v } from "convex/values";
 
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/access";
-import { ensureAvatar } from "./lib/office";
+import { avatarOf, ensureAvatar } from "./lib/office";
 import { beat, presence } from "./lib/presence";
+
+/** Whether someone has Hub open, and if not, when they last did. */
+export interface Seen {
+  state: "online" | "away" | "offline";
+  /** When their last session ended; null while online or if they never had one. */
+  lastSeen: number | null;
+}
 
 /** Heartbeat intervals the app may ask for, in milliseconds. */
 const MIN_INTERVAL = 5000;
@@ -42,6 +49,25 @@ export const heartbeat = mutation({
       timeZone: args.timeZone,
     });
     return { hub, office };
+  },
+});
+
+/** For someone's card: here, away with every tab hidden, or gone since when. */
+export const seen = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }): Promise<Seen> => {
+    await requireUser(ctx);
+    const user = await ctx.db.get(userId);
+    const rooms = await presence.listUser(ctx, userId);
+    const hub = rooms.find((room) => room.roomId === "hub");
+    if (hub?.online && user && !user.deactivated) {
+      const avatar = await avatarOf(ctx, userId);
+      return { lastSeen: null, state: avatar?.away ? "away" : "online" };
+    }
+    return {
+      lastSeen: hub && hub.lastDisconnected > 0 ? hub.lastDisconnected : null,
+      state: "offline",
+    };
   },
 });
 

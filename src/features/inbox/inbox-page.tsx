@@ -216,7 +216,7 @@ function Said({ item, me }: { item: InboxItem; me: UserId }) {
       {item.actorId ? `${name(item.actorId)} ${words}` : words}
       {quote && (
         <>
-          : <MentionText content={quote} />
+          : <MentionText content={quote} plain />
         </>
       )}
     </span>

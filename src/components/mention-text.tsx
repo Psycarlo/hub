@@ -1,17 +1,19 @@
 import { Fragment } from "react";
 
-import { useUser } from "@/hooks/use-users";
+import { MentionChip } from "@/components/mention-chip";
 import { splitMentions } from "@/lib/mentions";
 
-function MentionChip({ userId }: { userId: string }) {
-  const { name } = useUser(userId);
-  return (
-    <span className="bg-primary/15 rounded-md px-1 font-medium">@{name}</span>
-  );
-}
-
-/** Comment text with each mention shown as the person's name. */
-export function MentionText({ content }: { content: string }) {
+/**
+ * Comment text with each mention shown as the person's name. Inside a link,
+ * `plain` keeps the names from opening cards of their own.
+ */
+export function MentionText({
+  content,
+  plain = false,
+}: {
+  content: string;
+  plain?: boolean;
+}) {
   // Segments never reorder for the same content, so their index is a stable key.
   return splitMentions(content).map((segment, index) => (
     // oxlint-disable-next-line react/no-array-index-key
@@ -19,7 +21,7 @@ export function MentionText({ content }: { content: string }) {
       {segment.type === "text" ? (
         segment.text
       ) : (
-        <MentionChip userId={segment.userId} />
+        <MentionChip plain={plain} userId={segment.userId} />
       )}
     </Fragment>
   ));

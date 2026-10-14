@@ -12,7 +12,7 @@ function hash(value: string): number {
 }
 
 // A stable two-tone gradient per person, so people without a photo stay recognizable.
-function gradient(userId: string): string {
+export function avatarGradient(userId: string): string {
   const seed = hash(userId);
   const from = seed % 360;
   const to = (from + 40 + (seed % 100)) % 360;
@@ -44,7 +44,7 @@ export function UserAvatar({
       {image && <AvatarImage alt={name} src={image} />}
       <AvatarFallback
         className="font-medium text-white/95"
-        style={{ backgroundImage: gradient(userId) }}
+        style={{ backgroundImage: avatarGradient(userId) }}
       >
         <span aria-hidden className={LETTER[size]}>
           {initial(name)}

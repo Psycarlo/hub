@@ -8,8 +8,8 @@ import { exitSuggestion, Suggestion } from "@tiptap/suggestion";
 import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
+import { MentionChip } from "@/components/mention-chip";
 import { UserAvatar } from "@/components/user-avatar";
-import { useUser } from "@/hooks/use-users";
 import { mentionToken } from "@/lib/mentions";
 
 const MENTION = new PluginKey("mentionMenu");
@@ -23,13 +23,9 @@ export interface Mentionable {
 }
 
 function MentionView({ node }: NodeViewProps) {
-  const { name } = useUser(String(node.attrs.id));
   return (
-    <NodeViewWrapper
-      as="span"
-      className="bg-primary/15 rounded-md px-1 font-medium"
-    >
-      @{name}
+    <NodeViewWrapper as="span">
+      <MentionChip userId={String(node.attrs.id)} />
     </NodeViewWrapper>
   );
 }
