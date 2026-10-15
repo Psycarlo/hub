@@ -1,0 +1,30 @@
+diff --git a/select/root/SelectRoot.js b/select/root/SelectRoot.js
+index baeece92121b4dd67cd34e8497c71f48350a7f28..e478f201c2d8836dbc71720e14ff02b62b518d96 100644
+--- a/select/root/SelectRoot.js
++++ b/select/root/SelectRoot.js
+@@ -448,6 +448,10 @@ function SelectRoot(props) {
+       disabled: disabled,
+       required: required && !(multiple && hasSelectedValue),
+       readOnly: readOnly,
++      // Patched: a text input only when the select takes part in a form. Otherwise
++      // it does nothing, and password managers count it as a form field on every
++      // select, rescanning the page whenever one is added or removed.
++      type: name == null && form == null && autoComplete == null && !required ? "hidden" : undefined,
+       ref: ref,
+       style: name ? _visuallyHidden.visuallyHiddenInput : _visuallyHidden.visuallyHidden,
+       tabIndex: -1,
+diff --git a/select/root/SelectRoot.mjs b/select/root/SelectRoot.mjs
+index 889b311d098a5dcd60676481822f194d0ea795b9..899edcd713694f1687c100a688bfc90088fbd0e1 100644
+--- a/select/root/SelectRoot.mjs
++++ b/select/root/SelectRoot.mjs
+@@ -443,6 +443,10 @@ export function SelectRoot(props) {
+       disabled: disabled,
+       required: required && !(multiple && hasSelectedValue),
+       readOnly: readOnly,
++      // Patched: a text input only when the select takes part in a form. Otherwise
++      // it does nothing, and password managers count it as a form field on every
++      // select, rescanning the page whenever one is added or removed.
++      type: name == null && form == null && autoComplete == null && !required ? "hidden" : undefined,
+       ref: ref,
+       style: name ? visuallyHiddenInput : visuallyHidden,
+       tabIndex: -1,

@@ -1,5 +1,5 @@
 import type { CueName, PlayOptions } from "@foleyjs/core";
-import { play, set } from "@foleyjs/core";
+import { play, set, unlock } from "@foleyjs/core";
 import { useSyncExternalStore } from "react";
 
 import { readStorage, writeStorage } from "@/lib/utils";
@@ -56,6 +56,35 @@ function subscribe(listener: () => void): () => void {
 /** Whether the app plays sounds on this device. */
 export function useSounds(): boolean {
   return useSyncExternalStore(subscribe, () => current);
+}
+
+const GESTURES = ["pointerdown", "keydown"] as const;
+
+function buildAudio(): void {
+  if (current) {
+    unlock();
+  }
+}
+
+/**
+ * Builds the audio engine while the page is idle after the first click or
+ * key. The first cue would otherwise build it on the spot, a reverb computed
+ * sample by sample in the middle of, say, dropping a card. Audio may only
+ * start after a gesture, so it waits for one.
+ */
+function warmUp(): void {
+  for (const type of GESTURES) {
+    document.removeEventListener(type, warmUp, { capture: true });
+  }
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(buildAudio);
+  } else {
+    setTimeout(buildAudio, 500);
+  }
+}
+
+for (const type of GESTURES) {
+  document.addEventListener(type, warmUp, { capture: true, passive: true });
 }
 
 // Another tab changing it changes it here too.
