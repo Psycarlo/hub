@@ -84,7 +84,7 @@ function ContrastChip({ color, text }: { color: HexColor; text: HexColor }) {
       </span>
       <span
         className={cn(
-          "ml-auto rounded px-1 text-[10px] font-semibold tracking-wide",
+          "ml-auto rounded px-1 text-[10px] font-semibold tracking-wide whitespace-nowrap",
           grade === "—" && "line-through opacity-60"
         )}
         style={{
@@ -148,14 +148,15 @@ function Swatch({ color, lead }: { color: BrandColor; lead: boolean }) {
           </span>
         )}
       </button>
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="@container flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-col">
           <ColorValue label="Hex" value={color.hex.toUpperCase()} />
           <ColorValue label="RGB" value={formatRgb(color.hex)} />
           <ColorValue label="HSL" value={formatHsl(color.hex)} />
           <ColorValue label="CMYK" value={formatCmyk(color.hex)} />
         </div>
-        <div className="mt-auto grid grid-cols-2 gap-1.5">
+        {/* Side by side only with room for "AA Large" in each; else stacked. */}
+        <div className="mt-auto grid grid-cols-1 gap-1.5 @[17rem]:grid-cols-2">
           <ContrastChip color={color.hex} text={WHITE} />
           <ContrastChip color={color.hex} text={BLACK} />
         </div>
