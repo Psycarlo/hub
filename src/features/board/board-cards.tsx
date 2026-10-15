@@ -1,9 +1,6 @@
 import { useBoard } from "@/features/board/board-context";
-import {
-  HiddenCards,
-  outsideWindow,
-  useDoneWindow,
-} from "@/features/board/display-options";
+import type { DoneWindow } from "@/features/board/display-options";
+import { HiddenCards, outsideWindow } from "@/features/board/display-options";
 import { Kanban } from "@/features/board/kanban";
 import { CardList } from "@/features/board/list-view";
 import type { Card, Sprint } from "@/lib/model";
@@ -24,17 +21,24 @@ export function StatusCards({ cards, sprint }: StatusCardsProps) {
   );
 }
 
+interface BoardCardsProps {
+  doneWindow: DoneWindow;
+  onDoneWindowChange: (value: DoneWindow) => void;
+}
+
 /** Every card on a board without sprints, but those closed before the display options reach. */
-export function BoardCards() {
-  const { board, cards } = useBoard();
-  const [doneWindow, setDoneWindow] = useDoneWindow(board);
+export function BoardCards({
+  doneWindow,
+  onDoneWindowChange,
+}: BoardCardsProps) {
+  const { cards } = useBoard();
   const shown = cards.filter((card) => !outsideWindow(card, doneWindow));
   return (
     <>
       <StatusCards cards={shown} />
       <HiddenCards
         hidden={cards.length - shown.length}
-        onChange={setDoneWindow}
+        onChange={onDoneWindowChange}
         value={doneWindow}
       />
     </>

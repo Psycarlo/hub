@@ -1,5 +1,8 @@
+import { SlidersHorizontalIcon } from "lucide-react";
+import type { ReactElement, ReactNode } from "react";
 import { useId, useState } from "react";
 
+import { IconButton } from "@/components/icon-button";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,8 +23,12 @@ import { plural, readStorage, writeStorage } from "@/lib/utils";
 
 const DAY = 24 * 60 * 60_000;
 
-/** How far back closed cards reach. They pile up, so older ones stay out of sight. */
+/**
+ * How far back closed cards reach. They pile up, so older ones stay out of
+ * sight; a span of 0 leaves them all out.
+ */
 const DONE_WINDOWS = [
+  { label: "None", span: 0, value: "none" },
   { label: "Last day", span: DAY, value: "day" },
   { label: "Last week", span: 7 * DAY, value: "week" },
   { label: "Last month", span: 30 * DAY, value: "month" },
@@ -55,14 +62,89 @@ export function useDoneWindow(
   return [value, change];
 }
 
-/** Whether the window leaves the card out: closed, and before the window reaches. */
+/**
+ * Whether the window leaves the card out: closed, and before the window
+ * reaches. A card closed before closing was stamped only leaves with them all.
+ */
 export function outsideWindow(card: Card, value: DoneWindow): boolean {
   const span = DONE_WINDOWS.find((item) => item.value === value)?.span;
+  if (span === undefined || !isClosed(card.status)) {
+    return false;
+  }
   return (
-    span !== undefined &&
-    isClosed(card.status) &&
-    card.doneAt !== undefined &&
-    card.doneAt < Date.now() - span
+    span === 0 || (card.doneAt !== undefined && card.doneAt < Date.now() - span)
+  );
+}
+
+interface DisplayOptionsProps {
+  value: DoneWindow;
+  onChange: (value: DoneWindow) => void;
+  /** The element that opens the options, which `children` fill. */
+  trigger: ReactElement;
+  children: ReactNode;
+  align?: "start" | "center" | "end";
+}
+
+/** What a board leaves out of sight, behind whatever opens it. */
+function DisplayOptions({
+  value,
+  onChange,
+  trigger,
+  children,
+  align,
+}: DisplayOptionsProps) {
+  const id = useId();
+  return (
+    <Popover>
+      <PopoverTrigger render={trigger}>{children}</PopoverTrigger>
+      <PopoverContent align={align} className="flex w-64 flex-col gap-3">
+        <h3 className="font-medium">Display options</h3>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-muted-foreground text-xs" htmlFor={id}>
+            Done and canceled cards
+          </Label>
+          <Select
+            items={DONE_WINDOWS}
+            onValueChange={(next: DoneWindow | null) => {
+              if (next) {
+                onChange(next);
+              }
+            }}
+            value={value}
+          >
+            <SelectTrigger className="w-full" id={id}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DONE_WINDOWS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+interface DisplayButtonProps {
+  value: DoneWindow;
+  onChange: (value: DoneWindow) => void;
+}
+
+/** The display options from the board's toolbar, there whether or not any card is hidden. */
+export function DisplayButton({ value, onChange }: DisplayButtonProps) {
+  return (
+    <DisplayOptions
+      align="end"
+      onChange={onChange}
+      trigger={<IconButton label="Display options" />}
+      value={value}
+    >
+      <SlidersHorizontalIcon />
+    </DisplayOptions>
   );
 }
 
@@ -78,7 +160,6 @@ interface HiddenCardsProps {
  * Stays while the window is changed, so it can be changed back.
  */
 export function HiddenCards({ hidden, value, onChange }: HiddenCardsProps) {
-  const id = useId();
   if (hidden === 0 && value === DEFAULT_WINDOW) {
     return null;
   }
@@ -100,39 +181,13 @@ export function HiddenCards({ hidden, value, onChange }: HiddenCardsProps) {
           </>
         )}
       </p>
-      <Popover>
-        <PopoverTrigger render={<Button size="sm" variant="ghost" />}>
-          Show options
-        </PopoverTrigger>
-        <PopoverContent className="flex w-64 flex-col gap-3">
-          <h3 className="font-medium">Display options</h3>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-muted-foreground text-xs" htmlFor={id}>
-              Done and canceled cards
-            </Label>
-            <Select
-              items={DONE_WINDOWS}
-              onValueChange={(next: DoneWindow | null) => {
-                if (next) {
-                  onChange(next);
-                }
-              }}
-              value={value}
-            >
-              <SelectTrigger className="w-full" id={id}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DONE_WINDOWS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <DisplayOptions
+        onChange={onChange}
+        trigger={<Button size="sm" variant="ghost" />}
+        value={value}
+      >
+        Show options
+      </DisplayOptions>
     </div>
   );
 }

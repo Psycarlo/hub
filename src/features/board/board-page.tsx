@@ -33,7 +33,12 @@ import {
   cardOrder,
   groupedByStatus,
 } from "@/features/board/card-order";
-import { outsideWindow, useDoneWindow } from "@/features/board/display-options";
+import type { DoneWindow } from "@/features/board/display-options";
+import {
+  DisplayButton,
+  outsideWindow,
+  useDoneWindow,
+} from "@/features/board/display-options";
 import { DoneView } from "@/features/board/done-view";
 import type { BoardLayout } from "@/features/board/layout-switch";
 import { LayoutSwitch, useBoardLayout } from "@/features/board/layout-switch";
@@ -183,6 +188,8 @@ interface OpenCardProps {
   boardHref: string;
   /** The tab the card was opened from, which its previous and next follow. */
   tab: Tab;
+  /** What the board leaves out, which its previous and next skip. */
+  doneWindow: DoneWindow;
   /** Whether the board's cards have loaded. */
   loaded: boolean;
   onLeave: () => void;
@@ -193,12 +200,15 @@ interface OpenCardProps {
  * A card that view leaves out, like one opened from the inbox, steps through
  * the whole board instead.
  */
-function useNeighbours(board: Board, tab: Tab, card: Card | undefined) {
+function useNeighbours(
+  board: Board,
+  tab: Tab,
+  doneWindow: DoneWindow,
+  card: Card | undefined
+) {
   const scope = use(BoardContext);
   // A board without sprints has the one view.
   const view: CardView = board.usesSprints ? tab : "board";
-  // Read as the card opens, so it matches the board just left.
-  const [doneWindow] = useDoneWindow(board);
   if (!(scope && card)) {
     return {};
   }
@@ -220,12 +230,13 @@ function OpenCard({
   crumbs,
   boardHref,
   tab,
+  doneWindow,
   loaded,
   onLeave,
 }: OpenCardProps) {
   const scope = use(BoardContext);
   const card = scope?.content.cards.find((item) => item.number === number);
-  const { previous, next } = useNeighbours(board, tab, card);
+  const { previous, next } = useNeighbours(board, tab, doneWindow, card);
   // Stepping with K and J shows the next description at once.
   useWarmDescription(previous);
   useWarmDescription(next);
@@ -248,6 +259,15 @@ function OpenCard({
   );
 }
 
+/** The cards someone is assigned, or every card when no one is picked. */
+function assignedTo(cards: Card[], assignee?: string): Card[] {
+  return assignee
+    ? cards.filter((card) =>
+        card.assignees.some((person) => person === assignee)
+      )
+    : cards;
+}
+
 interface BoardPageProps {
   board: Board;
   project: Project;
@@ -268,6 +288,7 @@ export function BoardPage({
   const [assignee, setAssignee] = useState<string>();
   const [editing, setEditing] = useState(false);
   const [layout, setLayout] = useBoardLayout(board);
+  const [doneWindow, setDoneWindow] = useDoneWindow(board);
   // Kept after closing so the dialog keeps its content while it animates out.
   const [adding, setAdding] = useState<{
     open: boolean;
@@ -302,11 +323,7 @@ export function BoardPage({
         board,
         canEdit: canEdit(project),
         cardHref: (card) => cardPath(project, board, card, query),
-        cards: assignee
-          ? content.cards.filter((card) =>
-              card.assignees.some((person) => person === assignee)
-            )
-          : content.cards,
+        cards: assignedTo(content.cards, assignee),
         content,
         layout,
         me: me._id,
@@ -339,6 +356,10 @@ export function BoardPage({
       />
       <FluidTooltip.Group>
         {byStatus && <LayoutSwitch onChange={setLayout} value={layout} />}
+        {/* Only a board without sprints leaves closed cards out; a sprint's stay. */}
+        {!board.usesSprints && (
+          <DisplayButton onChange={setDoneWindow} value={doneWindow} />
+        )}
         {canEdit(project) && canChangeBoard && (
           <IconButton label="Board settings" onClick={() => setEditing(true)}>
             <Settings2Icon />
@@ -371,7 +392,10 @@ export function BoardPage({
             <div className="flex min-h-0 grow flex-col gap-4">
               {actions}
               {scope ? (
-                <BoardCards />
+                <BoardCards
+                  doneWindow={doneWindow}
+                  onDoneWindowChange={setDoneWindow}
+                />
               ) : (
                 <BoardSkeleton list={layout === "list"} />
               )}
@@ -384,6 +408,7 @@ export function BoardPage({
           board={board}
           boardHref={boardHref}
           crumbs={crumbs}
+          doneWindow={doneWindow}
           loaded={loaded}
           number={cardNumber}
           onLeave={leaveCard}
