@@ -1,13 +1,13 @@
 diff --git a/sortable.cjs b/sortable.cjs
-index 430e8ce5d501b339e1415d5592bab1aebc7e1a19..99ab0a5cdf52c653dace95a9adfc1415c6ba8a06 100644
+index 430e8ce5d501b339e1415d5592bab1aebc7e1a19..2b15fcd1ca2d916b0213f144942efc2a94d0c543 100644
 --- a/sortable.cjs
 +++ b/sortable.cjs
 @@ -593,6 +593,65 @@ function sort(instances, sortFn = sortByIndex) {
    return Array.from(instances).sort(sortFn);
  }
  
-+// Patched: sortables that animate together are measured together, so the
-+// browser lays out once for all of them rather than once per sortable.
++// Patched (clauderic/dnd-kit#2156): sortables that animate together are measured
++// together, so the browser lays out once for all of them rather than once per sortable.
 +var pendingSortableAnimations = [];
 +function queueSortableAnimation(sortable, shape, transition, manager) {
 +  pendingSortableAnimations.push({ sortable, shape, transition, manager });
@@ -116,15 +116,15 @@ index 430e8ce5d501b339e1415d5592bab1aebc7e1a19..99ab0a5cdf52c653dace95a9adfc1415
    }
    get manager() {
 diff --git a/sortable.js b/sortable.js
-index 8b46f2672fc25a1d8510468413f3bc901a8af6d5..aa15da0061200d3375f193b6150a8317c6a40a94 100644
+index 8b46f2672fc25a1d8510468413f3bc901a8af6d5..3be606767b503ec236bb44069ef12c557d42585d 100644
 --- a/sortable.js
 +++ b/sortable.js
 @@ -591,6 +591,65 @@ function sort(instances, sortFn = sortByIndex) {
    return Array.from(instances).sort(sortFn);
  }
  
-+// Patched: sortables that animate together are measured together, so the
-+// browser lays out once for all of them rather than once per sortable.
++// Patched (clauderic/dnd-kit#2156): sortables that animate together are measured
++// together, so the browser lays out once for all of them rather than once per sortable.
 +var pendingSortableAnimations = [];
 +function queueSortableAnimation(sortable, shape, transition, manager) {
 +  pendingSortableAnimations.push({ sortable, shape, transition, manager });

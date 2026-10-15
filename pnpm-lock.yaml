@@ -6,10 +6,10 @@ settings:
 
 patchedDependencies:
   '@base-ui/react@1.8.0':
-    hash: 44035d8a00ded9a7f55d9c6f96af5b3088cb78ae960f6a9e16ac66c8969a28fb
+    hash: c2527253695f9da33d48ee85f86247dfd94960e8a89e84069f56931ac222848e
     path: patches/@base-ui__react@1.8.0.patch
   '@dnd-kit/dom@0.5.1':
-    hash: 928dde2f64f2d38cbabe9e5d1b677978c6755d2a1c994481a6e4dce4f3a2bc0f
+    hash: 8916f9bf2927ca74c9cfae831ac4900f565d3e64bab4bd2e117ec3f5067f1eb0
     path: patches/@dnd-kit__dom@0.5.1.patch
 
 importers:
@@ -27,7 +27,7 @@ importers:
         version: 3.1147.0
       '@base-ui/react':
         specifier: ^1.8.0
-        version: 1.8.0(patch_hash=44035d8a00ded9a7f55d9c6f96af5b3088cb78ae960f6a9e16ac66c8969a28fb)(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 1.8.0(patch_hash=c2527253695f9da33d48ee85f86247dfd94960e8a89e84069f56931ac222848e)(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@convex-dev/auth':
         specifier: ^0.0.96
         version: 0.0.96(@auth/core@0.41.3)(convex@1.46.0(react@19.3.0))(react@19.3.0)
@@ -4862,7 +4862,7 @@ snapshots:
       '@babel/helper-string-parser': 8.0.6
       '@babel/helper-validator-identifier': 8.0.6
 
-  '@base-ui/react@1.8.0(patch_hash=44035d8a00ded9a7f55d9c6f96af5b3088cb78ae960f6a9e16ac66c8969a28fb)(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@base-ui/react@1.8.0(patch_hash=c2527253695f9da33d48ee85f86247dfd94960e8a89e84069f56931ac222848e)(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@babel/runtime': 7.29.10
       '@base-ui/utils': 0.4.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -4969,7 +4969,7 @@ snapshots:
       '@dnd-kit/geometry': 0.5.1
       tslib: 2.8.1
 
-  '@dnd-kit/dom@0.5.1(patch_hash=928dde2f64f2d38cbabe9e5d1b677978c6755d2a1c994481a6e4dce4f3a2bc0f)':
+  '@dnd-kit/dom@0.5.1(patch_hash=8916f9bf2927ca74c9cfae831ac4900f565d3e64bab4bd2e117ec3f5067f1eb0)':
     dependencies:
       '@dnd-kit/abstract': 0.5.1
       '@dnd-kit/collision': 0.5.1
@@ -4990,7 +4990,7 @@ snapshots:
   '@dnd-kit/react@0.5.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@dnd-kit/abstract': 0.5.1
-      '@dnd-kit/dom': 0.5.1(patch_hash=928dde2f64f2d38cbabe9e5d1b677978c6755d2a1c994481a6e4dce4f3a2bc0f)
+      '@dnd-kit/dom': 0.5.1(patch_hash=8916f9bf2927ca74c9cfae831ac4900f565d3e64bab4bd2e117ec3f5067f1eb0)
       '@dnd-kit/state': 0.5.1
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
