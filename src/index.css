@@ -5,6 +5,11 @@
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
+/*
+ * shadcn's `data-selected` only matches `data-selected="true"`, but Base UI
+ * marks picked items with a bare `data-selected`, so match both.
+ */
+@custom-variant data-selected (&:where([data-selected]:not([data-selected="false"])));
 
 @theme inline {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
