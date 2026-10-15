@@ -43,6 +43,8 @@ import {
 import { findGoogleFamily, loadGoogleFont } from "@/lib/brand-fonts";
 import type { Brand, BrandFile, BrandFont, FontSource } from "@/lib/brands";
 import {
+  EVERY_ROLE,
+  FONT_ROLES,
   MAX_FONT_FAMILY,
   MAX_FONT_FILES,
   MAX_FONT_ROLE,
@@ -51,12 +53,13 @@ import {
   faceOfFile,
   fontFiles,
   googleFontsPage,
+  namesRole,
   newId,
+  roleParts,
 } from "@/lib/brands";
 import { formatBytes } from "@/lib/utils";
 
 const ACCEPT = ".woff2,.woff,.otf,.ttf,font/woff2,font/woff,font/otf,font/ttf";
-const ROLES = ["Headings", "Body", "Display", "Accent", "Code"];
 /** Weights picked for a new Google family, as far as it has them. */
 const STARTING_WEIGHTS = new Set([400, 500, 600, 700]);
 /** How long typing rests before Google is asked. */
@@ -351,7 +354,30 @@ function WeightsField({
   );
 }
 
-/** What the typeface is for, typed or picked from the usual ones. */
+/**
+ * The role with a usual part picked or dropped. Everything stands alone; the
+ * others keep their usual order, with any typed ones after.
+ */
+function toggleRole(role: string, part: string): string {
+  if (part === EVERY_ROLE) {
+    return namesRole(role, EVERY_ROLE) ? "" : EVERY_ROLE;
+  }
+  const rest = roleParts(role).filter(
+    (item) => !(namesRole(item, part) || namesRole(item, EVERY_ROLE))
+  );
+  if (namesRole(role, part)) {
+    return rest.join(", ");
+  }
+  const usual = FONT_ROLES.filter(
+    (item) => item === part || rest.some((typed) => namesRole(typed, item))
+  );
+  const typed = rest.filter(
+    (item) => !FONT_ROLES.some((usualPart) => namesRole(item, usualPart))
+  );
+  return [...usual, ...typed].join(", ");
+}
+
+/** What the typeface is for, typed or picked from the usual ones, as many as it serves. */
 function RoleField({
   value,
   onChange,
@@ -368,25 +394,29 @@ function RoleField({
         id={id}
         maxLength={MAX_FONT_ROLE}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Headings"
+        placeholder="Headings, Body"
         value={value}
       />
       <div className="flex flex-wrap gap-1">
-        {ROLES.map((item) => (
-          <button
-            className={cn(
-              "focus-visible:ring-ring/50 h-6 rounded-full px-2.5 text-xs transition-colors duration-150 ease-out outline-none focus-visible:ring-3",
-              value === item
-                ? "bg-foreground text-background"
-                : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-            )}
-            key={item}
-            onClick={() => onChange(item)}
-            type="button"
-          >
-            {item}
-          </button>
-        ))}
+        {[EVERY_ROLE, ...FONT_ROLES].map((item) => {
+          const pressed = namesRole(value, item);
+          return (
+            <button
+              aria-pressed={pressed}
+              className={cn(
+                "focus-visible:ring-ring/50 h-6 rounded-full px-2.5 text-xs transition-colors duration-150 ease-out outline-none focus-visible:ring-3",
+                pressed
+                  ? "bg-foreground text-background"
+                  : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+              )}
+              key={item}
+              onClick={() => onChange(toggleRole(value, item))}
+              type="button"
+            >
+              {item}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

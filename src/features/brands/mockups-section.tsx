@@ -5,7 +5,7 @@ import { BrandCover, BrandMark } from "@/features/brands/brand-card";
 import { ShowcaseSection } from "@/features/brands/brand-parts";
 import { linkLabel, platformOf } from "@/features/brands/platforms";
 import type { Brand, BrandFile, LogoKind, LogoMode } from "@/lib/brands";
-import { cssFamily, logoFor } from "@/lib/brands";
+import { cssFamily, logoFor, textFonts } from "@/lib/brands";
 import { isLight } from "@/lib/color";
 import type { HexColor } from "@/lib/palette";
 
@@ -251,8 +251,7 @@ export function MockupsSection({
   brand: Brand;
   files: BrandFile[];
 }) {
-  const [heading, second] = brand.fonts;
-  const body = second ?? heading;
+  const { heading, body } = textFonts(brand.fonts);
   const primary = brand.colors[0]?.hex ?? INK;
   const handled = brand.socials.find((link) => platformOf(link)?.handle);
   const kit: Kit = {

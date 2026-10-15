@@ -5,7 +5,7 @@ import { BrandCover, BrandMark } from "@/features/brands/brand-card";
 import { linkLabel, platformOf } from "@/features/brands/platforms";
 import { SocialIcon } from "@/features/brands/social-icon";
 import type { Brand } from "@/lib/brands";
-import { cssFamily } from "@/lib/brands";
+import { cssFamily, textFonts } from "@/lib/brands";
 
 /** The brand's own site, then its profiles elsewhere, as pills. */
 function Links({ brand }: { brand: Brand }) {
@@ -51,8 +51,7 @@ export function BrandHero({
   /** Opens its name, description and links. */
   onEdit: () => void;
 }) {
-  const [heading, second] = brand.fonts;
-  const body = second ?? heading;
+  const { heading, body } = textFonts(brand.fonts);
   const hasLinks = brand.website !== "" || brand.socials.length > 0;
   return (
     <section className="bg-card shadow-surface overflow-hidden rounded-3xl">

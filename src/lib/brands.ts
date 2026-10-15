@@ -342,6 +342,40 @@ export function fontWeights(font: BrandFont, files: BrandFile[]): number[] {
   return [...weights].toSorted((a, b) => a - b);
 }
 
+/** What typefaces are usually for, in the order a role lists them. */
+export const FONT_ROLES = ["Headings", "Body", "Display", "Accent", "Code"];
+/** The role of a typeface used for all text. */
+export const EVERY_ROLE = "Everything";
+
+/** The parts of a role, like Headings and Body in "Headings, Body". */
+export function roleParts(role: string): string[] {
+  return role
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/** Whether a role names this part, whatever its case. */
+export function namesRole(role: string, part: string): boolean {
+  const wanted = part.toLowerCase();
+  return roleParts(role).some((item) => item.toLowerCase() === wanted);
+}
+
+/**
+ * The typefaces headings and body text are set in: the ones whose roles say
+ * so, else the first and the next. One for everything sets both.
+ */
+export function textFonts(fonts: BrandFont[]): {
+  heading?: BrandFont;
+  body?: BrandFont;
+} {
+  const sets = (font: BrandFont, part: string) =>
+    namesRole(font.role, part) || namesRole(font.role, EVERY_ROLE);
+  const heading = fonts.find((font) => sets(font, "Headings")) ?? fonts[0];
+  const body = fonts.find((font) => sets(font, "Body")) ?? fonts[1] ?? heading;
+  return { body, heading };
+}
+
 /**
  * The family the page draws a typeface in. Uploaded ones go by a name of
  * their own, so they never mix with a font of the same name on the device.

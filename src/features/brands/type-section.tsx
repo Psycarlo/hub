@@ -197,7 +197,7 @@ export function TypeSection({
           </Button>
         )
       }
-      description="The first sets headings; the next, body text. Uploaded typefaces download with the kit."
+      description="Roles say what sets headings and body text, else the first and the next do. Uploaded typefaces download with the kit."
       eyebrow="Typography"
       number={number}
       title="Typefaces"
