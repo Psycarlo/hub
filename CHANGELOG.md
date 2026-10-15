@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-10-15
+
+### Added
+
+- Due dates on finance entries, with a badge as one nears and a red date once it's past.
+- Bill reminders 3 days before, the day before and on the day an entry is due, for whoever can edit the project; turn them off per account.
+- Finance entries keep the day they were paid or received, apart from the day they're dated.
+- Reading an invoice fills in its due date too.
+- Hover or tap a mention to see that person's card: whether they're online, when they were last here, and the projects you share.
+- Give a brand typeface several roles, or Everything.
+- Suggestions as you search Google Fonts for a brand typeface, forgiving typos and spacing, or by category like mono or script.
+
+### Fixed
+
+- A logo slot turns away ZIPs up front, asking you to unzip them first.
+- Logos without a preview show their formats, with a button to add an SVG or PNG.
+- Pickers show a check by what's picked.
+- "AA Large" badges in color cards stay on one line.
+
 ## [0.12.0] - 2026-10-14
 
 ### Added
