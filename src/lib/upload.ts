@@ -3,6 +3,7 @@ import type { Upload } from "@convex/lib/validators";
 import { toast } from "sonner";
 
 import { convex, mediaUrl } from "@/lib/convex";
+import { typeOf } from "@/lib/drive";
 
 export type { Upload } from "@convex/lib/validators";
 
@@ -46,7 +47,7 @@ async function upload(
     const { key, url } = await target();
     const response = await fetch(url, {
       body: file,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
+      headers: { "Content-Type": typeOf(file) || "application/octet-stream" },
       method: "PUT",
     });
     if (!response.ok) {
@@ -77,7 +78,7 @@ export async function uploadAttachment(file: File): Promise<Upload> {
   const key = await upload(file, () =>
     convex.mutation(api.attachments.generateUploadUrl, { name: file.name })
   );
-  return { key, name: file.name, size: file.size, type: file.type };
+  return { key, name: file.name, size: file.size, type: typeOf(file) };
 }
 
 export function isImage(file: File): boolean {

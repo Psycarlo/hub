@@ -59,6 +59,33 @@ export function isShown(type: string): boolean {
   return shownRank(type) >= 0;
 }
 
+const FONT_FILE = /\.(?:woff2?|otf|ttf)$/iu;
+/** Logos that aren't images to a browser: vectors and print files. */
+const LOGO_FILE = /\.(?:svg|pdf|eps|ai)$/iu;
+
+/** What a place takes, and what's said of a file it doesn't. */
+export function placeFit(place: BrandPlace): {
+  fits: (file: { name: string; type: string }) => boolean;
+  misfit: string;
+} {
+  if (place.kind === "banner") {
+    return {
+      fits: (file) => isShown(file.type),
+      misfit: "Banners are images, like PNG, JPG, WebP or SVG.",
+    };
+  }
+  if (place.kind === "font") {
+    return {
+      fits: (file) => FONT_FILE.test(file.name),
+      misfit: "Typefaces take WOFF2, WOFF, OTF or TTF files.",
+    };
+  }
+  return {
+    fits: (file) => file.type.startsWith("image/") || LOGO_FILE.test(file.name),
+    misfit: "Logos take images, like SVG or PNG, or PDF, EPS and AI files.",
+  };
+}
+
 /** Whether two places are the same slot. */
 export function samePlace(a: BrandPlace, b: BrandPlace): boolean {
   if (a.kind === "logo" && b.kind === "logo") {

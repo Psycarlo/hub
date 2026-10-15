@@ -25,6 +25,7 @@ export {
   MAX_SLOT_FILES,
   MAX_SOCIALS,
   isShown,
+  placeFit,
   samePlace,
   shownFile,
 } from "@convex/shared/brands";

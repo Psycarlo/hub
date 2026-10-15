@@ -1,10 +1,13 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { OptimisticLocalStore } from "convex/browser";
+import { toast } from "sonner";
 
 import { discardUpload, run } from "@/lib/actions";
 import type { Brand, BrandFile, BrandPlace } from "@/lib/brands";
+import { placeFit } from "@/lib/brands";
 import { convex } from "@/lib/convex";
+import { fileKind, typeOf } from "@/lib/drive";
 import { playSound } from "@/lib/sounds";
 import { uploadable, uploadAttachment } from "@/lib/upload";
 
@@ -74,7 +77,7 @@ export function deleteBrand(brand: Brand) {
 async function imageSize(
   file: File
 ): Promise<{ width?: number; height?: number }> {
-  if (!file.type.startsWith("image/")) {
+  if (!typeOf(file).startsWith("image/")) {
     return {};
   }
   const url = URL.createObjectURL(file);
@@ -126,13 +129,33 @@ async function uploadToBrand(
   }
 }
 
+/**
+ * The files a place takes, telling the person about any it doesn't, so a
+ * ZIP dropped on a logo isn't uploaded only to be turned away.
+ */
+function placeable(place: BrandPlace, files: File[]): File[] {
+  const { fits, misfit } = placeFit(place);
+  const fitting = files.filter((file) =>
+    fits({ name: file.name, type: typeOf(file) })
+  );
+  const left = files.find((file) => !fitting.includes(file));
+  if (left) {
+    toast.error(
+      fileKind(left) === "archive"
+        ? `${misfit} Unzip ${left.name} first, then add the files inside.`
+        : misfit
+    );
+  }
+  return fitting;
+}
+
 /** Uploads files to a place in the brand. Resolves once they show there, or failed. */
 export async function addBrandFiles(
   brand: Brand,
   place: BrandPlace,
   files: File[]
 ): Promise<void> {
-  const fitting = uploadable(files);
+  const fitting = uploadable(placeable(place, files));
   if (fitting.length === 0) {
     return;
   }

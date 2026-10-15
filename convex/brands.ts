@@ -37,9 +37,9 @@ import {
   MAX_SLOT_FILES,
   MAX_SOCIALS,
   MAX_URL,
-  isShown,
   pickCover,
   pickMark,
+  placeFit,
   samePlace,
 } from "./shared/brands";
 import { canManageRole } from "./shared/model";
@@ -52,7 +52,6 @@ type BrandFont = Infer<typeof vBrandFont>;
 const MAX_ID = 40;
 const SCHEME = /^[a-z][\d+.a-z-]*:/iu;
 const SPACES = /\s+/gu;
-const FONT_FILE = /\.(?:woff2?|otf|ttf)$/iu;
 
 /** A file just uploaded for the brand, with its size in pixels when it's an image. */
 const vBrandUpload = v.object({
@@ -338,34 +337,23 @@ export const remove = mutation({
   },
 });
 
-/** What a place takes, and what's said when it's full or a file doesn't fit. */
-function placeRules(place: BrandPlace): {
-  limit: number;
-  full: string;
-  fits: (file: { name: string; type: string }) => boolean;
-  misfit: string;
-} {
+/** How many files a place keeps, and what's said when it's full. */
+function placeLimit(place: BrandPlace): { limit: number; full: string } {
   if (place.kind === "banner") {
     return {
-      fits: (file) => isShown(file.type),
       full: `A brand keeps up to ${MAX_BANNERS} banners.`,
       limit: MAX_BANNERS,
-      misfit: "Banners are images, like PNG, JPG, WebP or SVG.",
     };
   }
   if (place.kind === "font") {
     return {
-      fits: (file) => FONT_FILE.test(file.name),
       full: `A typeface keeps up to ${MAX_FONT_FILES} files.`,
       limit: MAX_FONT_FILES,
-      misfit: "Typefaces take WOFF2, WOFF, OTF or TTF files.",
     };
   }
   return {
-    fits: () => true,
     full: `Each logo keeps up to ${MAX_SLOT_FILES} formats.`,
     limit: MAX_SLOT_FILES,
-    misfit: "",
   };
 }
 
@@ -384,15 +372,16 @@ export const addFiles = mutation({
         throw new ConvexError("That typeface doesn’t take files.");
       }
     }
-    const rules = placeRules(place);
+    const { limit, full } = placeLimit(place);
+    const { fits, misfit } = placeFit(place);
     const rows = await filesOf(ctx, brandId).collect();
     const kept = rows.filter((file) => samePlace(file.place, place));
-    if (kept.length + uploads.length > rules.limit) {
-      throw new ConvexError(rules.full);
+    if (kept.length + uploads.length > limit) {
+      throw new ConvexError(full);
     }
     for (const upload of uploads) {
-      if (!rules.fits(upload)) {
-        throw new ConvexError(rules.misfit);
+      if (!fits(upload)) {
+        throw new ConvexError(misfit);
       }
       await ownedFile(ctx, upload.key, user._id, "attachment");
       if (await isAttached(ctx, upload.key)) {

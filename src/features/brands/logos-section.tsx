@@ -2,7 +2,6 @@ import { cn } from "cn";
 import {
   CodeIcon,
   DownloadIcon,
-  FileIcon,
   PlusIcon,
   Trash2Icon,
   UploadIcon,
@@ -73,6 +72,12 @@ const CHIP: Record<LogoMode, string> = {
 const CAPTION: Record<LogoMode, string> = {
   dark: "text-white/55",
   light: "text-black/45",
+};
+
+/** The formats of a logo with nothing to show, standing in for it. */
+const INK: Record<LogoMode, string> = {
+  dark: "text-white/85",
+  light: "text-black/75",
 };
 
 /** An empty tile's prompt, in the tile's own colors whatever the app's theme. */
@@ -163,6 +168,7 @@ function LogoTile({
   const { handlers, over } = useFileDrop(add);
   const picker = useFilePicker(add, { accept: ACCEPT });
   const label = `${LOGO_NAMES[kind]} · ${MODE_NAMES[mode]}`;
+  const room = slot.length < MAX_SLOT_FILES;
 
   if (slot.length === 0 && !editable) {
     return null;
@@ -189,12 +195,33 @@ function LogoTile({
       {!shown && slot.length > 0 && (
         <div
           className={cn(
-            "absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs",
+            "absolute inset-x-4 inset-y-10 flex flex-col items-center justify-center gap-2.5 text-center text-xs",
             CAPTION[mode]
           )}
         >
-          <FileIcon className="size-6" strokeWidth={1.5} />
-          No preview for {slot.map(formatOf).join(", ")}
+          <span
+            className={cn(
+              "font-mono text-xl font-semibold tracking-tight text-balance",
+              INK[mode]
+            )}
+          >
+            {slot.map(formatOf).join(" · ")}
+          </span>
+          {editable && room && (
+            <button
+              className={cn(
+                "focus-visible:ring-ring/50 flex h-7 items-center gap-1.5 rounded-full px-3 font-medium transition-colors duration-150 ease-out outline-none focus-visible:ring-3",
+                CHIP[mode]
+              )}
+              onClick={() => picker.open()}
+              title="Add an SVG or PNG to show the logo here"
+              type="button"
+            >
+              <PlusIcon className="size-3.5" />
+              Add SVG or PNG
+            </button>
+          )}
+          {!editable && <span>Download to open</span>}
         </div>
       )}
       {slot.length === 0 && (
@@ -228,7 +255,7 @@ function LogoTile({
               mode={mode}
             />
           ))}
-          {editable && slot.length < MAX_SLOT_FILES && (
+          {editable && room && (
             <button
               aria-label={`Add a format of the ${label}`}
               className={cn(
