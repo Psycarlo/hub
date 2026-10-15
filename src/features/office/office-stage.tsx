@@ -3,6 +3,8 @@ import { Canvas } from "@react-three/fiber";
 import { useState, useSyncExternalStore } from "react";
 import { PCFShadowMap } from "three";
 
+import { makeRenderer } from "@/lib/webgl";
+
 import { FOV } from "./camera";
 import type { SceneProps } from "./office-scene";
 import { OfficeScene } from "./office-scene";
@@ -30,7 +32,7 @@ export default function OfficeStage(props: SceneProps) {
       dpr={[1, dpr]}
       flat
       frameloop={visible ? "always" : "never"}
-      gl={{ alpha: true, antialias: true }}
+      gl={makeRenderer}
       onPointerMissed={() => props.onSelect(null)}
       // Drawn when something that casts them moves, not every frame.
       shadows={{ autoUpdate: false, type: PCFShadowMap }}

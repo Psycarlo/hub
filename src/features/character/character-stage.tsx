@@ -6,6 +6,7 @@ import { MathUtils, PMREMGenerator, Vector3 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 import type { Character, Hat } from "@/lib/character";
+import { makeRenderer } from "@/lib/webgl";
 
 import { CharacterModel } from "./character-model";
 import { LIGHTS } from "./model";
@@ -161,7 +162,7 @@ export default function CharacterStage({
         dpr={[1, 2]}
         flat
         frameloop={onScreen ? "always" : "never"}
-        gl={{ alpha: true, antialias: true }}
+        gl={makeRenderer}
         scene={{ environmentIntensity: LIGHTS.environment }}
       >
         <Lights />

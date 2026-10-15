@@ -14,6 +14,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { ErrorBoundary } from "@/components/error-boundary";
+import { StageError } from "@/components/stage-error";
 import { TopBar } from "@/components/top-bar";
 import { useMe, useUsers } from "@/hooks/use-users";
 import { run } from "@/lib/actions";
@@ -95,6 +97,11 @@ function useEnter(): string | null | undefined {
   return desk;
 }
 
+/** On the daytime sky the office starts on, so dark in either theme. */
+function OfficeStageError({ error }: { error: unknown }) {
+  return <StageError className="text-zinc-900" error={error} />;
+}
+
 /** The phase of the day, looked at every minute. */
 function usePhase(): Phase {
   const [phase, setPhase] = useState(() => phaseAt(new Date()));
@@ -118,6 +125,8 @@ export function OfficePage() {
   const entered = useEnter();
   const still = useReducedMotion() ?? false;
   const [ready, setReady] = useState(false);
+  // The 3D couldn't be drawn: the rest of the office still works.
+  const [broken, setBroken] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [chatting, setChatting] = useState(false);
   const [seat, setSeat] = useState<string | null>(null);
@@ -218,26 +227,31 @@ export function OfficePage() {
             // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the office takes keys to walk, so it takes focus
             tabIndex={0}
           >
-            <Suspense fallback={null}>
-              <OfficeStage
-                commands={commands}
-                desks={desks}
-                entered={entered}
-                keys={stage}
-                meId={me._id}
-                onChat={() => setChatting(true)}
-                onPuff={puffSound}
-                onReady={onReady}
-                onSeat={setSeat}
-                onSelect={setSelected}
-                onStep={onStep}
-                overlays={overlays}
-                people={people}
-                selected={selected}
-                still={still}
-                users={users}
-              />
-            </Suspense>
+            <ErrorBoundary
+              fallback={OfficeStageError}
+              onError={() => setBroken(true)}
+            >
+              <Suspense fallback={null}>
+                <OfficeStage
+                  commands={commands}
+                  desks={desks}
+                  entered={entered}
+                  keys={stage}
+                  meId={me._id}
+                  onChat={() => setChatting(true)}
+                  onPuff={puffSound}
+                  onReady={onReady}
+                  onSeat={setSeat}
+                  onSelect={setSelected}
+                  onStep={onStep}
+                  overlays={overlays}
+                  people={people}
+                  selected={selected}
+                  still={still}
+                  users={users}
+                />
+              </Suspense>
+            </ErrorBoundary>
           </div>
           <p className="sr-only" id="office-keys">
             Walk with W, A, S and D or the arrow keys, holding Shift to run.
@@ -290,7 +304,7 @@ export function OfficePage() {
               onSend={say}
             />
           )}
-          <Loading done={ready} />
+          <Loading done={ready || broken} />
         </section>
         <PeopleList
           meId={me._id}

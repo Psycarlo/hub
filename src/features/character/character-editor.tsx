@@ -14,6 +14,8 @@ import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { HexSwatchPicker } from "@/components/color-picker";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { StageError } from "@/components/stage-error";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -499,6 +501,8 @@ export function CharacterEditor() {
   const [category, setCategory] = useState<Category>("face");
   const [move, setMove] = useState<Move>("idle");
   const [ready, setReady] = useState(false);
+  // The 3D couldn't be drawn: the wardrobe still works.
+  const [broken, setBroken] = useState(false);
   const [saving, setSaving] = useState(false);
   // What was worn on each body before switching away from it, to give back.
   const [worn, setWorn] = useState<Partial<Record<Body, BodyStyle>>>({});
@@ -540,22 +544,27 @@ export function CharacterEditor() {
         {/* Stays in view while a long panel scrolls past it, clear of the top bar. */}
         <div className="flex flex-col gap-3 sm:sticky sm:top-18 sm:self-start">
           <div className="relative h-80 sm:aspect-4/5 sm:h-auto">
-            <div
-              className={cn(
-                "size-full transition-opacity duration-500",
-                !ready && "opacity-0"
-              )}
+            <ErrorBoundary
+              fallback={StageError}
+              onError={() => setBroken(true)}
             >
-              <Suspense fallback={null}>
-                <CharacterStage
-                  character={draft}
-                  move={move}
-                  onMoveEnd={() => setMove("idle")}
-                  onReady={() => setReady(true)}
-                />
-              </Suspense>
-            </div>
-            <Loading done={ready} />
+              <div
+                className={cn(
+                  "size-full transition-opacity duration-500",
+                  !ready && "opacity-0"
+                )}
+              >
+                <Suspense fallback={null}>
+                  <CharacterStage
+                    character={draft}
+                    move={move}
+                    onMoveEnd={() => setMove("idle")}
+                    onReady={() => setReady(true)}
+                  />
+                </Suspense>
+              </div>
+            </ErrorBoundary>
+            <Loading done={ready || broken} />
           </div>
           <Moves move={move} onChange={setMove} />
         </div>
