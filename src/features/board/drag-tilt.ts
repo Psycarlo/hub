@@ -13,6 +13,11 @@ const SPEED_SMOOTHING = 0.3;
 /** Pointer events stop while the pointer rests, so speed fades each frame. */
 const SPEED_DECAY = 0.9;
 const TILT_SMOOTHING = 0.15;
+/**
+ * Degrees too few to see. The tilt eases forever, but writing each tiny step
+ * would restyle the card, and its placeholder copy, every frame.
+ */
+const MIN_STEP = 0.01;
 const SETTLE: KeyframeAnimationOptions = {
   duration: 200,
   easing: "cubic-bezier(0.23, 1, 0.32, 1)",
@@ -42,13 +47,20 @@ export function createDragTilt(): DragTilt {
   let frame = 0;
   let speed = 0;
   let tilt = 0;
+  /** The tilt the card last showed. */
+  let shown = 0;
   let last: { x: number; time: number } | undefined;
+
+  const show = (target: HTMLElement) => {
+    shown = tilt;
+    target.style.rotate = `${tilt}deg`;
+  };
 
   const step = () => {
     speed *= SPEED_DECAY;
     tilt += (clamp(speed * TILT_PER_SPEED, MAX_TILT) - tilt) * TILT_SMOOTHING;
-    if (element) {
-      element.style.rotate = `${tilt}deg`;
+    if (element && Math.abs(tilt - shown) >= MIN_STEP) {
+      show(element);
     }
     frame = requestAnimationFrame(step);
   };
@@ -62,7 +74,7 @@ export function createDragTilt(): DragTilt {
     element?.style.removeProperty("transform-origin");
     element = next;
     element.style.transformOrigin = origin;
-    element.style.rotate = `${tilt}deg`;
+    show(element);
   };
 
   const settle = () => {
@@ -75,7 +87,7 @@ export function createDragTilt(): DragTilt {
     }
     target.style.removeProperty("rotate");
     const animation = target.animate(
-      [{ rotate: `${tilt}deg` }, { rotate: "0deg" }],
+      [{ rotate: `${shown}deg` }, { rotate: "0deg" }],
       SETTLE
     );
     const reset = () => target.style.removeProperty("transform-origin");

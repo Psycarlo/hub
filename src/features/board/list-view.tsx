@@ -2,7 +2,7 @@ import { CollisionPriority } from "@dnd-kit/abstract";
 import { DragDropProvider, useDroppable } from "@dnd-kit/react";
 import { cn } from "cn";
 import { ChevronRightIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { Button } from "@/components/ui/button";
@@ -52,19 +52,22 @@ interface GroupProps {
   label: string;
   cards: Card[];
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onAdd?: () => void;
+  onOpenChange: (status: Status, open: boolean) => void;
+  /** The sprint the cards are in, which new cards join. */
+  sprint?: Sprint;
 }
 
-/** A status's cards, under a header that stays in sight while they scroll by. */
-function Group({
+function StatusGroup({
   status,
   label,
   cards,
   open,
   onOpenChange,
-  onAdd,
+  sprint,
 }: GroupProps) {
+  const { board, canEdit, newCard } = useBoard();
+  const canAdd =
+    canEdit && board.statuses.includes(status) && !isClosed(status);
   // A folded group takes no drops: the card would vanish into it mid-drag.
   const { ref } = useDroppable({
     accept: "card",
@@ -76,7 +79,10 @@ function Group({
   const { icon: Icon, className } = STATUS_STYLES[status];
   return (
     <section className="bg-muted/60 rounded-2xl p-1.5" ref={ref}>
-      <Collapsible onOpenChange={onOpenChange} open={open}>
+      <Collapsible
+        onOpenChange={(next) => onOpenChange(status, next)}
+        open={open}
+      >
         {/* Opaque in the tray's own colour, so cards pass under it unseen. */}
         <div className="bg-grain sticky top-14 z-10 flex h-9 items-center gap-1 rounded-lg bg-[color-mix(in_srgb,var(--muted)_60%,var(--background))]">
           <h3 className="flex h-full min-w-0 flex-1">
@@ -92,11 +98,11 @@ function Group({
               </span>
             </CollapsibleTrigger>
           </h3>
-          {onAdd && (
+          {canAdd && (
             <IconButton
               className="text-muted-foreground"
               label={`Add card to ${label}`}
-              onClick={onAdd}
+              onClick={() => newCard({ sprintId: sprint?._id, status })}
             >
               <PlusIcon />
             </IconButton>
@@ -119,6 +125,13 @@ function Group({
     </section>
   );
 }
+
+/**
+ * A status's cards, under a header that stays in sight while they scroll by.
+ * Memoized, as a drag re-renders the list each time the card passes another
+ * and most groups stay as they were.
+ */
+const Group = memo(StatusGroup);
 
 interface CardListProps {
   cards: Card[];
@@ -164,13 +177,9 @@ export function CardList({ cards, sprint }: CardListProps) {
             cards={drag.groups[id]}
             key={id}
             label={label}
-            onAdd={
-              canEdit && board.statuses.includes(id) && !isClosed(id)
-                ? () => newCard({ sprintId: sprint?._id, status: id })
-                : undefined
-            }
-            onOpenChange={(open) => setOpen(id, open)}
+            onOpenChange={setOpen}
             open={!folded.has(id)}
+            sprint={sprint}
             status={id}
           />
         ))}

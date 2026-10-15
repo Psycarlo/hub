@@ -1,6 +1,7 @@
 import { CollisionPriority } from "@dnd-kit/abstract";
 import { DragDropProvider, useDroppable } from "@dnd-kit/react";
 import { cn } from "cn";
+import { memo } from "react";
 
 import { useBoard } from "@/features/board/board-context";
 import { CardTile } from "@/features/board/card-tile";
@@ -15,10 +16,14 @@ interface ColumnProps {
   status: Status;
   label: string;
   cards: Card[];
-  onAdd?: () => void;
+  /** The sprint the cards are in, which new cards join. */
+  sprint?: Sprint;
 }
 
-function Column({ status, label, cards, onAdd }: ColumnProps) {
+function StatusColumn({ status, label, cards, sprint }: ColumnProps) {
+  const { board, canEdit, newCard } = useBoard();
+  const canAdd =
+    canEdit && board.statuses.includes(status) && !isClosed(status);
   const { ref } = useDroppable({
     accept: "card",
     collisionPriority: CollisionPriority.Low,
@@ -43,11 +48,22 @@ function Column({ status, label, cards, onAdd }: ColumnProps) {
         {cards.map((card, index) => (
           <CardTile card={card} group={status} index={index} key={card._id} />
         ))}
-        {onAdd && <AddButton label="Add card" onClick={onAdd} />}
+        {canAdd && (
+          <AddButton
+            label="Add card"
+            onClick={() => newCard({ sprintId: sprint?._id, status })}
+          />
+        )}
       </div>
     </section>
   );
 }
+
+/**
+ * A status's cards. Memoized, as a drag re-renders the board each time the
+ * card passes another and most columns stay as they were.
+ */
+const Column = memo(StatusColumn);
 
 interface KanbanProps {
   cards: Card[];
@@ -79,7 +95,7 @@ export function useStatusDrag(cards: Card[]) {
  * while cards are in it, so none of them go missing.
  */
 export function Kanban({ cards, sprint }: KanbanProps) {
-  const { board, canEdit, newCard } = useBoard();
+  const { board } = useBoard();
   const drag = useStatusDrag(cards);
   // Which columns show goes by the cards before the drag, so a column emptied
   // by it stays put until the drop.
@@ -95,11 +111,7 @@ export function Kanban({ cards, sprint }: KanbanProps) {
             cards={drag.groups[id]}
             key={id}
             label={label}
-            onAdd={
-              canEdit && board.statuses.includes(id) && !isClosed(id)
-                ? () => newCard({ sprintId: sprint?._id, status: id })
-                : undefined
-            }
+            sprint={sprint}
             status={id}
           />
         ))}

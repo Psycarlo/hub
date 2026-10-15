@@ -3,7 +3,7 @@ import { cn } from "cn";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import type { ReactNode, Ref } from "react";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { Link } from "wouter";
 
 import { OPENED_FROM_BOARD, useBoard } from "@/features/board/board-context";
@@ -185,7 +185,7 @@ function CardLink({
   );
 }
 
-export function CardTile(props: SortableCardProps) {
+function Tile(props: SortableCardProps) {
   const { card } = props;
   const { board } = useBoard();
   const labels = useCardLabels(card);
@@ -207,6 +207,12 @@ export function CardTile(props: SortableCardProps) {
     </CardLink>
   );
 }
+
+/**
+ * A card on the kanban. Memoized, like the row, so a drag re-renders the cards
+ * it moves and not the ones around them.
+ */
+export const CardTile = memo(Tile);
 
 export function CardRow({
   card,
@@ -236,7 +242,9 @@ export function CardRow({
   );
 }
 
-export function SortableCardRow(props: SortableCardProps) {
+function SortableRow(props: SortableCardProps) {
   const ref = useSortableCard(props);
   return <CardRow card={props.card} ref={ref} />;
 }
+
+export const SortableCardRow = memo(SortableRow);

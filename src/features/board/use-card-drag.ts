@@ -76,6 +76,13 @@ function idsOf<K extends string, T extends Ranked>(
   return ids;
 }
 
+function inOrder(ids: string[], items: Ranked[]): boolean {
+  return (
+    ids.length === items.length &&
+    ids.every((id, index) => items[index]?._id === id)
+  );
+}
+
 /**
  * Keeps a local copy of the groups while dragging and reports the new ranks on
  * drop. A card dragged by pointer tilts with its movement.
@@ -94,13 +101,18 @@ export function useCardDrag<K extends string, T extends Ranked = Card>(
   );
 
   // The items in the order the drag left them; ones gone meanwhile drop out.
+  // A group the drag left as it was keeps its array, so what shows it can skip
+  // re-rendering each time the card passes another.
   const resolve = (ids: IdGroups<K>): Groups<K, T> => {
     const resolved = {} as Groups<K, T>;
     for (const group of Object.keys(groups) as K[]) {
-      resolved[group] = (ids[group] ?? []).flatMap((id) => {
-        const item = byId.get(id);
-        return item ? [item] : [];
-      });
+      const order = ids[group] ?? [];
+      resolved[group] = inOrder(order, groups[group])
+        ? groups[group]
+        : order.flatMap((id) => {
+            const item = byId.get(id);
+            return item ? [item] : [];
+          });
     }
     return resolved;
   };
