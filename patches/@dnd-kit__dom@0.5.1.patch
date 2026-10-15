@@ -1,5 +1,5 @@
 diff --git a/sortable.cjs b/sortable.cjs
-index 2e79126b64ac7dc7c1ef7a80d222fff0d77ee4e4..269137f432b41deb8efc5acca36fc98b5a5aa736 100644
+index 430e8ce5d501b339e1415d5592bab1aebc7e1a19..99ab0a5cdf52c653dace95a9adfc1415c6ba8a06 100644
 --- a/sortable.cjs
 +++ b/sortable.cjs
 @@ -593,6 +593,65 @@ function sort(instances, sortFn = sortByIndex) {
@@ -68,7 +68,7 @@ index 2e79126b64ac7dc7c1ef7a80d222fff0d77ee4e4..269137f432b41deb8efc5acca36fc98b
  // src/sortable/sortable.ts
  var defaultPlugins = [
    SortableKeyboardPlugin,
-@@ -748,45 +807,7 @@ var Sortable2 = class {
+@@ -751,45 +810,7 @@ var Sortable2 = class {
        if (!shape || !transition || idle && !transition.idle) {
          return;
        }
@@ -116,7 +116,7 @@ index 2e79126b64ac7dc7c1ef7a80d222fff0d77ee4e4..269137f432b41deb8efc5acca36fc98b
    }
    get manager() {
 diff --git a/sortable.js b/sortable.js
-index 29f1dbfa879698088751840778705cd7c5e84bd8..0c547ca744e06d08b9fe147e162a0131b8496d18 100644
+index 8b46f2672fc25a1d8510468413f3bc901a8af6d5..aa15da0061200d3375f193b6150a8317c6a40a94 100644
 --- a/sortable.js
 +++ b/sortable.js
 @@ -591,6 +591,65 @@ function sort(instances, sortFn = sortByIndex) {
@@ -185,7 +185,7 @@ index 29f1dbfa879698088751840778705cd7c5e84bd8..0c547ca744e06d08b9fe147e162a0131
  // src/sortable/sortable.ts
  var defaultPlugins = [
    SortableKeyboardPlugin,
-@@ -746,45 +805,7 @@ var Sortable2 = class {
+@@ -749,45 +808,7 @@ var Sortable2 = class {
        if (!shape || !transition || idle && !transition.idle) {
          return;
        }
