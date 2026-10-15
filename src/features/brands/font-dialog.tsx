@@ -1,3 +1,4 @@
+import { Autocomplete } from "@base-ui/react/autocomplete";
 import { cn } from "cn";
 import {
   CheckIcon,
@@ -7,7 +8,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import {
@@ -30,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { FIELD, Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -57,6 +58,12 @@ import {
   newId,
   roleParts,
 } from "@/lib/brands";
+import type { ListedFamily } from "@/lib/google-fonts";
+import {
+  findListedFamily,
+  loadGoogleFamilies,
+  searchGoogleFamilies,
+} from "@/lib/google-fonts";
 import { formatBytes } from "@/lib/utils";
 
 const ACCEPT = ".woff2,.woff,.otf,.ttf,font/woff2,font/woff,font/otf,font/ttf";
@@ -64,6 +71,9 @@ const ACCEPT = ".woff2,.woff,.otf,.ttf,font/woff2,font/woff,font/otf,font/ttf";
 const STARTING_WEIGHTS = new Set([400, 500, 600, 700]);
 /** How long typing rests before Google is asked. */
 const LOOKUP_MS = 450;
+
+const SUGGESTION =
+  "data-highlighted:bg-accent data-highlighted:text-accent-foreground flex h-8 cursor-default items-center gap-2 rounded-lg px-2 text-sm outline-none select-none";
 
 const SOURCES: { source: FontSource; label: string }[] = [
   { label: "Google Fonts", source: "google" },
@@ -76,16 +86,59 @@ type Lookup =
   | { state: "found"; family: string; weights: number[] }
   | { state: "missing" };
 
-/** Asks Google Fonts for the family once typing rests. */
-function useGoogleLookup(family: string, active: boolean): Lookup {
+/** Google's families, loaded once one is first looked for; null should they not load. */
+function useGoogleFamilies(active: boolean): ListedFamily[] | null | undefined {
+  const [families, setFamilies] = useState<ListedFamily[] | null>();
+  useEffect(() => {
+    if (!active || families !== undefined) {
+      return;
+    }
+    let current = true;
+    const load = async () => {
+      try {
+        const loaded = await loadGoogleFamilies();
+        if (current) {
+          setFamilies(loaded);
+        }
+      } catch {
+        if (current) {
+          setFamilies(null);
+        }
+      }
+    };
+    load();
+    return () => {
+      current = false;
+    };
+  }, [active, families]);
+  return families;
+}
+
+/**
+ * Finds the family among Google's, however it's written. One they lack,
+ * added since or with no list to look in, is asked of Google once typing rests.
+ */
+function useGoogleLookup(
+  family: string,
+  families: ListedFamily[] | null | undefined,
+  active: boolean
+): Lookup {
   const typed = family.trim();
+  const listed =
+    active && families ? findListedFamily(families, typed) : undefined;
+  const ask = active && typed !== "" && families !== undefined && !listed;
   // What Google said, and for which name: an answer for another is still on its way.
   const [answer, setAnswer] = useState<{
     typed: string;
     found: { family: string; weights: number[] } | null;
   }>();
   useEffect(() => {
-    if (!(active && typed)) {
+    if (listed) {
+      loadGoogleFont(listed.family, listed.weights);
+    }
+  }, [listed]);
+  useEffect(() => {
+    if (!ask) {
       return;
     }
     const controller = new AbortController();
@@ -103,11 +156,14 @@ function useGoogleLookup(family: string, active: boolean): Lookup {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [active, typed]);
+  }, [ask, typed]);
   if (!(active && typed)) {
     return { state: "idle" };
   }
-  if (answer?.typed !== typed) {
+  if (listed) {
+    return { family: listed.family, state: "found", weights: listed.weights };
+  }
+  if (families === undefined || answer?.typed !== typed) {
     return { state: "looking" };
   }
   return answer.found
@@ -150,6 +206,72 @@ function LookupStatus({ lookup }: { lookup: Lookup }) {
     );
   }
   return null;
+}
+
+/** The family as typed, with Google's families like it to pick from. */
+function GoogleFamilyField({
+  id,
+  autoFocus,
+  families,
+  value,
+  onChange,
+}: {
+  id: string;
+  autoFocus: boolean;
+  families: ListedFamily[] | null | undefined;
+  value: string;
+  onChange: (family: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const suggestions = useMemo(
+    () => (families ? searchGoogleFamilies(families, value) : []),
+    [families, value]
+  );
+  return (
+    <Autocomplete.Root
+      autoHighlight
+      filter={null}
+      itemToStringValue={(item: ListedFamily) => item.family}
+      items={suggestions}
+      onOpenChange={setOpen}
+      onValueChange={onChange}
+      // Nothing like it leaves the status below to say so.
+      open={open && suggestions.length > 0}
+      openOnInputClick
+      value={value}
+    >
+      <Autocomplete.Input
+        autoCapitalize="off"
+        autoCorrect="off"
+        autoFocus={autoFocus}
+        className={cn(FIELD, "h-9")}
+        id={id}
+        maxLength={MAX_FONT_FAMILY}
+        placeholder="Inter"
+        spellCheck={false}
+      />
+      <Autocomplete.Portal>
+        <Autocomplete.Positioner className="isolate z-50" sideOffset={6}>
+          <Autocomplete.Popup className="bg-popover text-popover-foreground shadow-raised max-h-[min(18rem,var(--available-height))] w-(--anchor-width) origin-(--transform-origin) overflow-y-auto overscroll-contain rounded-xl p-1 transition-[opacity,scale] duration-150 ease-out outline-none data-ending-style:scale-[0.96] data-ending-style:opacity-0 data-ending-style:duration-100 data-starting-style:scale-[0.96] data-starting-style:opacity-0">
+            <Autocomplete.List>
+              {(item: ListedFamily) => (
+                <Autocomplete.Item
+                  className={SUGGESTION}
+                  key={item.family}
+                  value={item}
+                >
+                  <span className="min-w-0 flex-1 truncate">{item.family}</span>
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {item.category}
+                  </span>
+                </Autocomplete.Item>
+              )}
+            </Autocomplete.List>
+          </Autocomplete.Popup>
+        </Autocomplete.Positioner>
+      </Autocomplete.Portal>
+    </Autocomplete.Root>
+  );
 }
 
 /** Files kept and picked, with the weight each is read as. */
@@ -479,7 +601,8 @@ function useFontDraft(brand: Brand, files: BrandFile[], font?: BrandFont) {
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
   const google = source === "google";
-  const lookup = useGoogleLookup(family, google);
+  const families = useGoogleFamilies(google);
+  const lookup = useGoogleLookup(family, families, google);
   const found = lookup.state === "found" ? lookup : undefined;
   const available = found?.weights ?? [];
   const weights = keptWeights(available, picked);
@@ -496,6 +619,7 @@ function useFontDraft(brand: Brand, files: BrandFile[], font?: BrandFont) {
   };
   return {
     available,
+    families,
     family,
     found,
     google,
@@ -558,16 +682,26 @@ function FontForm({ brand, files, font, onDone }: FontFormProps) {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-family`}>Family</Label>
-        <Input
-          autoComplete="off"
-          autoFocus={!font}
-          id={`${id}-family`}
-          maxLength={MAX_FONT_FAMILY}
-          onChange={(event) => draft.setFamily(event.target.value)}
-          placeholder={google ? "Inter" : "Your typeface"}
-          spellCheck={false}
-          value={draft.family}
-        />
+        {google ? (
+          <GoogleFamilyField
+            autoFocus={!font}
+            families={draft.families}
+            id={`${id}-family`}
+            onChange={(next) => draft.setFamily(next)}
+            value={draft.family}
+          />
+        ) : (
+          <Input
+            autoComplete="off"
+            autoFocus={!font}
+            id={`${id}-family`}
+            maxLength={MAX_FONT_FAMILY}
+            onChange={(event) => draft.setFamily(event.target.value)}
+            placeholder="Your typeface"
+            spellCheck={false}
+            value={draft.family}
+          />
+        )}
         {google && <LookupStatus lookup={lookup} />}
       </div>
 

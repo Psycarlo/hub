@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b && tsc -p convex",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "fonts": "node scripts/google-fonts.ts && oxfmt src/lib/google-fonts.json"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",
