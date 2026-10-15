@@ -1,3 +1,5 @@
+/* First, so it sits under every other layer, where dnd-kit puts it. */
+@layer dnd-kit;
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -1020,5 +1022,27 @@
     background: inherit;
     content: "";
     transform: translateX(-50%) rotate(45deg);
+  }
+}
+
+/*
+ * dnd-kit's resets for a card it lifts into the top layer as a popover, so the
+ * popover's own frame doesn't show: its stylesheet brings them in this layer at
+ * every pickup, which restyles the whole page. Kept here instead, always; see
+ * drag-plugins.ts. Copied from @dnd-kit/dom's Feedback plugin.
+ */
+@layer dnd-kit {
+  :where([data-dnd-dragging][popover]) {
+    overflow: visible;
+    background: unset;
+    border: unset;
+    margin: unset;
+    padding: unset;
+    color: inherit;
+
+    &:is(input, button) {
+      border: revert;
+      background: revert;
+    }
   }
 }

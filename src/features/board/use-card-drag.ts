@@ -8,6 +8,7 @@ import type {
 import { KeyboardSensor, PointerSensor } from "@dnd-kit/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DRAG_PLUGINS } from "@/features/board/drag-plugins";
 import { createDragTilt } from "@/features/board/drag-tilt";
 import type { Card } from "@/lib/model";
 import { rankBetween } from "@/lib/model";
@@ -160,6 +161,7 @@ export function useCardDrag<K extends string, T extends Ranked = Card>(
       onDragOver: (event: DragOverEvent) =>
         update(move(latest.current ?? idsOf(groups), event) as IdGroups<K>),
       onDragStart: start,
+      plugins: DRAG_PLUGINS,
       sensors: SENSORS,
     },
   };
